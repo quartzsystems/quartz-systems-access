@@ -64,6 +64,18 @@ pub mod id {
     pub const ADMIN_NEEDED: &str = "QAD2104";
     pub const REMOVED: &str = "QAD2105";
     pub const REPAIRED: &str = "QAD2106";
+    pub const PRINTER_CONNECTED: &str = "QAD3001";
+    pub const PRINTER_DEVICE_REQUIRED: &str = "QAD3002";
+    pub const NOT_A_PRINTER_DEVICE: &str = "QAD3003";
+    pub const MESSAGE_QUEUE_NOT_FOUND: &str = "QAD3004";
+    pub const OUTPUT_SAVED: &str = "QAD3010";
+    pub const OUTPUT_PRINTED: &str = "QAD3011";
+    pub const SYSTEM_PRINTING_UNAVAILABLE: &str = "QAD3012";
+    pub const PRINTER_ERROR: &str = "QAD3013";
+    pub const OUTPUT_FOLDER_NOT_WRITABLE: &str = "QAD3014";
+    pub const TRANSFORMED_DATA: &str = "QAD3020";
+    pub const JOB_IDLE_CLOSED: &str = "QAD3021";
+    pub const PRINTER_RECONNECTING: &str = "QAD3030";
 }
 
 /// Errors in the catalogue itself.
@@ -233,7 +245,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 37] = [
+    const SEEDS: [&str; 49] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -271,7 +283,94 @@ mod tests {
         id::ADMIN_NEEDED,
         id::REMOVED,
         id::REPAIRED,
+        id::PRINTER_CONNECTED,
+        id::PRINTER_DEVICE_REQUIRED,
+        id::NOT_A_PRINTER_DEVICE,
+        id::MESSAGE_QUEUE_NOT_FOUND,
+        id::OUTPUT_SAVED,
+        id::OUTPUT_PRINTED,
+        id::SYSTEM_PRINTING_UNAVAILABLE,
+        id::PRINTER_ERROR,
+        id::OUTPUT_FOLDER_NOT_WRITABLE,
+        id::TRANSFORMED_DATA,
+        id::JOB_IDLE_CLOSED,
+        id::PRINTER_RECONNECTING,
     ];
+
+    #[test]
+    fn phase_3_texts() {
+        let t = |id: &str, args: &[&str]| message(id, args).text;
+        for (id, args, want) in [
+            (
+                id::PRINTER_CONNECTED,
+                &["PRT01", "SYS"][..],
+                "Printer session PRT01 connected to SYS.",
+            ),
+            (
+                id::PRINTER_DEVICE_REQUIRED,
+                &[],
+                "Printer device name is required.",
+            ),
+            (
+                id::NOT_A_PRINTER_DEVICE,
+                &["DSP01", "SYS", "8903", "why"],
+                "Device DSP01 is not a printer device on SYS.",
+            ),
+            (
+                id::MESSAGE_QUEUE_NOT_FOUND,
+                &["Q", "L", "SYS", "8930"],
+                "Message queue Q in library L not found on SYS.",
+            ),
+            (
+                id::OUTPUT_SAVED,
+                &["PRT01", "f.pdf", "3"],
+                "Output for PRT01 saved to f.pdf (3 pages).",
+            ),
+            (
+                id::OUTPUT_PRINTED,
+                &["PRT01", "Laser", "3"],
+                "Output for PRT01 sent to printer Laser (3 pages).",
+            ),
+            (
+                id::SYSTEM_PRINTING_UNAVAILABLE,
+                &["the lp command was not found"],
+                "System printing is not available: the lp command was not found.",
+            ),
+            (
+                id::PRINTER_ERROR,
+                &["Laser", "out of paper"],
+                "Printer Laser reported an error: out of paper.",
+            ),
+            (
+                id::OUTPUT_FOLDER_NOT_WRITABLE,
+                &["D"],
+                "Output folder D cannot be written.",
+            ),
+            (
+                id::TRANSFORMED_DATA,
+                &[],
+                "Transformed print data received and discarded.",
+            ),
+            (
+                id::JOB_IDLE_CLOSED,
+                &[],
+                "Print job closed after idle timeout.",
+            ),
+            (
+                id::PRINTER_RECONNECTING,
+                &["PRT01", "20"],
+                "Reconnecting printer session PRT01 in 20 seconds.",
+            ),
+        ] {
+            assert_eq!(t(id, args), want, "{id}");
+            let m = message(id, args);
+            assert!(!m.cause.is_empty() && !m.recovery.is_empty(), "{id}");
+            assert!(
+                !m.cause.contains('&') && !m.recovery.contains('&'),
+                "{id}: {m:?}"
+            );
+        }
+    }
 
     #[test]
     fn phase_1_session_texts() {

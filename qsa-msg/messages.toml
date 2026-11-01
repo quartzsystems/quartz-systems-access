@@ -236,3 +236,75 @@ severity = 0
 text = "Repair complete."
 cause = "The program files, shortcuts and file types recorded in the install manifest were written again. Settings, system configurations, session files and saved passwords were not changed."
 recovery = "None needed."
+
+[QAD3001]
+severity = 0
+text = "Printer session &1 connected to &2."
+cause = "The printer session with device &1 is connected to system &2. The system's writer for the device can now send it spooled files."
+recovery = "None needed. If the writer is not started, start it on the system for device &1."
+
+[QAD3002]
+severity = 30
+text = "Printer device name is required."
+cause = "A printer session needs the name of a printer device on the system, and none was given."
+recovery = "Type a device name of 1 to 10 letters, digits, #, $, @ or _, starting with a letter, #, $ or @, and start the session again."
+
+[QAD3003]
+severity = 30
+text = "Device &1 is not a printer device on &2."
+cause = "System &2 refused device &1 for a printer session (start-up response code &3: &4). The device may be a display device, or its description may not allow this kind of session."
+recovery = "Give the name of a printer device on &2, or a new name so that the system can create one, and start the session again."
+
+[QAD3004]
+severity = 30
+text = "Message queue &1 in library &2 not found on &3."
+cause = "System &3 could not create or change the printer device because message queue &1 in library &2 does not exist (start-up response code &4)."
+recovery = "Create the message queue on &3, or change the message queue in the session's settings (leave it empty for QSYSOPR in QSYS), and start the session again."
+
+[QAD3010]
+severity = 0
+text = "Output for &1 saved to &2 (&3 pages)."
+cause = "A print job received by printer session &1 was written to &2 as a PDF of &3 pages."
+recovery = "None needed. Double-click the job in the Received output list to open it."
+
+[QAD3011]
+severity = 0
+text = "Output for &1 sent to printer &2 (&3 pages)."
+cause = "A print job received by printer session &1 was sent to printer &2, &3 pages."
+recovery = "None needed. If nothing prints, look at the printer's queue in the operating system."
+
+[QAD3012]
+severity = 10
+text = "System printing is not available: &1."
+cause = "Printer sessions cannot print on this computer's printers: &1. Received output is still saved as PDF files."
+recovery = "On Linux, install the CUPS client commands (lp and lpstat). On Windows, add a printer in Settings. Then set the session's output to the system printer again."
+
+[QAD3013]
+severity = 30
+text = "Printer &1 reported an error: &2."
+cause = "Sending a print job to printer &1 failed: &2. The job is kept, and the system was told that the printer is not ready."
+recovery = "Correct the problem with printer &1, then select Print again for the job in the Received output list. Reply to the printer message on the system to let the writer go on."
+
+[QAD3014]
+severity = 30
+text = "Output folder &1 cannot be written."
+cause = "The printer session could not create or write files in folder &1. The received job is kept in a temporary file, and the system was told that the printer is not ready."
+recovery = "Choose another output folder in the session's settings, or make &1 writable, then reply to the printer message on the system to let the writer go on."
+
+[QAD3020]
+severity = 10
+text = "Transformed print data received and discarded."
+cause = "The system sent printer data that had already been converted for a particular printer (host print transform). This client prints SCS data only, and never asks for transformed data, so the job was not printed."
+recovery = "Change the printer device on the system so that host print transform is off, then print the spooled file again."
+
+[QAD3021]
+severity = 0
+text = "Print job closed after idle timeout."
+cause = "The system does not mark where print jobs end, so the printer session ended the job after 10 seconds without data."
+recovery = "None needed. If one spooled file was split into two outputs, print it again; the system may be slow to send it."
+
+[QAD3030]
+severity = 10
+text = "Reconnecting printer session &1 in &2 seconds."
+cause = "The connection for printer session &1 was lost. The session tries again by itself, waiting longer each time, up to 5 minutes."
+recovery = "None needed. To stop trying, select Disconnect. Received output is never lost."
