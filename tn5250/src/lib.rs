@@ -6,10 +6,12 @@
 //!
 //! - [`telnet`]: transports (TCP, TLS), the Telnet codec and option
 //!   negotiation.
+//! - [`codepage`]: EBCDIC translation behind one trait.
 //! - [`log`]: where the crate's log lines go.
 //!
 //! The crate is deliberately free of any user-interface dependency: the UI
 //! crates depend on it, never the other way round.
 
+pub mod codepage;
 pub mod log;
 pub mod telnet;
