@@ -92,6 +92,7 @@ fn main() {
                     r.device
                 ),
                 Event::ProtocolError(e) => println!("protocol error: {e}"),
+                Event::Rejected(why) => println!("record rejected: {why}"),
                 Event::Print(events) => {
                     for e in &events {
                         match e {

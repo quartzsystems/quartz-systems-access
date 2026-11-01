@@ -181,14 +181,86 @@ fn clear_print_buffers_drops_the_job() {
 fn other_operations_are_rejected_by_the_protocol() {
     let mut p = Printer::new();
     let r = hex("0011 12A0 0101 0A 0000 09 000000000000 40");
-    assert_eq!(
-        p.record(&rec(&r), Instant::now()),
-        Handled::Now {
-            response: Response::Negative(Negative::InvalidCommand),
-            opcode: 9
-        }
-    );
+    let Handled::Rejected {
+        response,
+        opcode,
+        reason,
+    } = p.record(&rec(&r), Instant::now())
+    else {
+        panic!("operation 09 is refused")
+    };
+    assert_eq!(response, Response::Negative(Negative::InvalidCommand));
+    // The answer carries a defined operation, not the undefined one.
+    assert_eq!(opcode, op::PRINT);
+    assert!(reason.contains("09"), "{reason}");
     assert_eq!(p.current_job(), None);
+}
+
+/// The 519-byte print record (521 with its end-of-record mark) QS/400 sent before its writer was
+/// fixed: data flow 0000, a four-byte variable header, operation 00, then
+/// SCS (GCGID 697 and code page 37, format and spacing controls) and a
+/// screen print with new-lines. The screen text is made up; the header and
+/// controls are as captured.
+fn qs400_unfixed_record() -> Vec<u8> {
+    let mut r = hex("0000 12A0 0000 04 0000 00
+        2BD10601 02B90025 2BC10284 2BC20242 2BC6020C 2BD2042900 0A");
+    let page = crate::codepage::default_page();
+    for line in ["QS400 SCREEN PRINT", "MAIN MENU", "SELECTION OR COMMAND"] {
+        r.extend(page.encode(&format!("{line:<80}")));
+        r.push(0x15);
+    }
+    r.resize(0x0206, 0x40);
+    r.push(0x15);
+    let len = r.len() as u16;
+    r[..2].copy_from_slice(&len.to_be_bytes());
+    r
+}
+
+#[test]
+fn the_unfixed_qs400_record_gets_the_invalid_print_command_reply() {
+    let mut p = Printer::new();
+    let bytes = qs400_unfixed_record();
+    assert_eq!(bytes.len(), 0x0207);
+    assert_eq!(&bytes[..10], &hex("0207 12A0 0000 04 0000 00")[..]);
+    let Handled::Rejected {
+        response,
+        opcode,
+        reason,
+    } = p.record(&rec(&bytes), Instant::now())
+    else {
+        panic!("operation 00 is refused")
+    };
+    // Section 11: data flow 0102 (figure 5), header length 8 counting the
+    // four-byte diagnostic, error flag, operation 01, and note 3's invalid
+    // print command.
+    assert_eq!(
+        response.encode(opcode),
+        hex("000E 12A0 0102 08 8000 01 08110228")
+    );
+    assert!(reason.contains("00"), "{reason}");
+    assert_eq!(p.current_job(), None);
+}
+
+#[test]
+fn the_same_data_in_the_rfc_layout_is_one_job() {
+    // What QS/400 sends once fixed: the same SCS in a figure 4 header,
+    // then figure 6's null print record.
+    let data = qs400_unfixed_record()[10..].to_vec();
+    let mut r = hex("0000 12A0 0101 0A 1800 01 000000000000");
+    r.extend_from_slice(&data);
+    let len = r.len() as u16;
+    r[..2].copy_from_slice(&len.to_be_bytes());
+    let mut p = Printer::new();
+    let now = Instant::now();
+    let Handled::Caller { events, opcode } = p.record(&rec(&r), now) else {
+        panic!("a print record")
+    };
+    assert_eq!(opcode, op::PRINT);
+    assert!(matches!(&events[1], PrintEvent::Data { bytes, .. } if *bytes == data));
+    let Handled::Caller { events, .. } = p.record(&rec(&hex(FIGURE_6)), now) else {
+        panic!()
+    };
+    assert!(matches!(events[..], [PrintEvent::JobEnded { job: 1, .. }]));
 }
 
 #[test]
@@ -342,6 +414,16 @@ fn printer_session_over_tcp() {
              000000000000000000",
         );
         s.write_all(&codec::encode_record(&startup)).unwrap();
+        // QS/400's record before its fix is refused on the wire with the
+        // invalid print command reply, and the session goes on.
+        s.write_all(&codec::encode_record(&qs400_unfixed_record()))
+            .unwrap();
+        got.clear();
+        read_until(
+            &mut s,
+            &mut got,
+            &codec::encode_record(&hex("000E 12A0 0102 08 8000 01 08110228")),
+        );
         let complete = codec::encode_record(&Response::Complete.encode(op::PRINT));
         for r in [FIGURE_4, FIGURE_4, FIGURE_6] {
             s.write_all(&codec::encode_record(&hex(r))).unwrap();
@@ -380,6 +462,10 @@ fn printer_session_over_tcp() {
     };
     assert_eq!(s.outcome(), Outcome::Started);
     assert_eq!(s.device.as_deref(), Some("DUMMYPRT"));
+    assert!(
+        matches!(&events[2], Event::Rejected(why) if why.contains("operation 00")),
+        "{events:?}"
+    );
     let print: Vec<&Vec<PrintEvent>> = events
         .iter()
         .filter_map(|e| match e {

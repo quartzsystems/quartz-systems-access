@@ -17,8 +17,16 @@
 //! `0101` (from the server) in the reserved field, a variable header of ten
 //! bytes (flags, the printer operation, zero padding) and SCS data. The
 //! server ends each job with a null print record (section 11.3). Responses
-//! use data flow `0102`; an error response carries a diagnostic in a longer
-//! variable header.
+//! use data flow `0102` (figure 5); an error response carries a diagnostic
+//! in a longer variable header, whose length counts it (section 11, bytes
+//! 10 to LL).
+//!
+//! A record whose printer operation is neither print nor clear is refused
+//! with the negative response "invalid print command" (section 11, note 3)
+//! and reported as [`Event::Rejected`]. The client is strict here on
+//! purpose: section 11 defines no other operation, and guessing what a
+//! server meant would hide its error. A wrong data flow alone is only
+//! logged, as a warning.
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};
@@ -226,7 +234,9 @@ impl Condition {
     }
 }
 
-/// A negative response (section 11, note 3).
+/// A negative response. The diagnostics are section 11, note 3's printer
+/// negative responses: `08 11 02 00` cancel, `08 11 02 29` invalid print
+/// parameter, `08 11 02 28` invalid print command.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Negative {
     Cancel,
@@ -321,8 +331,13 @@ pub enum Handled {
     /// The caller deals with the events, then answers with
     /// [`PrinterSession::respond`] (or [`Response::encode`]) using `opcode`.
     Caller { events: Vec<PrintEvent>, opcode: u8 },
-    /// The protocol answers by itself.
-    Now { response: Response, opcode: u8 },
+    /// The record is refused: the protocol answers by itself with
+    /// `response` and `opcode`, and `reason` says why, for the user.
+    Rejected {
+        response: Response,
+        opcode: u8,
+        reason: String,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -339,6 +354,8 @@ pub struct Printer {
     /// The server has ended a job with a null print record, so it gives job
     /// boundaries and idle time never ends a job.
     boundaries: bool,
+    /// A wrong data flow has been logged; it is logged once a session.
+    flow_warned: bool,
 }
 
 /// Whether print data is a null print record's: none, or one null byte.
@@ -358,9 +375,9 @@ impl Printer {
 
     /// A record from the server, at `now`.
     pub fn record(&mut self, rec: &Record, now: Instant) -> Handled {
-        if rec.reserved != flow::FROM_SERVER {
-            debug!(
-                "printer: record with data flow {:04X} (not {:04X}), flags {:04X}, operation {:02X}",
+        if rec.reserved != flow::FROM_SERVER && !std::mem::replace(&mut self.flow_warned, true) {
+            crate::warn!(
+                "printer: record with data flow {:04X} (not {:04X}), flags {:04X}, operation {:02X};                  not in the RFC 4777 layout (logged once a session)",
                 rec.reserved,
                 flow::FROM_SERVER,
                 rec.flags,
@@ -431,10 +448,19 @@ impl Printer {
                 }
             }
             other => {
-                debug!("printer: operation {other:02X} is not a printer operation; rejected");
-                Handled::Now {
+                crate::warn!(
+                    "printer: operation {other:02X} (data flow {:04X}) is not a printer operation;                      rejected as an invalid print command",
+                    rec.reserved
+                );
+                // The answer carries a defined operation code: section 11
+                // has only print and clear, so an undefined one is not
+                // echoed back.
+                Handled::Rejected {
                     response: Response::Negative(Negative::InvalidCommand),
-                    opcode: other,
+                    opcode: op::PRINT,
+                    reason: format!(
+                        "printer operation {other:02X} is not print (01) or clear (02)"
+                    ),
                 }
             }
         }
@@ -476,6 +502,9 @@ pub enum Event {
     Print(Vec<PrintEvent>),
     /// Something in the stream was wrong; the session goes on.
     ProtocolError(String),
+    /// A record was refused and already answered with a negative
+    /// response; the text says why. Nothing is to be sent for it.
+    Rejected(String),
 }
 
 /// A connected printer session.
@@ -545,8 +574,13 @@ impl PrinterSession {
                         self.unanswered.push_back(opcode);
                         out.push(Event::Print(events));
                     }
-                    Handled::Now { response, opcode } => {
+                    Handled::Rejected {
+                        response,
+                        opcode,
+                        reason,
+                    } => {
                         self.session.send_bytes(&response.encode(opcode))?;
+                        out.push(Event::Rejected(reason));
                     }
                 },
             }

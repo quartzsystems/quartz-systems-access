@@ -164,6 +164,7 @@ fn serve(
                 Event::Ready(m) => send(tx, FromNet::Ready(m)),
                 Event::Startup(s) => send(tx, FromNet::Startup(s)),
                 Event::ProtocolError(e) => send(tx, FromNet::ProtocolError(e)),
+                Event::Rejected(why) => send(tx, FromNet::ProtocolError(why)),
                 Event::Print(events) => {
                     let ok = print_events(spooler, &events, tx);
                     session.respond(if ok {

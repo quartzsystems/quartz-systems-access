@@ -385,6 +385,8 @@ pub struct PrinterReplay {
     pub jobs: Vec<Vec<u8>>,
     /// Jobs that were host print transform output.
     pub transformed: usize,
+    /// Records the client refused with a negative response.
+    pub rejected: usize,
     /// Answers the client sent that are not what this client sends for a
     /// stored record (print complete): (event index, recorded, expected).
     pub divergences: Vec<(usize, Vec<u8>, Vec<u8>)>,
@@ -425,7 +427,10 @@ pub fn replay_printer(rec: &Recording) -> PrinterReplay {
                         }
                         expected.push_back(Response::Complete.encode(opcode));
                     }
-                    Handled::Now { response, opcode } => {
+                    Handled::Rejected {
+                        response, opcode, ..
+                    } => {
+                        out.rejected += 1;
                         expected.push_back(response.encode(opcode));
                     }
                 }
