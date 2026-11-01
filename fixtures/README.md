@@ -226,6 +226,12 @@ must never be used for anything else.
    `fixtures/pwsub/capture-<host>-level<N>-{signon,change}.vec` only when
    the system answered with return code 0. Nothing is written for a
    failed exchange; the return code is printed instead.
+
+   The `--change` step exercises `pwsub`'s change-password forms, which
+   are unverified and behind the `unverified-change` feature (off by
+   default). A `change` vector the system accepted is the evidence needed
+   to turn the feature on; check it with
+   `cargo test -p pwsub --features unverified-change --test vectors`.
 4. Check `cargo test -p pwsub --test vectors` passes, read the files, and
    commit them.
 5. Delete the profile:

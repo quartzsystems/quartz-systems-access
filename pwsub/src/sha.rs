@@ -60,6 +60,14 @@ pub(crate) fn substitute(token: &[u8; 20], uid: &[u8; 20], seeds: &Seeds, seq: u
     h.finalize().into()
 }
 
+/// UNVERIFIED. The change-password protected forms are not in RFC 4777.
+/// They were written from the author's prose notes taken after reading
+/// the open-source Java toolbox's sign-on code (as a specification, no
+/// code copied), and have not been checked against a real system. They
+/// need a clean re-derivation and capture vectors (see
+/// `hostsvr-proto/SIGNON-SPEC.md`) before the feature is turned on by
+/// default.
+#[cfg(feature = "unverified-change")]
 /// A change-password request's parts.
 pub(crate) struct ChangeParts {
     pub substitute: [u8; 20],
@@ -70,6 +78,7 @@ pub(crate) struct ChangeParts {
 /// Protects `password` with `token`: each 20-byte block XORed with the
 /// substitute for the next sequence number; the length is rounded up to
 /// a whole block, the padding being the substitute's own bytes.
+#[cfg(feature = "unverified-change")]
 fn protect(
     password: &[u8],
     token: &[u8; 20],
@@ -92,6 +101,7 @@ fn protect(
 /// The substitute for the old password (sequence 1), then the new password
 /// protected with the old token, then the old password protected with the
 /// new token, one sequence number per block throughout.
+#[cfg(feature = "unverified-change")]
 pub(crate) fn change(uid: &[u8; 20], old: &[u8], new: &[u8], seeds: &Seeds) -> ChangeParts {
     let old_token = token(uid, old);
     let mut seq = 1;
@@ -129,6 +139,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(feature = "unverified-change")]
     fn protected_passwords_round_up_to_whole_blocks() {
         let seeds = Seeds {
             server: [1; 8],

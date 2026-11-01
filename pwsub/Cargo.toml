@@ -14,5 +14,11 @@ des.workspace = true
 sha1.workspace = true
 zeroize.workspace = true
 
+[features]
+# The change-password protected-password forms. Unverified: off until they
+# are re-derived cleanly and checked against capture vectors (see
+# hostsvr-proto/SIGNON-SPEC.md).
+unverified-change = []
+
 [lints]
 workspace = true

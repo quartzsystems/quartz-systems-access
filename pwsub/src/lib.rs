@@ -24,8 +24,9 @@
 //! - [`substitute`]: the substitute for a sign-on (sequence number 1).
 //! - [`telnet`]: the same, in the form TN5250E automatic sign-on sends
 //!   (user, client seed, substitute).
-//! - [`change`]: the substitute and the protected old and new passwords of a
-//!   change-password request.
+//! - `change` (feature `unverified-change`, off by default): the
+//!   substitute and the protected old and new passwords of a
+//!   change-password request. Not yet checked against a real system.
 //! - [`user_id`]: a user ID as the servers want it: ten EBCDIC bytes.
 
 mod des;
@@ -212,6 +213,14 @@ pub fn telnet(level: u8, user: &str, password: &str, seeds: &Seeds) -> Result<Te
     })
 }
 
+/// UNVERIFIED. The change-password protected forms are not in RFC 4777.
+/// They were written from the author's prose notes taken after reading
+/// the open-source Java toolbox's sign-on code (as a specification, no
+/// code copied), and have not been checked against a real system. They
+/// need a clean re-derivation and capture vectors (see
+/// `hostsvr-proto/SIGNON-SPEC.md`) before the feature is turned on by
+/// default.
+#[cfg(feature = "unverified-change")]
 /// The secret parts of a change-password request.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Change {
@@ -229,9 +238,18 @@ pub struct Change {
     pub new_len: u32,
 }
 
+/// UNVERIFIED. The change-password protected forms are not in RFC 4777.
+/// They were written from the author's prose notes taken after reading
+/// the open-source Java toolbox's sign-on code (as a specification, no
+/// code copied), and have not been checked against a real system. They
+/// need a clean re-derivation and capture vectors (see
+/// `hostsvr-proto/SIGNON-SPEC.md`) before the feature is turned on by
+/// default.
+///
 /// The parts of a change-password request from `old` to `new` for `user`
 /// at password `level`. Whether the new password meets the system's rules
 /// is the server's decision, not this function's.
+#[cfg(feature = "unverified-change")]
 pub fn change(level: u8, user: &str, old: &str, new: &str, seeds: &Seeds) -> Result<Change, Error> {
     let scheme = Scheme::for_level(level)?;
     match scheme {

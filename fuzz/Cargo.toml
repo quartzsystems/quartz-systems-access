@@ -12,7 +12,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 qsa-net = { path = "../qsa-net" }
-pwsub = { path = "../pwsub" }
+pwsub = { path = "../pwsub", features = ["unverified-change"] }
 tn5250 = { path = "../tn5250" }
 scs = { path = "../scs" }
 

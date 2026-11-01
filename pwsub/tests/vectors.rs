@@ -81,6 +81,7 @@ fn every_vector_matches() {
                 assert_eq!(t.client_seed, seeds.client, "{name}");
                 assert_eq!(t.substitute.expose(), hex(get("substitute")), "{name}");
             }
+            #[cfg(feature = "unverified-change")]
             "change" => {
                 let c = pwsub::change(
                     level,
@@ -102,6 +103,8 @@ fn every_vector_matches() {
                     "{name}"
                 );
             }
+            #[cfg(not(feature = "unverified-change"))]
+            "change" => eprintln!("{name}: change vectors need the unverified-change feature"),
             k => panic!("{name}: unknown kind {k}"),
         }
     }
