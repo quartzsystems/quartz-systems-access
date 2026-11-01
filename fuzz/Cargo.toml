@@ -1,5 +1,5 @@
-# Fuzz targets for tn5250 and scs (cargo-fuzz; nightly). Not part of the main
-# workspace. See README.md.
+# Fuzz targets for tn5250, scs, pwsub and hostsvr-proto (cargo-fuzz;
+# nightly). Not part of the main workspace. See README.md.
 [package]
 name = "tn5250-fuzz"
 version = "0.0.0"
@@ -12,6 +12,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 qsa-net = { path = "../qsa-net" }
+pwsub = { path = "../pwsub" }
 tn5250 = { path = "../tn5250" }
 scs = { path = "../scs" }
 
@@ -42,6 +43,13 @@ bench = false
 [[bin]]
 name = "scs_parser"
 path = "fuzz_targets/scs_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "pwsub_inputs"
+path = "fuzz_targets/pwsub_inputs.rs"
 test = false
 doc = false
 bench = false

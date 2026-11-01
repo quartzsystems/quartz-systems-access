@@ -1,0 +1,18 @@
+[package]
+name = "pwsub"
+description = "Password substitutes for the QS/400 host servers and TN5250E automatic sign-on (RFC 4777), as pure functions"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+# Only these: QS/400 depends on this crate by git, pinned to a commit.
+[dependencies]
+des.workspace = true
+sha1.workspace = true
+zeroize.workspace = true
+
+[lints]
+workspace = true

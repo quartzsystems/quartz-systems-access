@@ -1,0 +1,9 @@
+# RFC 4777 section 5.2, item 6: the SHA-1 password substitute example.
+# Published test data; the password is the RFC's, not anyone's.
+kind = substitute
+level = 2
+user = USER123
+password = AbCdEfGh123?+
+server_seed = 3E3A71C78795E5F5
+client_seed = B1C806D5D377D994
+substitute = E7FAB5F034BEDA42E91F439DD07532A24140E3DD

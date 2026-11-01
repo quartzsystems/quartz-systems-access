@@ -1,0 +1,9 @@
+# RFC 4777 section 5: the encrypted automatic sign-on example
+# (DUMMYUSR / DUMMYPW). Published test data.
+kind = telnet
+level = 0
+user = DUMMYUSR
+password = DUMMYPW
+server_seed = 7D3E488F18080404
+client_seed = 4E4142334E414233
+substitute = DFB0402F22ABA3BA
