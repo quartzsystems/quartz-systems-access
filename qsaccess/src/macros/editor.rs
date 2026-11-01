@@ -7,6 +7,7 @@
 //! step that waits for text can take its row and column from a click on a
 //! live session's screen.
 
+use qsa_ui::chan::{self, Emit};
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -68,7 +69,7 @@ pub struct Editor {
     description: Input,
     size: Choice,
     status: StatusLine,
-    rx: app::Receiver<Req>,
+    rx: chan::Receiver<Req>,
     file: RefCell<Option<PathBuf>>,
     doc: RefCell<MacroFile>,
     one: Vec<Switch>,
@@ -84,7 +85,7 @@ fn title_for(m: &MacroFile, file: Option<&Path>) -> String {
 
 /// Builds an editor for `m` without showing it.
 pub fn build(m: MacroFile, file: Option<PathBuf>) -> Rc<Editor> {
-    let (tx, rx) = app::channel::<Req>();
+    let (tx, rx) = chan::channel::<Req>();
     let mm = 10;
     let fh = theme::FIELD_H;
     let bw = theme::BUTTON_W + 10;
@@ -121,7 +122,7 @@ pub fn build(m: MacroFile, file: Option<PathBuf>) -> Rc<Editor> {
     let mut y = top;
     let mut button = |label: &str, r: Req, gap: i32| -> Button {
         let mut b = controls::button(bx, y, bw, bh, label);
-        b.emit(tx, r);
+        b.emit_to(tx, r);
         y += bh + gap;
         b
     };
@@ -134,11 +135,11 @@ pub fn build(m: MacroFile, file: Option<PathBuf>) -> Rc<Editor> {
     buttons.make_resizable(false);
     let status = StatusLine::new(mm, H - mm - bh, W - 4 * mm - 3 * bw, bh);
     let mut save = controls::default_button(W - 3 * bw - 2 * 6 - mm, H - mm - bh, bw, bh, "Save");
-    save.emit(tx, Req::Save);
+    save.emit_to(tx, Req::Save);
     let mut save_as = controls::button(W - 2 * bw - 6 - mm, H - mm - bh, bw, bh, "Save As...");
-    save_as.emit(tx, Req::SaveAs);
+    save_as.emit_to(tx, Req::SaveAs);
     let mut close = controls::button(W - bw - mm, H - mm - bh, bw, bh, "Close");
-    close.emit(tx, Req::Close);
+    close.emit_to(tx, Req::Close);
     window.end();
     window.resizable(list.table());
     window.set_callback(move |_| tx.send(Req::Close));
@@ -449,8 +450,8 @@ impl StepForm {
 }
 
 /// Builds the Step dialog for `step` without showing it.
-pub fn build_step(title: &str, step: &Step) -> (Window, StepForm, app::Receiver<u8>) {
-    let (tx, rx) = app::channel::<u8>();
+pub fn build_step(title: &str, step: &Step) -> (Window, StepForm, chan::Receiver<u8>) {
+    let (tx, rx) = chan::channel::<u8>();
     let (w, h) = (430, 270);
     let m = 12;
     let fh = theme::FIELD_H;
@@ -485,7 +486,7 @@ pub fn build_step(title: &str, step: &Step) -> (Window, StepForm, app::Receiver<
     let mut r = int_field(m + lw, at, 50);
     let mut c = int_field(m + lw + 56, at, 50);
     let mut pick = controls::button(m + lw + 116, at, fw - 116, fh, "Pick from Screen...");
-    pick.emit(tx, 2);
+    pick.emit_to(tx, 2);
     let at = row("Time (ms):");
     let mut ms = int_field(m + lw, at, 90);
     let at = row("");
@@ -521,9 +522,9 @@ pub fn build_step(title: &str, step: &Step) -> (Window, StepForm, app::Receiver<
     let bw = theme::BUTTON_W;
     let bh = theme::BUTTON_H;
     let mut ok = controls::default_button(w - m - 2 * bw - 6, h - m - bh, bw, bh, "OK");
-    ok.emit(tx, 1);
+    ok.emit_to(tx, 1);
     let mut cancel = controls::button(w - m - bw, h - m - bh, bw, bh, "Cancel");
-    cancel.emit(tx, 0);
+    cancel.emit_to(tx, 0);
     win.end();
     win.set_callback(move |_| tx.send(0));
     let form = StepForm {

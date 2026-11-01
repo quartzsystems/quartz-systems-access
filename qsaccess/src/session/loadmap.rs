@@ -6,6 +6,7 @@
 //! copied into an open session (kept when that session is saved), or made
 //! the map new sessions start from.
 
+use qsa_ui::chan::{self, Emit};
 use std::path::Path;
 use std::rc::Rc;
 
@@ -51,8 +52,8 @@ pub fn rows(sessions: &[(String, String)]) -> Vec<Vec<Cell>> {
     out
 }
 
-fn build_with(file: &Path, sessions: &[(String, String)]) -> (LoadMapDialog, app::Receiver<bool>) {
-    let (tx, rx) = app::channel::<bool>();
+fn build_with(file: &Path, sessions: &[(String, String)]) -> (LoadMapDialog, chan::Receiver<bool>) {
+    let (tx, rx) = chan::channel::<bool>();
     let m = 10;
     let bh = theme::BUTTON_H;
     let bw = theme::BUTTON_W;
@@ -80,9 +81,9 @@ fn build_with(file: &Path, sessions: &[(String, String)]) -> (LoadMapDialog, app
         &[("Session", 170), ("System", W - 2 * m - 170 - 20)],
     );
     let mut ok = controls::default_button(W - 2 * m - 2 * bw + m / 2, H - m - bh, bw, bh, "OK");
-    ok.emit(tx, true);
+    ok.emit_to(tx, true);
     let mut cancel = controls::button(W - m - bw, H - m - bh, bw, bh, "Cancel");
-    cancel.emit(tx, false);
+    cancel.emit_to(tx, false);
     window.end();
     window.set_callback(move |_| tx.send(false));
     list.set_rows(rows(sessions));

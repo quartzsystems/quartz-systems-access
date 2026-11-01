@@ -6,6 +6,7 @@
 //! TLS and colour map. It opens with the selected system and the values last
 //! used for it, and remembers them per system in `settings.toml`.
 
+use qsa_ui::chan::{self, Emit};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -122,8 +123,8 @@ impl Form {
     }
 }
 
-fn build_with(state: &Shared, system: Option<&str>) -> (StartDialog, app::Receiver<bool>) {
-    let (tx, rx) = app::channel::<bool>();
+fn build_with(state: &Shared, system: Option<&str>) -> (StartDialog, chan::Receiver<bool>) {
+    let (tx, rx) = chan::channel::<bool>();
     let m = 12;
     let (lw, fh) = (112, theme::FIELD_H);
     let fw = W - 2 * m - lw;
@@ -161,9 +162,9 @@ fn build_with(state: &Shared, system: Option<&str>) -> (StartDialog, app::Receiv
     let bw = theme::BUTTON_W;
     let status = StatusLine::new(m, H - m - bh - bh - 10, W - 2 * m, bh);
     let mut ok = controls::default_button(W - 2 * m - 2 * bw + m / 2, H - m - bh, bw, bh, "Start");
-    ok.emit(tx, true);
+    ok.emit_to(tx, true);
     let mut cancel = controls::button(W - m - bw, H - m - bh, bw, bh, "Cancel");
-    cancel.emit(tx, false);
+    cancel.emit_to(tx, false);
     window.end();
     window.set_callback(move |_| tx.send(false));
 

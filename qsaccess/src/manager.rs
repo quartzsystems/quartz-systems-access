@@ -14,6 +14,7 @@
 //! - The folders are looked at every five seconds, and the list follows
 //!   files added, changed or removed by anything else.
 
+use qsa_ui::chan::{self, Emit};
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -21,7 +22,6 @@ use std::time::{Duration, Instant, SystemTime};
 
 use fltk::app;
 use fltk::button::Button;
-use fltk::dialog::{FileChooser, FileChooserType};
 use fltk::prelude::*;
 use fltk::window::Window;
 use qsa_config::qsd::{self, SessionFile};
@@ -196,7 +196,7 @@ pub struct Manager {
     pub list: ListTable,
     status: StatusLine,
     state: Shared,
-    rx: app::Receiver<Req>,
+    rx: chan::Receiver<Req>,
     entries: RefCell<Vec<Entry>>,
     sort: Cell<(usize, bool)>,
     sig: RefCell<Signature>,
@@ -214,7 +214,7 @@ thread_local! {
 
 /// Builds the window without showing it (for screenshots).
 pub fn build(state: &Shared) -> Rc<Manager> {
-    let (tx, rx) = app::channel::<Req>();
+    let (tx, rx) = chan::channel::<Req>();
     let m = 10;
     let bw = theme::BUTTON_W + 14;
     let bh = theme::BUTTON_H;
@@ -232,7 +232,7 @@ pub fn build(state: &Shared) -> Rc<Manager> {
     let mut y = m;
     let mut button = |label: &str, r: Req, gap: i32| -> Button {
         let mut b = controls::button(bx, y, bw, bh, label);
-        b.emit(tx, r);
+        b.emit_to(tx, r);
         y += bh + gap;
         b
     };
@@ -249,7 +249,7 @@ pub fn build(state: &Shared) -> Rc<Manager> {
     buttons.make_resizable(false);
     let status = StatusLine::new(m, H - m - bh, W - 3 * m - bw, bh);
     let mut close = controls::default_button(bx, H - m - bh, bw, bh, "Close");
-    close.emit(tx, Req::Close);
+    close.emit_to(tx, Req::Close);
     window.end();
     window.resizable(list.table());
     window.set_callback(move |_| tx.send(Req::Close));
@@ -702,17 +702,7 @@ impl Manager {
     }
 
     fn add_folder(&self) {
-        let mut chooser = FileChooser::new(
-            files::sessions_dir(),
-            "*",
-            FileChooserType::Directory,
-            "Add Folder",
-        );
-        chooser.show();
-        while chooser.shown() {
-            app::wait();
-        }
-        let Some(dir) = chooser.value(1).map(PathBuf::from) else {
+        let Some(dir) = files::choose_folder(&files::sessions_dir(), "Add Folder") else {
             return;
         };
         let dir = std::path::absolute(&dir).unwrap_or(dir);

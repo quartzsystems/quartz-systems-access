@@ -5,6 +5,7 @@
 //! The main window: menu bar, toolbar, task pane with the system selector,
 //! a welcome panel, and the status bar.
 
+use qsa_ui::chan::{self, Emit, MenuEmit};
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -103,7 +104,7 @@ pub struct Ui {
     pub system: Choice,
     pub state: Shared,
     menu: MenuBar,
-    tx: fltk::app::Sender<Action>,
+    tx: chan::Sender<Action>,
     /// The recent sessions generation the menu shows.
     recent_gen: Rc<Cell<Option<u64>>>,
 }
@@ -185,7 +186,7 @@ impl Ui {
         self.recent_gen.set(Some(gen_now));
         let tx = self.tx;
         recent::fill(&mut self.menu.clone(), RECENT_MENU, &list, |m, path, i| {
-            m.add_emit(
+            m.add_emit_to(
                 path,
                 Shortcut::None,
                 MenuFlag::Normal,
@@ -300,18 +301,19 @@ impl Ui {
 }
 
 /// Builds the main window. It is not shown. Actions arrive on the receiver.
-pub fn build(state: Shared) -> (Ui, fltk::app::Receiver<Action>) {
-    let (tx, rx) = fltk::app::channel::<Action>();
+pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
+    let (tx, rx) = chan::channel::<Action>();
     let (w, h) = (W, H);
     let mut window = Window::new(0, 0, w, h, None);
     window.set_label(PRODUCT);
+    window.set_icon(Some(glyph::app_icon()));
     window.set_color(colors::FACE);
     window.size_range(640, 420, 0, 0);
 
     // Menus.
     let mut menu = menu_bar(0, 0, w);
     let add = |menu: &mut fltk::menu::MenuBar, path: &str, sc: Shortcut, a: Action| {
-        menu.add_emit(path, sc, MenuFlag::Normal, tx, a);
+        menu.add_emit_to(path, sc, MenuFlag::Normal, tx, a);
     };
     add(
         &mut menu,
@@ -319,7 +321,7 @@ pub fn build(state: Shared) -> (Ui, fltk::app::Receiver<Action>) {
         Shortcut::Ctrl | 'o',
         Action::Open,
     );
-    menu.add_emit(
+    menu.add_emit_to(
         &format!("{RECENT_MENU}/(none)"),
         Shortcut::None,
         MenuFlag::Inactive,
@@ -399,12 +401,12 @@ pub fn build(state: Shared) -> (Ui, fltk::app::Receiver<Action>) {
         let bw = 26;
         let l = controls::label(x, y, lw, theme::FIELD_H, "System:");
         let mut c = controls::combo(x + lw, y, w - lw - bw - 4, theme::FIELD_H);
-        c.emit(tx, Action::SystemChanged);
+        c.emit_to(tx, Action::SystemChanged);
         let mut b = controls::button(x + w - bw, y, bw, theme::FIELD_H, "");
         b.set_image(Some(glyph::image(Glyph::System, Size::Small)));
         b.set_align(Align::Center | Align::Inside | Align::ImageBackdrop);
         b.set_tooltip("System Configurations");
-        b.emit(tx, Action::Task(Task::SystemConfigurations));
+        b.emit_to(tx, Action::Task(Task::SystemConfigurations));
         system = Some(c.clone());
         vec![l.as_base_widget(), c.as_base_widget(), b.as_base_widget()]
     });

@@ -6,6 +6,7 @@
 //! (Welcome, Licence, Install for, Location, Options, Ready, Progress,
 //! Finish), and the Uninstall and Repair dialogs.
 
+use qsa_ui::chan::{self, Emit};
 use std::cell::Cell;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -13,7 +14,6 @@ use std::sync::mpsc;
 
 use fltk::app;
 use fltk::button::{Button, CheckButton, RadioRoundButton};
-use fltk::dialog::{FileChooser, FileChooserType};
 use fltk::enums::{Align, FrameType};
 use fltk::frame::Frame;
 use fltk::group::Group;
@@ -83,12 +83,20 @@ const PAGE_READY: usize = 5;
 const PAGE_PROGRESS: usize = 6;
 const PAGE_FINISH: usize = 7;
 
-/// The licence page's text, until the real terms are written.
-pub const LICENCE: &str = "PLACEHOLDER LICENCE TERMS\n\n\
-This text stands in for the licence agreement for QS/400 Access for Desktop. \
-The final terms will be supplied by Quartz Systems before release.\n\n\
-Until then, QS/400 Access for Desktop is made available under the MIT licence \
-that comes with it; see LICENSE in the install folder.";
+/// The project's MIT licence, as hard-wrapped in the file.
+const LICENSE_FILE: &str = include_str!("../../LICENSE");
+
+/// The licence page's text: [`LICENSE_FILE`] with each paragraph on one
+/// line, so the text box wraps it to its own width.
+pub fn licence() -> String {
+    LICENSE_FILE
+        .replace('\r', "")
+        .split("\n\n")
+        .map(|p| p.split_whitespace().collect::<Vec<_>>().join(" "))
+        .filter(|p| !p.is_empty())
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
 
 /// What happened, for the Finish page.
 #[derive(Debug)]
@@ -167,6 +175,7 @@ impl Wizard {
     pub fn build(existing: Option<Manifest>) -> Wizard {
         let mut window = Window::new(0, 0, W, H, None);
         window.set_label(&format!("{} Setup", crate::PRODUCT));
+        window.set_icon(Some(glyph::app_icon()));
         window.set_color(colors::FACE);
         window.make_modal(false);
 
@@ -214,8 +223,6 @@ impl Wizard {
                 ph,
                 &format!(
                     "{}Setup will guide you through installing {}.\n\n\
-                     It is a good idea to close QS/400 Access for Desktop before you go on; \
-                     Setup offers to close it if it is running.\n\n\
                      Select Next to continue.",
                     upgrade.clone().unwrap_or_default(),
                     crate::PRODUCT
@@ -226,7 +233,7 @@ impl Wizard {
         // Licence.
         let mut accept = None;
         page(&mut || {
-            let _ = text_box(px, py, pw, ph - 54, LICENCE);
+            let _ = text_box(px, py, pw, ph - 54, &licence());
             let g = Group::new(px, py + ph - 48, pw, 48, None);
             let a = controls::radio(px, py + ph - 46, pw, 20, "I accept the licence terms");
             let mut d = controls::radio(
@@ -355,7 +362,7 @@ impl Wizard {
         sep.set_color(colors::BORDER_LIGHT);
         let (bw, bh) = (theme::BUTTON_W, theme::BUTTON_H);
         let by = H - 12 - bh;
-        let mut back = controls::button(W - 12 - 3 * bw - 12, by, bw, bh, "< Back");
+        let mut back = controls::button(W - 12 - 3 * bw - 24, by, bw, bh, "< Back");
         let mut next = controls::default_button(W - 12 - 2 * bw - 12, by, bw, bh, "Next >");
         let cancel = controls::button(W - 12 - bw, by, bw, bh, "Cancel");
         window.end();
@@ -373,18 +380,9 @@ impl Wizard {
             let mut d = dir.clone();
             let e = dir_edited.clone();
             browse.set_callback(move |_| {
-                let mut c = FileChooser::new(
-                    d.value(),
-                    "*",
-                    FileChooserType::Directory,
-                    "Install Location",
-                );
-                c.show();
-                while c.shown() {
-                    app::wait();
-                }
-                if let Some(v) = c.value(1) {
-                    d.set_value(&v);
+                let start = PathBuf::from(d.value());
+                if let Some(v) = qsaccess::files::choose_folder(&start, "Install Location") {
+                    d.set_value(&v.display().to_string());
                     e.set(true);
                 }
             });
@@ -583,10 +581,10 @@ pub fn run_wizard(installer: &Path) -> i32 {
     let mut w = Wizard::build(existing);
     center_on(&mut w.window, None);
     qsa_ui::propdialog::show_placed(&mut w.window);
-    let (tx, rx) = app::channel::<u8>();
-    w.back.emit(tx, 1);
-    w.next.emit(tx, 2);
-    w.cancel.emit(tx, 3);
+    let (tx, rx) = chan::channel::<u8>();
+    w.back.emit_to(tx, 1);
+    w.next.emit_to(tx, 2);
+    w.cancel.emit_to(tx, 3);
     w.window.set_callback(move |_| tx.send(3));
     {
         let n = w.next_sw.clone();
@@ -743,7 +741,7 @@ pub struct UninstallDialog {
 }
 
 /// Builds the Uninstall dialog for the install in `dir`.
-pub fn build_uninstall(dir: &Path, repair: bool) -> (UninstallDialog, app::Receiver<bool>) {
+pub fn build_uninstall(dir: &Path, repair: bool) -> (UninstallDialog, chan::Receiver<bool>) {
     let sessions = qsa_config::store::default_sessions_dir()
         .map(|d| d.display().to_string())
         .unwrap_or_else(|| "your Sessions folder".into());
@@ -756,8 +754,8 @@ pub fn build_uninstall_with(
     dir: &Path,
     sessions: &str,
     repair: bool,
-) -> (UninstallDialog, app::Receiver<bool>) {
-    let (tx, rx) = app::channel::<bool>();
+) -> (UninstallDialog, chan::Receiver<bool>) {
+    let (tx, rx) = chan::channel::<bool>();
     let (w, h) = (440, 232);
     let m = 14;
     let mut window = Window::new(0, 0, w, h, None);
@@ -766,6 +764,7 @@ pub fn build_uninstall_with(
     } else {
         format!("Uninstall {}", crate::PRODUCT)
     });
+    window.set_icon(Some(glyph::app_icon()));
     window.set_color(colors::FACE);
     window.make_modal(true);
     let mut icon = Frame::new(m, m, 32, 32, None);
@@ -808,9 +807,9 @@ pub fn build_uninstall_with(
         bh,
         if repair { "Repair" } else { "Uninstall" },
     );
-    ok.emit(tx, true);
+    ok.emit_to(tx, true);
     let mut cancel = controls::button(w - m - bw, h - m - bh, bw, bh, "Cancel");
-    cancel.emit(tx, false);
+    cancel.emit_to(tx, false);
     window.end();
     window.set_callback(move |_| tx.send(false));
     (

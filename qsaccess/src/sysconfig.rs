@@ -5,6 +5,7 @@
 //! The System Configurations dialog: the list of systems, with New, Edit,
 //! Delete, Import, Export and Close.
 
+use qsa_ui::chan::{self, Emit};
 use std::path::Path;
 
 use fltk::app;
@@ -76,8 +77,8 @@ pub fn rows(systems: &[System]) -> Vec<Vec<Cell>> {
 }
 
 /// Builds the dialog. It is not shown. Button presses arrive on the receiver.
-fn build_with(state: &Shared) -> (ListDialog, app::Receiver<Request>) {
-    let (tx, rx) = app::channel::<Request>();
+fn build_with(state: &Shared) -> (ListDialog, chan::Receiver<Request>) {
+    let (tx, rx) = chan::channel::<Request>();
     let m = 10;
     let bw = theme::BUTTON_W;
     let bh = theme::BUTTON_H;
@@ -93,7 +94,7 @@ fn build_with(state: &Shared) -> (ListDialog, app::Receiver<Request>) {
     let mut y = m;
     let button = |label: &str, r: Request, y: i32| -> Button {
         let mut b = controls::button(bx, y, bw, bh, label);
-        b.emit(tx, r);
+        b.emit_to(tx, r);
         b
     };
     button("New...", Request::New, y);
@@ -108,7 +109,7 @@ fn build_with(state: &Shared) -> (ListDialog, app::Receiver<Request>) {
 
     let status = StatusLine::new(m, H - m - bh, W - 3 * m - bw, bh);
     let mut close = controls::default_button(bx, H - m - bh, bw, bh, "Close");
-    close.emit(tx, Request::Close);
+    close.emit_to(tx, Request::Close);
     window.end();
     window.set_callback(move |_| tx.send(Request::Close));
 

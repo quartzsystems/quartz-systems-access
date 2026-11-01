@@ -6,6 +6,7 @@
 //! with Change... and Reset to defaults. Functions without a key are listed
 //! too, as `(none)`, so they can be given one.
 
+use qsa_ui::chan::{self, Emit};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -95,8 +96,8 @@ impl KeymapDialog {
     }
 }
 
-fn build_with(title: &str, map: &KeyMap) -> (KeymapDialog, app::Receiver<Req>) {
-    let (tx, rx) = app::channel::<Req>();
+fn build_with(title: &str, map: &KeyMap) -> (KeymapDialog, chan::Receiver<Req>) {
+    let (tx, rx) = chan::channel::<Req>();
     let m = 10;
     let (bw, bh) = (theme::BUTTON_W + 30, theme::BUTTON_H);
     let mut window = Window::new(0, 0, W, H, None);
@@ -108,9 +109,9 @@ fn build_with(title: &str, map: &KeyMap) -> (KeymapDialog, app::Receiver<Req>) {
     let mut list = ListTable::new(m, m, lw, lh, &COLUMNS);
     let bx = m + lw + m;
     let mut change = controls::button(bx, m, bw, bh, "Change...");
-    change.emit(tx, Req::Change);
+    change.emit_to(tx, Req::Change);
     let mut reset = controls::button(bx, m + bh + 6, bw, bh, "Reset to defaults");
-    reset.emit(tx, Req::Reset);
+    reset.emit_to(tx, Req::Reset);
     let mut ok = controls::default_button(
         W - 2 * m - 2 * theme::BUTTON_W,
         H - m - bh,
@@ -118,7 +119,7 @@ fn build_with(title: &str, map: &KeyMap) -> (KeymapDialog, app::Receiver<Req>) {
         bh,
         "OK",
     );
-    ok.emit(tx, Req::Ok);
+    ok.emit_to(tx, Req::Ok);
     let mut cancel = controls::button(
         W - m - theme::BUTTON_W,
         H - m - bh,
@@ -126,7 +127,7 @@ fn build_with(title: &str, map: &KeyMap) -> (KeymapDialog, app::Receiver<Req>) {
         bh,
         "Cancel",
     );
-    cancel.emit(tx, Req::Cancel);
+    cancel.emit_to(tx, Req::Cancel);
     window.end();
     window.set_callback(move |_| tx.send(Req::Cancel));
     let change = Switch::for_button(&mut change);
@@ -229,14 +230,14 @@ fn capture(parent: &Window, function: &str) -> Captured {
     shown.set_frame(FrameType::DownBox);
     shown.set_color(colors::WINDOW);
     shown.set_align(Align::Center | Align::Inside);
-    let (tx, rx) = app::channel::<u8>();
+    let (tx, rx) = chan::channel::<u8>();
     let bw = theme::BUTTON_W;
     let mut none = controls::button(m, h - m - bh, bw, bh, "No key");
-    none.emit(tx, 2);
+    none.emit_to(tx, 2);
     let mut ok = controls::default_button(w - 2 * m - 2 * bw, h - m - bh, bw, bh, "OK");
-    ok.emit(tx, 1);
+    ok.emit_to(tx, 1);
     let mut cancel = controls::button(w - m - bw, h - m - bh, bw, bh, "Cancel");
-    cancel.emit(tx, 0);
+    cancel.emit_to(tx, 0);
     win.end();
     win.set_callback(move |_| tx.send(0));
     let key: Rc<RefCell<Option<String>>> = Rc::default();

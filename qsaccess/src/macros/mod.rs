@@ -15,6 +15,7 @@ pub mod editor;
 pub mod player;
 pub mod recorder;
 
+use qsa_ui::chan::{self, Emit};
 use std::path::Path;
 
 use fltk::app;
@@ -38,8 +39,8 @@ pub struct RunDialog {
 }
 
 /// Builds the Run Macro dialog: `sessions` are (title, system).
-pub fn build_run(name: &str, sessions: &[(String, String)]) -> (RunDialog, app::Receiver<u8>) {
-    let (tx, rx) = app::channel::<u8>();
+pub fn build_run(name: &str, sessions: &[(String, String)]) -> (RunDialog, chan::Receiver<u8>) {
+    let (tx, rx) = chan::channel::<u8>();
     let m = 10;
     let bh = theme::BUTTON_H;
     let bw = theme::BUTTON_W;
@@ -62,7 +63,7 @@ pub fn build_run(name: &str, sessions: &[(String, String)]) -> (RunDialog, app::
         &[("Session", 170), ("System", RUN_W - 2 * m - 170 - 20)],
     );
     let mut edit = controls::button(m, RUN_H - m - bh, bw, bh, "Edit...");
-    edit.emit(tx, 2);
+    edit.emit_to(tx, 2);
     let mut run = controls::default_button(
         RUN_W - 2 * m - 2 * bw + m / 2,
         RUN_H - m - bh,
@@ -70,9 +71,9 @@ pub fn build_run(name: &str, sessions: &[(String, String)]) -> (RunDialog, app::
         bh,
         "Run",
     );
-    run.emit(tx, 1);
+    run.emit_to(tx, 1);
     let mut cancel = controls::button(RUN_W - m - bw, RUN_H - m - bh, bw, bh, "Cancel");
-    cancel.emit(tx, 0);
+    cancel.emit_to(tx, 0);
     window.end();
     window.set_callback(move |_| tx.send(0));
     list.set_rows(

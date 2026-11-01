@@ -15,3 +15,15 @@ pub fn image(glyph: Glyph, size: Size) -> RgbImage {
     RgbImage::new(&rgba(glyph, size), s, s, ColorDepth::Rgba8)
         .expect("glyph buffer is always the right size")
 }
+
+/// The application icon, for title bars and the taskbar.
+pub fn app_icon() -> RgbImage {
+    let s = 32;
+    RgbImage::new(
+        &qsa_glyph::icon_rgba(qsa_glyph::Icon::App, s as usize),
+        s,
+        s,
+        ColorDepth::Rgba8,
+    )
+    .expect("icon buffer is always the right size")
+}

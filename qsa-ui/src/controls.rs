@@ -124,10 +124,17 @@ pub fn combo(x: i32, y: i32, w: i32, h: i32) -> Choice {
     c
 }
 
+/// The label of a check box or radio. FLTK sets the text only a pixel or two
+/// past the box, with no setting for the gap, so a leading space gives the
+/// gap Windows leaves.
+fn spaced(label: &str) -> String {
+    format!(" {label}")
+}
+
 /// A check box.
 pub fn check(x: i32, y: i32, w: i32, h: i32, label: &str) -> CheckButton {
     let mut c = CheckButton::new(x, y, w, h, None);
-    c.set_label(label);
+    c.set_label(&spaced(label));
     c.set_label_size(theme::UI_SIZE);
     c.set_selection_color(colors::TEXT);
     c.set_down_frame(theme::CHECK_BOX);
@@ -138,7 +145,7 @@ pub fn check(x: i32, y: i32, w: i32, h: i32, label: &str) -> CheckButton {
 /// A radio button. Radios in the same group are exclusive.
 pub fn radio(x: i32, y: i32, w: i32, h: i32, label: &str) -> RadioRoundButton {
     let mut r = RadioRoundButton::new(x, y, w, h, None);
-    r.set_label(label);
+    r.set_label(&spaced(label));
     r.set_label_size(theme::UI_SIZE);
     r.set_selection_color(colors::TEXT);
     r.set_down_frame(FrameType::RoundDownBox);

@@ -11,6 +11,7 @@ use fltk::enums::{Align, FrameType};
 use fltk::frame::Frame;
 use fltk::prelude::*;
 use fltk::window::Window;
+use qsa_ui::chan::{self, Emit};
 use qsa_ui::controls;
 use qsa_ui::glyph::{self, Glyph, Size};
 use qsa_ui::propdialog::center_on;
@@ -22,8 +23,8 @@ pub const H: i32 = 330;
 
 /// Builds the dialog without showing it. `true` arrives on the receiver
 /// for Trust for this system, `false` for Cancel.
-pub fn build(system: &str, reason: &str, info: &CertInfo) -> (Window, app::Receiver<bool>) {
-    let (tx, rx) = app::channel::<bool>();
+pub fn build(system: &str, reason: &str, info: &CertInfo) -> (Window, chan::Receiver<bool>) {
+    let (tx, rx) = chan::channel::<bool>();
     let m = 12;
     let mut win = Window::new(0, 0, W, H, None);
     win.set_label("Certificate Not Trusted");
@@ -90,7 +91,7 @@ pub fn build(system: &str, reason: &str, info: &CertInfo) -> (Window, app::Recei
         bh,
         "Trust for this system",
     );
-    trust.emit(tx, true);
+    trust.emit_to(tx, true);
     let mut cancel = controls::default_button(
         W - m - theme::BUTTON_W,
         H - m - bh,
@@ -98,7 +99,7 @@ pub fn build(system: &str, reason: &str, info: &CertInfo) -> (Window, app::Recei
         bh,
         "Cancel",
     );
-    cancel.emit(tx, false);
+    cancel.emit_to(tx, false);
     win.end();
     win.set_callback(move |_| tx.send(false));
     (win, rx)

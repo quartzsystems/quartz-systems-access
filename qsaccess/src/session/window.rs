@@ -11,6 +11,7 @@
 //! new one for a session started from the Start 5250 Display dialog. Save
 //! Session writes it.
 
+use qsa_ui::chan::{self, MenuEmit};
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
@@ -184,8 +185,8 @@ pub struct SessionWindow {
     toolbar: Group,
     status: StatusBar,
     menu: MenuBar,
-    rx: app::Receiver<Cmd>,
-    tx: app::Sender<Cmd>,
+    rx: chan::Receiver<Cmd>,
+    tx: chan::Sender<Cmd>,
     state: Shared,
     st: RefCell<State>,
     /// The recent sessions generation the menu shows.
@@ -204,14 +205,6 @@ fn scheme(c: ColorMap) -> Scheme {
         ColorMap::Console => Scheme::Console,
         ColorMap::BlackOnWhite => Scheme::BlackOnWhite,
     }
-}
-
-/// The scale the window opens at: the largest that fits 90 % of the screen.
-fn initial_scale(rows: usize, cols: usize, extra_w: i32, extra_h: i32) -> usize {
-    let (_, _, sw, sh) = app::screen_xywh(0);
-    let (w1, h1) = TerminalView::size_for(rows, cols, 1);
-    let fit = |avail: i32, extra: i32, one: i32| ((avail * 9 / 10 - extra) / one.max(1)).max(1);
-    fit(sw, extra_w, w1).min(fit(sh, extra_h, h1)).max(1) as usize
 }
 
 /// The connection settings a session file gives.
@@ -268,21 +261,23 @@ impl SessionWindow {
     ) -> Rc<SessionWindow> {
         let opts = options_for(&doc);
         let keymap = doc.keymap();
-        let (tx, rx) = app::channel::<Cmd>();
+        let (tx, rx) = chan::channel::<Cmd>();
         let size = tn_size(opts.size);
         let chrome_h = MENU_H + Toolbar::HEIGHT + StatusBar::HEIGHT;
-        let s = scale
-            .unwrap_or_else(|| initial_scale(size.rows(), size.cols(), KEYPAD_W, chrome_h + 60));
+        // The screen's own size (scale 1) unless asked otherwise; a resize
+        // picks the largest scale that fits.
+        let s = scale.unwrap_or(1);
         let (tw, th) = TerminalView::size_for(size.rows(), size.cols(), s);
         let (w, h) = (tw, chrome_h + th);
         let mut window = Window::new(0, 0, w, h, None);
         window.set_label(&window_title(&doc, file.as_deref()));
+        window.set_icon(Some(qsa_ui::glyph::app_icon()));
         window.set_color(colors::FACE);
         window.size_range(320, 240, 0, 0);
 
         let mut menu = menu_bar(0, 0, w);
         let mut add = |path: &str, sc: Shortcut, c: Cmd, flag: MenuFlag| {
-            menu.add_emit(path, sc, flag, tx, c);
+            menu.add_emit_to(path, sc, flag, tx, c);
         };
         let n = MenuFlag::Normal;
         add("&File/&Open Session...", Shortcut::Ctrl | 'o', Cmd::Open, n);
@@ -526,7 +521,7 @@ impl SessionWindow {
             let _ = menu.clear_submenu(idx);
         }
         if files.is_empty() {
-            menu.add_emit(
+            menu.add_emit_to(
                 &format!("{RUN_MENU}/(none)"),
                 Shortcut::None,
                 MenuFlag::Inactive,
@@ -544,7 +539,7 @@ impl SessionWindow {
                         .unwrap_or_default()
                 });
             let label = format!("&{} {}", i + 1, recent::escape(&name));
-            menu.add_emit(
+            menu.add_emit_to(
                 &format!("{RUN_MENU}/{label}"),
                 Shortcut::None,
                 MenuFlag::Normal,
@@ -842,7 +837,7 @@ impl SessionWindow {
         self.recent_gen.set(Some(gen_now));
         let tx = self.tx;
         recent::fill(&mut self.menu.clone(), RECENT_MENU, &list, |m, path, i| {
-            m.add_emit(path, Shortcut::None, MenuFlag::Normal, tx, Cmd::Recent(i));
+            m.add_emit_to(path, Shortcut::None, MenuFlag::Normal, tx, Cmd::Recent(i));
         });
     }
 

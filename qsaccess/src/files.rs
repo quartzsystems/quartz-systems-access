@@ -2,13 +2,11 @@
 // licensed under the terms of the MIT license which can be found in the
 // root directory of this project.
 
-//! File choosers. These use FLTK's own chooser, drawn with the house look,
-//! rather than the desktop's native dialog.
+//! File choosers: the desktop's own Open, Save and folder dialogs.
 
 use std::path::{Path, PathBuf};
 
-use fltk::app;
-use fltk::dialog::{FileChooser, FileChooserType};
+use fltk::dialog::{NativeFileChooser, NativeFileChooserOptions, NativeFileChooserType};
 
 /// Session files, for choosers.
 pub const SESSION_PATTERN: &str = "Session Files (*.qsd)\tAll Files (*)";
@@ -32,12 +30,42 @@ pub fn sessions_dir() -> PathBuf {
     }
 }
 
-fn run(mut chooser: FileChooser) -> Option<PathBuf> {
-    chooser.show();
-    while chooser.shown() {
-        app::wait();
+/// `pattern`, `"Name (*.ext)\tAll Files (*)"`, as the native dialog's
+/// filter: one `Name\t*.ext` line per entry.
+fn native_filter(pattern: &str) -> String {
+    pattern
+        .split('\t')
+        .map(|f| match f.rsplit_once(" (") {
+            Some((name, glob)) => format!("{name}\t{}", glob.trim_end_matches(')')),
+            None => f.to_owned(),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn run(
+    kind: NativeFileChooserType,
+    dir: &Path,
+    title: &str,
+    pattern: Option<&str>,
+    name: Option<&str>,
+) -> Option<PathBuf> {
+    let mut d = NativeFileChooser::new(kind);
+    d.set_title(title);
+    d.set_option(NativeFileChooserOptions::NewFolder);
+    // The nearest folder that exists, since the dialog ignores one that
+    // does not (an install location not made yet, say).
+    let start = dir.ancestors().find(|p| p.is_dir()).unwrap_or(dir);
+    let _ = d.set_directory(&start);
+    if let Some(p) = pattern {
+        d.set_filter(&native_filter(p));
     }
-    chooser.value(1).map(PathBuf::from)
+    if let Some(n) = name {
+        d.set_preset_file(n);
+    }
+    d.show();
+    let path = d.filename();
+    (!path.as_os_str().is_empty()).then_some(path)
 }
 
 /// Asks for an existing file. `pattern` is in FLTK form, for example
@@ -48,12 +76,13 @@ pub fn choose_open(title: &str, pattern: &str) -> Option<PathBuf> {
 
 /// Asks for an existing file, starting in `dir`.
 pub fn choose_open_in(dir: &Path, title: &str, pattern: &str) -> Option<PathBuf> {
-    run(FileChooser::new(
+    run(
+        NativeFileChooserType::BrowseFile,
         dir,
-        pattern,
-        FileChooserType::Single,
         title,
-    ))
+        Some(pattern),
+        None,
+    )
 }
 
 /// Asks for a file to write, suggesting `name`.
@@ -61,11 +90,21 @@ pub fn choose_save(title: &str, pattern: &str, name: &str) -> Option<PathBuf> {
     choose_save_in(&start_dir(), title, pattern, name)
 }
 
-/// Asks for a file to write in `dir`, suggesting `name`.
+/// Asks for a file to write in `dir`, suggesting `name`. The caller asks
+/// before replacing a file, once it has added any missing extension.
 pub fn choose_save_in(dir: &Path, title: &str, pattern: &str, name: &str) -> Option<PathBuf> {
-    let mut chooser = FileChooser::new(dir, pattern, FileChooserType::Create, title);
-    chooser.set_value(name);
-    run(chooser)
+    run(
+        NativeFileChooserType::BrowseSaveFile,
+        dir,
+        title,
+        Some(pattern),
+        Some(name),
+    )
+}
+
+/// Asks for a folder, starting in `dir`.
+pub fn choose_folder(dir: &Path, title: &str) -> Option<PathBuf> {
+    run(NativeFileChooserType::BrowseDir, dir, title, None, None)
 }
 
 /// `path` with extension `ext` if it has none.
@@ -99,6 +138,18 @@ pub fn file_name_for(title: &str, ext: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn filters_in_native_form() {
+        assert_eq!(
+            native_filter(SESSION_PATTERN),
+            "Session Files\t*.qsd\nAll Files\t*"
+        );
+        assert_eq!(
+            native_filter("Certificates (*.{pem,crt,cer})\tAll Files (*)"),
+            "Certificates\t*.{pem,crt,cer}\nAll Files\t*"
+        );
+    }
 
     #[test]
     fn file_names() {
