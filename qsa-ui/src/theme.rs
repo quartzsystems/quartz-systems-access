@@ -30,7 +30,7 @@ pub mod colors {
     /// Normal text.
     pub const TEXT: Color = Color::from_rgb(0x00, 0x00, 0x00);
     /// Selection background.
-    pub const SELECTION: Color = Color::from_rgb(0x0A, 0x24, 0x6A);
+    pub const SELECTION: Color = Color::from_rgb(0x2F, 0x6F, 0xD6);
     /// Text on the selection background.
     pub const SELECTION_TEXT: Color = Color::from_rgb(0xFF, 0xFF, 0xFF);
     /// Disabled text.
@@ -64,6 +64,12 @@ pub mod colors {
     pub const TASK_RULE: Color = Color::from_rgb(0x5A, 0x6E, 0x96);
     /// Task links.
     pub const LINK: Color = Color::from_rgb(0x1C, 0x46, 0x96);
+    /// Background of a task link under the pointer or focus.
+    pub const HOVER: Color = Color::from_rgb(0x2F, 0x6F, 0xD6);
+    /// Text of a task link under the pointer or focus.
+    pub const HOVER_TEXT: Color = Color::from_rgb(0xFF, 0xFF, 0xFF);
+    /// Task link bullet.
+    pub const BULLET: Color = Color::from_rgb(0xA4, 0xAB, 0xB5);
 }
 
 /// UI text size in pixels.
@@ -108,32 +114,32 @@ struct BundledFont {
 // Placeholders until the Quartz faces exist; see THIRD_PARTY.md.
 const FONTS: &[BundledFont] = &[
     BundledFont {
-        file: "DejaVuSansCondensed.ttf",
-        data: include_bytes!("../fonts/DejaVuSansCondensed.ttf"),
+        file: "NotoSans-Regular.ttf",
+        data: include_bytes!("../fonts/NotoSans-Regular.ttf"),
         slots: &[Font::Helvetica],
-        gdi_name: " DejaVu Sans Condensed",
-        pango_name: "DejaVu Sans Condensed",
+        gdi_name: " Noto Sans",
+        pango_name: "Noto Sans",
     },
     BundledFont {
-        file: "DejaVuSansCondensed-Bold.ttf",
-        data: include_bytes!("../fonts/DejaVuSansCondensed-Bold.ttf"),
+        file: "NotoSans-Bold.ttf",
+        data: include_bytes!("../fonts/NotoSans-Bold.ttf"),
         slots: &[Font::HelveticaBold],
-        gdi_name: "BDejaVu Sans Condensed",
-        pango_name: "DejaVu Sans Condensed Bold",
+        gdi_name: "BNoto Sans",
+        pango_name: "Noto Sans Bold",
     },
     BundledFont {
-        file: "DejaVuSansMono.ttf",
-        data: include_bytes!("../fonts/DejaVuSansMono.ttf"),
+        file: "NotoSansMono-Regular.ttf",
+        data: include_bytes!("../fonts/NotoSansMono-Regular.ttf"),
         slots: &[Font::Courier, Font::Screen],
-        gdi_name: " DejaVu Sans Mono",
-        pango_name: "DejaVu Sans Mono",
+        gdi_name: " Noto Sans Mono",
+        pango_name: "Noto Sans Mono",
     },
     BundledFont {
-        file: "DejaVuSansMono-Bold.ttf",
-        data: include_bytes!("../fonts/DejaVuSansMono-Bold.ttf"),
+        file: "NotoSansMono-Bold.ttf",
+        data: include_bytes!("../fonts/NotoSansMono-Bold.ttf"),
         slots: &[Font::CourierBold, Font::ScreenBold],
-        gdi_name: "BDejaVu Sans Mono",
-        pango_name: "DejaVu Sans Mono Bold",
+        gdi_name: "BNoto Sans Mono",
+        pango_name: "Noto Sans Mono Bold",
     },
 ];
 

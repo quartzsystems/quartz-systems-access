@@ -81,14 +81,22 @@ pub fn build() -> Window {
 
     // Left: the task pane.
     let mut pane = TaskPane::new(6, top, 190, bottom - top);
+    pane.add_row(theme::FIELD_H, |x, y, w| {
+        let l = controls::label(x, y, 46, theme::FIELD_H, "System:");
+        let mut c = controls::combo(x + 46, y, w - 46, theme::FIELD_H);
+        c.add_choice("SYS1|SYS2|DEV");
+        c.set_value(0);
+        vec![l.as_base_widget(), c.as_base_widget()]
+    });
+    pane.add_rule();
     pane.add_group("General");
-    for (g, t) in [
-        (Glyph::Terminal, "5250 Display"),
-        (Glyph::Disk, "Data Transfer"),
-        (Glyph::Folder, "Integrated File System"),
-    ] {
+    let mut focus_link = None;
+    for t in ["5250 Display", "Data Transfer", "Integrated File System"] {
         let mut s = status.clone();
-        pane.add_link(Some(g), t, move || s.set_message(t));
+        let link = pane.add_link(None, t, move || s.set_message(t));
+        if t == "Data Transfer" {
+            focus_link = Some(link);
+        }
     }
     pane.add_group("Database");
     for (g, t) in [(Glyph::Table, "Schemas"), (Glyph::Table, "Run SQL")] {
@@ -287,5 +295,9 @@ pub fn build() -> Window {
     tabs.add_page("Security", |_| {});
 
     win.end();
+    // Start with a link focused, so the highlight shows in screenshots.
+    if let Some(mut l) = focus_link {
+        let _ = l.take_focus();
+    }
     win
 }

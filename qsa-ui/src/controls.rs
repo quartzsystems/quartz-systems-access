@@ -9,6 +9,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use fltk::button::{Button, CheckButton, RadioRoundButton};
+use fltk::draw;
 use fltk::enums::{Align, Event, FrameType, Key, Shortcut};
 use fltk::frame::Frame;
 use fltk::input::Input;
@@ -55,14 +56,42 @@ pub fn field(x: i32, y: i32, w: i32, h: i32) -> Input {
     i
 }
 
-/// A drop-down list (combo).
+/// A drop-down list (combo): a white field with a slim chevron at the right.
+/// It is drawn here in full; FLTK draws only the open list.
 pub fn combo(x: i32, y: i32, w: i32, h: i32) -> Choice {
     let mut c = Choice::new(x, y, w, h, None);
     c.set_frame(FrameType::DownBox);
     c.set_down_frame(FrameType::FlatBox);
     c.set_color(colors::WINDOW);
     c.set_text_size(theme::UI_SIZE);
-    c.set_selection_color(colors::SELECTION);
+    c.set_selection_color(colors::HOVER);
+    c.super_draw(false);
+    c.draw(|c| {
+        let (x, y, w, h) = (c.x(), c.y(), c.w(), c.h());
+        draw::draw_box(FrameType::DownBox, x, y, w, h, c.color());
+        let text = c.choice().unwrap_or_default();
+        let text_w = w - 4 - 18;
+        draw::set_font(theme::UI_FONT, theme::UI_SIZE);
+        draw::set_draw_color(c.text_color());
+        draw::push_clip(x + 1, y + 1, text_w, h - 2);
+        draw::draw_text2(&text, x + 4, y, text_w - 4, h, Align::Left);
+        draw::pop_clip();
+        if c.has_focus() && fltk::app::visible_focus() {
+            draw::set_draw_color(colors::TEXT);
+            draw::draw_focus_rect(x + 2, y + 2, text_w, h - 4);
+        }
+        // Chevron: two one-pixel-thick strokes meeting at the bottom.
+        let (cx, cy) = (x + w - 11, y + h / 2 - 2);
+        let col = if c.text_color() == colors::DISABLED_TEXT {
+            colors::DISABLED_TEXT
+        } else {
+            colors::TEXT
+        };
+        for i in 0..4 {
+            draw::draw_rect_fill(cx - 3 + i, cy + i, 2, 1, col);
+            draw::draw_rect_fill(cx + 2 - i, cy + i, 2, 1, col);
+        }
+    });
     c
 }
 

@@ -26,13 +26,12 @@ privately with the process at start-up, so layouts match on every platform.
 
 | File | Family | Version | Licence | Use |
 |------|--------|---------|---------|-----|
-| `DejaVuSansCondensed.ttf` | DejaVu Sans Condensed | 2.37 | Bitstream Vera licence, Arev additions; DejaVu changes public domain | UI text, 11 px |
-| `DejaVuSansCondensed-Bold.ttf` | DejaVu Sans Condensed Bold | 2.37 | as above | Group titles |
-| `DejaVuSansMono.ttf` | DejaVu Sans Mono | 2.37 | as above | System output |
-| `DejaVuSansMono-Bold.ttf` | DejaVu Sans Mono Bold | 2.37 | as above | System output, bold |
+| `NotoSans-Regular.ttf` | Noto Sans | 2.015 (hinted) | SIL Open Font License 1.1 | UI text |
+| `NotoSans-Bold.ttf` | Noto Sans Bold | 2.015 (hinted) | SIL Open Font License 1.1 | Group titles |
+| `NotoSansMono-Regular.ttf` | Noto Sans Mono | 2.014 (hinted) | SIL Open Font License 1.1 | System output |
+| `NotoSansMono-Bold.ttf` | Noto Sans Mono Bold | 2.014 (hinted) | SIL Open Font License 1.1 | System output, bold |
 
-Source: the `dejavu-fonts-ttf-2.37` release of the DejaVu project. The licence
-text is in `qsa-ui/fonts/LICENSE-DejaVu.txt`; it carries the Bitstream Vera and
-Arev sections, which are the ones that cover these four faces. The release's
-licence file also has a section for the separate DejaVu Math font, which is
-not bundled.
+Source: the `NotoSans-v2.015` and `NotoSansMono-v2.014` releases of the
+`notofonts/latin-greek-cyrillic` project, `hinted/ttf` builds. Copyright 2022
+The Noto Project Authors. The licence text is in `qsa-ui/fonts/OFL-Noto.txt`.
+The fonts are unmodified and are not sold on their own.
