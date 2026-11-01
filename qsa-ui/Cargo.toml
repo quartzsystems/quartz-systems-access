@@ -1,0 +1,14 @@
+[package]
+name = "qsa-ui"
+description = "Look, glyphs and reusable widgets for QS/400 Access for Desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+fltk.workspace = true
+
+[lints]
+workspace = true

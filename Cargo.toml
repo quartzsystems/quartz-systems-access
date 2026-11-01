@@ -1,0 +1,35 @@
+[workspace]
+resolver = "3"
+members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "tn5250"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.85"
+license = "MIT"
+authors = ["Quartz Systems"]
+repository = "https://github.com/quartzsystems/quartz-systems-access"
+
+[workspace.dependencies]
+fltk = { version = "1.5", features = ["static-msvcrt", "use-wayland"] }
+serde = { version = "1", features = ["derive"] }
+toml = "0.9"
+keyring = { version = "3.6", default-features = false }
+directories = "6"
+thiserror = "2"
+windows-sys = "0.61"
+
+qsa-ui = { path = "qsa-ui" }
+qsa-config = { path = "qsa-config" }
+qsa-msg = { path = "qsa-msg" }
+tn5250 = { path = "tn5250" }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

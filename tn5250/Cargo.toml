@@ -1,0 +1,11 @@
+[package]
+name = "tn5250"
+description = "5250 data stream and Telnet negotiation for QS/400 Access for Desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[lints]
+workspace = true
