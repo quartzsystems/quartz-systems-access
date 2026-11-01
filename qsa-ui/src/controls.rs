@@ -77,19 +77,27 @@ pub fn field(x: i32, y: i32, w: i32, h: i32) -> Input {
     i
 }
 
-/// A drop-down list (combo): a white field with a slim chevron at the right.
-/// It is drawn here in full; FLTK draws only the open list.
+/// A drop-down list (combo): a push-button body with a slim chevron at the
+/// right. It is drawn here in full; FLTK draws only the open list, which takes
+/// its background from the widget colour, so that stays white.
 pub fn combo(x: i32, y: i32, w: i32, h: i32) -> Choice {
     let mut c = Choice::new(x, y, w, h, None);
     c.set_frame(FrameType::DownBox);
     c.set_down_frame(FrameType::FlatBox);
+    c.set_menu_frame(theme::MENU_BOX);
     c.set_color(colors::WINDOW);
     c.set_text_size(theme::UI_SIZE);
     c.set_selection_color(colors::HOVER);
     c.super_draw(false);
     c.draw(|c| {
         let (x, y, w, h) = (c.x(), c.y(), c.w(), c.h());
-        draw::draw_box(FrameType::DownBox, x, y, w, h, c.color());
+        let enabled = c.text_color() != colors::DISABLED_TEXT;
+        let body = if enabled {
+            colors::BUTTON
+        } else {
+            colors::BUTTON_DISABLED
+        };
+        theme::draw_button(x, y, w, h, body);
         let text = c.choice().unwrap_or_default();
         let text_w = w - 4 - 18;
         draw::set_font(theme::UI_FONT, theme::UI_SIZE);
@@ -103,10 +111,10 @@ pub fn combo(x: i32, y: i32, w: i32, h: i32) -> Choice {
         }
         // Chevron: two one-pixel-thick strokes meeting at the bottom.
         let (cx, cy) = (x + w - 11, y + h / 2 - 2);
-        let col = if c.text_color() == colors::DISABLED_TEXT {
-            colors::DISABLED_TEXT
-        } else {
+        let col = if enabled {
             colors::TEXT
+        } else {
+            colors::DISABLED_TEXT
         };
         for i in 0..4 {
             draw::draw_rect_fill(cx - 3 + i, cy + i, 2, 1, col);
@@ -245,10 +253,9 @@ impl Switch {
         })
     }
 
-    /// Switch for a combo.
+    /// Switch for a combo. Its body follows the text colour; see [`combo`].
     pub fn for_choice(c: &mut Choice) -> Switch {
         Switch::install(c, |c, on| {
-            c.set_color(if on { colors::WINDOW } else { colors::FACE });
             c.set_text_color(if on {
                 colors::TEXT
             } else {

@@ -27,13 +27,14 @@ Transitive dependencies are listed in `Cargo.lock`.
 
 The UI and monospace faces are open-licence fonts used until Quartz Systems'
 own fonts exist. They are embedded in the binary (`qsa-ui/fonts/`) and
-registered privately with the process at start-up, so layouts match on every
-platform. Both are published by Microsoft under the SIL Open Font License 1.1
-and are bundled unmodified; they are not sold on their own.
+registered privately with the process at start-up. Both are published by
+Microsoft under the SIL Open Font License 1.1 and are bundled unmodified; they
+are not sold on their own. On Windows, UI text uses the system's own Segoe UI,
+which is not bundled, and Selawik is left out of the binary.
 
 | File | Family | Version | Licence | Use |
 |------|--------|---------|---------|-----|
-| `Selawik-Regular.ttf` | Selawik | 1.01 | SIL OFL 1.1, Reserved Font Name "Selawik" | UI text, 12 px |
+| `Selawik-Regular.ttf` | Selawik | 1.01 | SIL OFL 1.1, Reserved Font Name "Selawik" | UI text, 12 px (not on Windows) |
 | `Selawik-Bold.ttf` | Selawik Bold | 1.01 | as above | Emphasis |
 | `CascadiaMono-Regular.ttf` | Cascadia Mono | 2407.24 | SIL OFL 1.1, Reserved Font Name "Cascadia Code" | System output |
 | `CascadiaMono-Bold.ttf` | Cascadia Mono Bold | 2407.24 | as above | System output, bold |

@@ -40,7 +40,7 @@ impl Toolbar {
     }
 
     /// Adds a tool button. It is flat until the pointer is over it, then pale
-    /// blue with a blue edge.
+    /// blue with a light blue edge.
     pub fn add(&mut self, glyph: Glyph, tooltip: &str, mut cb: impl FnMut() + 'static) -> Button {
         let y = self.group.y() + (Self::HEIGHT - Self::BUTTON) / 2;
         let mut b = Button::new(self.next_x, y, Self::BUTTON, Self::BUTTON, None);
@@ -54,8 +54,8 @@ impl Toolbar {
         b.handle(move |b, ev| match ev {
             Event::Enter | Event::Leave if !theme::hover_effects() => false,
             Event::Enter => {
-                b.set_color(colors::BUTTON_HOVER);
-                b.set_frame(FrameType::UpBox);
+                b.set_color(colors::TOOL_HOVER);
+                b.set_frame(theme::MENU_HOT_BOX);
                 b.redraw();
                 true
             }

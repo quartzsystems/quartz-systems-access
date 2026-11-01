@@ -9,9 +9,10 @@
 //! every box is drawn by the functions below from the fixed palette.
 //!
 //! The look follows the plain Windows desktop controls: a `#F0F0F0` face,
-//! white fields, lists and tab pages, light buttons with softly rounded
-//! corners that turn blue under the pointer, and `#0078D7` selection. It is
-//! the same on every platform.
+//! white fields, lists and tab pages, square grey buttons that turn blue under
+//! the pointer, white menus with a thin grey border, and `#0078D7` selection.
+//! It is the same on every platform, except that UI text on Windows is drawn
+//! in the system's own Segoe UI.
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -46,22 +47,20 @@ pub mod colors {
     /// Tooltip background.
     pub const TOOLTIP: Color = Color::from_rgb(0xFF, 0xFF, 0xFF);
 
-    /// Push button body.
-    pub const BUTTON: Color = Color::from_rgb(0xFD, 0xFD, 0xFD);
+    /// Push button and drop-down list body.
+    pub const BUTTON: Color = Color::from_rgb(0xE1, 0xE1, 0xE1);
     /// Push button body under the pointer.
-    pub const BUTTON_HOVER: Color = Color::from_rgb(0xE0, 0xEE, 0xF9);
+    pub const BUTTON_HOVER: Color = Color::from_rgb(0xE5, 0xF1, 0xFB);
     /// Push button body while pressed.
     pub const BUTTON_PRESSED: Color = Color::from_rgb(0xCC, 0xE4, 0xF7);
     /// Push button body while disabled.
-    pub const BUTTON_DISABLED: Color = Color::from_rgb(0xF5, 0xF5, 0xF5);
-    /// Push button outline: top and sides.
-    pub const BUTTON_BORDER: Color = Color::from_rgb(0xD0, 0xD0, 0xD0);
-    /// Push button outline: bottom edge, a shade darker.
-    pub const BUTTON_BORDER_BOTTOM: Color = Color::from_rgb(0xB8, 0xB8, 0xB8);
+    pub const BUTTON_DISABLED: Color = Color::from_rgb(0xCC, 0xCC, 0xCC);
+    /// Push button outline.
+    pub const BUTTON_BORDER: Color = Color::from_rgb(0xAD, 0xAD, 0xAD);
     /// Push button outline while disabled.
-    pub const BUTTON_BORDER_DISABLED: Color = Color::from_rgb(0xE3, 0xE3, 0xE3);
+    pub const BUTTON_BORDER_DISABLED: Color = Color::from_rgb(0xBF, 0xBF, 0xBF);
     /// Outline of the default button, and of any button under the pointer.
-    pub const ACCENT_BORDER: Color = Color::from_rgb(0x00, 0x78, 0xD4);
+    pub const ACCENT_BORDER: Color = Color::from_rgb(0x00, 0x78, 0xD7);
     /// Outline of a pressed button.
     pub const PRESSED_BORDER: Color = Color::from_rgb(0x00, 0x54, 0x99);
     /// Outline of text fields and combos.
@@ -76,6 +75,14 @@ pub mod colors {
     pub const HEADER_RULE: Color = Color::from_rgb(0xE5, 0xE5, 0xE5);
     /// Menu bar and menu item highlight.
     pub const MENU_HIGHLIGHT: Color = Color::from_rgb(0xCC, 0xE8, 0xFF);
+    /// Outline of the menu highlight.
+    pub const MENU_HIGHLIGHT_BORDER: Color = Color::from_rgb(0x99, 0xD1, 0xFF);
+    /// Outline of an open menu.
+    pub const MENU_BORDER: Color = Color::from_rgb(0xCC, 0xCC, 0xCC);
+    /// Divider between groups of menu items.
+    pub const MENU_SEPARATOR: Color = Color::from_rgb(0xD7, 0xD7, 0xD7);
+    /// Tool button body under the pointer.
+    pub const TOOL_HOVER: Color = Color::from_rgb(0xE5, 0xF3, 0xFF);
     /// Task pane group header band.
     pub const TASK_HEADER: Color = Color::from_rgb(0xE3, 0xE6, 0xF0);
     /// Rule that divides sections of the task pane.
@@ -109,7 +116,7 @@ pub const ROW_H: i32 = 18;
 /// Cell padding.
 pub const CELL_PAD: i32 = 4;
 
-/// UI sans, regular.
+/// UI sans, regular: Segoe UI on Windows, the bundled Selawik elsewhere.
 pub const UI_FONT: Font = Font::Helvetica;
 /// UI sans, bold.
 pub const UI_FONT_BOLD: Font = Font::HelveticaBold;
@@ -125,6 +132,12 @@ pub const PRESSED_BUTTON_BOX: FrameType = FrameType::GtkDownBox;
 /// Box type of a check box's well. It must be one of the types FLTK draws a
 /// check mark in, rather than filling.
 pub const CHECK_BOX: FrameType = FrameType::PlasticDownBox;
+/// Box type of an open menu or drop-down list: white, thin grey outline.
+/// Give it to a menu with `set_menu_frame`.
+pub const MENU_BOX: FrameType = FrameType::GtkThinUpBox;
+/// Box type of the highlighted menu title or item, and of a tool button under
+/// the pointer: pale blue body, light blue outline.
+pub const MENU_HOT_BOX: FrameType = FrameType::GtkThinDownBox;
 
 struct BundledFont {
     file: &'static str,
@@ -137,7 +150,10 @@ struct BundledFont {
 }
 
 // Open-licence faces until Quartz Systems' own fonts exist; see THIRD_PARTY.md.
+// Windows draws UI text in its own Segoe UI (see `SYSTEM_UI_FONTS`), so
+// Selawik, its stand-in, is only bundled for other platforms.
 const FONTS: &[BundledFont] = &[
+    #[cfg(not(windows))]
     BundledFont {
         file: "Selawik-Regular.ttf",
         data: include_bytes!("../fonts/Selawik-Regular.ttf"),
@@ -145,6 +161,7 @@ const FONTS: &[BundledFont] = &[
         gdi_name: " Selawik",
         pango_name: "Selawik",
     },
+    #[cfg(not(windows))]
     BundledFont {
         file: "Selawik-Bold.ttf",
         data: include_bytes!("../fonts/Selawik-Bold.ttf"),
@@ -166,6 +183,13 @@ const FONTS: &[BundledFont] = &[
         gdi_name: "BCascadia Mono",
         pango_name: "Cascadia Mono Bold",
     },
+];
+
+/// System faces used on Windows, as GDI names: the desktop's own UI font.
+#[cfg(windows)]
+const SYSTEM_UI_FONTS: &[(Font, &str)] = &[
+    (Font::Helvetica, " Segoe UI"),
+    (Font::HelveticaBold, "BSegoe UI"),
 ];
 
 static INIT: OnceLock<Result<(), String>> = OnceLock::new();
@@ -230,7 +254,8 @@ fn set_colors() {
         (Color::Inactive, colors::DISABLED_TEXT),
         (Color::Black, colors::TEXT),
         (Color::White, colors::WINDOW),
-        (Color::Dark3, colors::FIELD_BORDER),
+        // FLTK draws menu dividers in Dark3 over Light3.
+        (Color::Dark3, colors::MENU_SEPARATOR),
         (Color::Dark2, colors::BORDER_LIGHT),
         (Color::Light3, colors::WINDOW),
     ] {
@@ -260,6 +285,8 @@ fn set_box_types() {
     app::set_frame_type_cb(PRESSED_BUTTON_BOX, pressed_button_box, 2, 2, 4, 4);
     app::set_frame_type_cb(CHECK_BOX, check_box, 1, 1, 2, 2);
     app::set_frame_type_cb(RoundDownBox, radio_box, 1, 1, 2, 2);
+    app::set_frame_type_cb(MENU_BOX, menu_box, 3, 3, 6, 6);
+    app::set_frame_type_cb(MENU_HOT_BOX, menu_hot_box, 1, 1, 2, 2);
 }
 
 // Every edge is a filled 1-pixel rectangle rather than a line, so that the
@@ -294,40 +321,24 @@ fn outline(x: i32, y: i32, w: i32, h: i32, c: Color) {
     vline(x + w - 1, y + 1, h - 2, c);
 }
 
-/// A button shape: body and one-pixel outline with corners rounded by two
-/// pixels. The four corner pixels outside the curve are left untouched.
-fn rounded(x: i32, y: i32, w: i32, h: i32, body: Color, edge: Color, bottom: Color) {
-    if w < 6 || h < 6 {
-        fill(x, y, w, h, body);
-        outline(x, y, w, h, edge);
-        return;
-    }
-    // Body.
-    fill(x + 2, y + 1, w - 4, h - 2, body);
-    fill(x + 1, y + 2, w - 2, h - 4, body);
-    // Edge.
-    hline(x + 2, y, w - 4, edge);
-    vline(x, y + 2, h - 4, edge);
-    vline(x + w - 1, y + 2, h - 4, edge);
-    hline(x + 2, y + h - 1, w - 4, bottom);
-    fill(x + 1, y + 1, 1, 1, edge);
-    fill(x + w - 2, y + 1, 1, 1, edge);
-    fill(x + 1, y + h - 2, 1, 1, bottom);
-    fill(x + w - 2, y + h - 2, 1, 1, bottom);
+/// A button shape: body and one-pixel square outline.
+fn square(x: i32, y: i32, w: i32, h: i32, body: Color, edge: Color) {
+    fill(x + 1, y + 1, w - 2, h - 2, body);
+    outline(x, y, w, h, edge);
 }
 
 /// Raised: a push button in its normal, hover or disabled state, chosen by
 /// its body colour.
 pub fn draw_button(x: i32, y: i32, w: i32, h: i32, body: Color) {
     use colors::*;
-    let (edge, bottom) = if body == BUTTON_HOVER {
-        (ACCENT_BORDER, ACCENT_BORDER)
+    let edge = if body == BUTTON_HOVER {
+        ACCENT_BORDER
     } else if body == BUTTON_DISABLED {
-        (BUTTON_BORDER_DISABLED, BUTTON_BORDER_DISABLED)
+        BUTTON_BORDER_DISABLED
     } else {
-        (BUTTON_BORDER, BUTTON_BORDER_BOTTOM)
+        BUTTON_BORDER
     };
-    rounded(x, y, w, h, body, edge, bottom);
+    square(x, y, w, h, body, edge);
 }
 
 /// Sunken: fields and combos.
@@ -387,9 +398,13 @@ fn panel_frame(x: i32, y: i32, w: i32, h: i32, _c: Color) {
 
 fn default_button_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
     use colors::*;
-    rounded(x, y, w, h, c, ACCENT_BORDER, ACCENT_BORDER);
+    if c == BUTTON_DISABLED {
+        draw_button(x, y, w, h, c);
+        return;
+    }
+    square(x, y, w, h, c, ACCENT_BORDER);
     // A second, inner rule makes the default button's edge read as heavier.
-    if w > 8 && h > 8 && c != BUTTON_DISABLED {
+    if w > 8 && h > 8 {
         hline(x + 2, y + 1, w - 4, ACCENT_BORDER);
         hline(x + 2, y + h - 2, w - 4, ACCENT_BORDER);
         vline(x + 1, y + 2, h - 4, ACCENT_BORDER);
@@ -399,7 +414,21 @@ fn default_button_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
 
 fn pressed_button_box(x: i32, y: i32, w: i32, h: i32, _c: Color) {
     use colors::*;
-    rounded(x, y, w, h, BUTTON_PRESSED, PRESSED_BORDER, PRESSED_BORDER);
+    square(x, y, w, h, BUTTON_PRESSED, PRESSED_BORDER);
+}
+
+fn menu_box(x: i32, y: i32, w: i32, h: i32, _c: Color) {
+    square(x, y, w, h, colors::WINDOW, colors::MENU_BORDER);
+}
+
+fn menu_hot_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
+    use colors::*;
+    let edge = if c == TOOL_HOVER {
+        MENU_HIGHLIGHT
+    } else {
+        MENU_HIGHLIGHT_BORDER
+    };
+    square(x, y, w, h, c, edge);
 }
 
 fn check_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
@@ -531,6 +560,10 @@ fn load_fonts() -> Result<(), String> {
         for slot in font.slots {
             Font::set_font(*slot, name);
         }
+    }
+    #[cfg(windows)]
+    for (slot, name) in SYSTEM_UI_FONTS {
+        Font::set_font(*slot, name);
     }
     if failed.is_empty() {
         Ok(())
