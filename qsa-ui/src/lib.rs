@@ -12,6 +12,7 @@ pub mod glyph;
 pub mod groupbox;
 pub mod listtable;
 pub mod msgbox;
+pub mod msgdetails;
 pub mod propdialog;
 pub mod sampler;
 pub mod snapshot;

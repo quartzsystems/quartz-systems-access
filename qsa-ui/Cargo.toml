@@ -9,6 +9,7 @@ authors.workspace = true
 
 [dependencies]
 fltk.workspace = true
+qsa-msg.workspace = true
 
 [lints]
 workspace = true

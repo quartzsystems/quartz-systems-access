@@ -1,0 +1,58 @@
+# QS/400 Access for Desktop: client-side message catalogue.
+#
+# Each message has:
+#   severity  0-99. 0 information, 10 warning, 20 and up error.
+#   text      first-level text: one line.
+#   cause     second-level text, Cause section.
+#   recovery  second-level text, Recovery section.
+#
+# &1 to &9 are substitution variables, filled in order from the arguments
+# given when the message is sent. They may appear in any of the three texts.
+
+[QAD0001]
+severity = 10
+text = "Function not yet available."
+cause = "The function you selected is not part of this release of QS/400 Access for Desktop."
+recovery = "Use another function. The function will be enabled in a later release."
+
+[QAD0010]
+severity = 0
+text = "System &1 added."
+cause = "A system configuration named &1 was created and saved."
+recovery = "None needed."
+
+[QAD0011]
+severity = 0
+text = "System &1 changed."
+cause = "The system configuration named &1 was updated and saved."
+recovery = "None needed."
+
+[QAD0012]
+severity = 0
+text = "System &1 deleted."
+cause = "The system configuration named &1 was removed, together with any password saved for it in the credential store."
+recovery = "None needed. To use the system again, add a new system configuration for it."
+
+[QAD0020]
+severity = 0
+text = "&1 systems imported."
+cause = "&1 system configurations were read from the import file and added to, or replaced in, the list of systems."
+recovery = "None needed. Passwords are never part of an import file; enter them when you first connect."
+
+[QAD0021]
+severity = 0
+text = "&1 systems exported to &2."
+cause = "&1 system configurations were written to the file &2."
+recovery = "None needed. The file contains no passwords."
+
+[QAD0030]
+severity = 30
+text = "Settings file &1 could not be read."
+cause = "The file &1 could not be opened, or it holds a value that is not valid. The reason given was: &2"
+recovery = "Correct or remove the file, then start QS/400 Access for Desktop again. Until then the program runs with default values and does not overwrite the file."
+
+[QAD0040]
+severity = 10
+text = "Credential store not available; you will be prompted each time."
+cause = "No credential store could be reached. On Windows this is the Windows Credential Manager; on Linux it is a Secret Service provider on the session bus. Passwords are never saved anywhere else."
+recovery = "On Linux, start a Secret Service provider for your session and start QS/400 Access for Desktop again. Until then, enter your password whenever you are prompted."

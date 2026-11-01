@@ -19,8 +19,13 @@ fn main() {
     if let Err(e) = qsa_ui::theme::init() {
         eprintln!("qsaccess: fonts not loaded: {e}");
     }
-    if args.iter().any(|a| a == "--ui-sampler") {
-        let mut win = qsa_ui::sampler::build();
+    if let Some(i) = args.iter().position(|a| a == "--ui-sampler") {
+        let m = qsa_msg::message(qsa_msg::id::NOT_AVAILABLE, &[]);
+        let mut win = match args.get(i + 1).map(String::as_str) {
+            Some("details") => qsa_ui::msgdetails::details_window(&m),
+            Some("message") => qsa_ui::msgdetails::message_box(&m).build().0,
+            _ => qsa_ui::sampler::build(),
+        };
         qsa_ui::propdialog::center_on(&mut win, None);
         win.show();
         if let Some(path) = snapshot {

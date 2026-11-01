@@ -247,6 +247,11 @@ pub fn build() -> Window {
             let parent = b.window();
             d.run(parent.as_deref(), || Err("Name is required.".to_owned()));
         });
+        let mut mb = controls::button(r.x + 146, r.y + 30, 100, theme::BUTTON_H, "Message...");
+        mb.set_callback(|b| {
+            let m = qsa_msg::message(qsa_msg::id::NOT_AVAILABLE, &[]);
+            crate::msgdetails::show_message(b.window().as_deref(), &m);
+        });
     });
     tabs.add_page("Output", |r| {
         let mut out = Widget::new(r.x, r.y, r.w, r.h, None);

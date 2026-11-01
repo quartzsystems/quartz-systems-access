@@ -936,6 +936,7 @@ name = "qsa-ui"
 version = "0.1.0"
 dependencies = [
  "fltk",
+ "qsa-msg",
 ]
 
 [[package]]
