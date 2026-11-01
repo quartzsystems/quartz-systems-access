@@ -47,6 +47,7 @@ fn parse_args() -> Args {
 }
 
 fn main() {
+    qsa_ui::theme::pin_font_rendering();
     let args = parse_args();
     let dir = match &args.config_dir {
         Some(d) => Some(ConfigDir::at(d)),

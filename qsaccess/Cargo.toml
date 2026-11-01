@@ -27,3 +27,7 @@ windows-sys = { workspace = true, features = [
 
 [lints]
 workspace = true
+
+[[test]]
+name = "screenshots"
+harness = false

@@ -170,6 +170,7 @@ impl TaskPane {
         link.draw(move |l| draw_link(l, h.get(), &image));
         let pressed = Rc::new(Cell::new(false));
         link.handle(move |l, ev| match ev {
+            Event::Enter if !theme::hover_effects() => true,
             Event::Enter => {
                 hover.set(true);
                 set_cursor(l, Cursor::Hand);

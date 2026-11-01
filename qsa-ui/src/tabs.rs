@@ -122,6 +122,9 @@ impl Tabs {
     /// padding) while the page is the current group.
     pub fn add_page(&mut self, title: &str, build: impl FnOnce(Rect)) -> Group {
         let r = self.page_rect();
+        // Remember the current group: ending the tab group would otherwise
+        // leave its window current, and the next window made would nest in it.
+        let previous = Group::try_current();
         self.group.begin();
         let mut page = Group::new(r.x, r.y, r.w, r.h, None);
         page.set_frame(FrameType::FlatBox);
@@ -135,6 +138,7 @@ impl Tabs {
         });
         page.end();
         self.group.end();
+        Group::set_current(previous.as_ref());
         // Keep the strip last so it draws over the panel's top edge.
         self.group.add(&self.strip);
         let mut pages = self.pages.borrow_mut();

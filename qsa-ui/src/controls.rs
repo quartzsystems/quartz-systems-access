@@ -32,6 +32,9 @@ pub fn button(x: i32, y: i32, w: i32, h: i32, label: &str) -> Button {
 
 /// Pale blue body under the pointer; the box draws the blue edge.
 fn hover<W: WidgetExt>(w: &mut W, ev: Event) -> bool {
+    if !theme::hover_effects() {
+        return false;
+    }
     match ev {
         Event::Enter => {
             w.set_color(colors::BUTTON_HOVER);

@@ -170,6 +170,19 @@ const FONTS: &[BundledFont] = &[
 
 static INIT: OnceLock<Result<(), String>> = OnceLock::new();
 
+static HOVER: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+/// Turns pointer-hover highlighting on or off (on by default). Screenshot
+/// tests turn it off so the real pointer cannot change a capture.
+pub fn set_hover_effects(on: bool) {
+    HOVER.store(on, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether pointer-hover highlighting is on.
+pub fn hover_effects() -> bool {
+    HOVER.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Sets the scheme, colour table, box types and fonts.
 ///
 /// Call once, after `app::App::default()` and before making any widget. Further
@@ -436,6 +449,46 @@ pub fn style_scrollbar<S: fltk::prelude::ValuatorExt + fltk::prelude::WidgetExt>
     s.set_frame(FrameType::FlatBox);
     s.set_color(colors::SCROLL_TRACK);
     s.set_selection_color(colors::SCROLL_THUMB);
+}
+
+/// Font rendering settings used on every platform where fontconfig decides
+/// them: greyscale antialiasing, slight hinting, no subpixel colour. They
+/// are layered over the system configuration, so system fonts still resolve.
+#[cfg_attr(windows, allow(dead_code))]
+const FONTCONFIG: &str = r#"<?xml version="1.0"?>
+<!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+<fontconfig>
+  <include ignore_missing="yes">/etc/fonts/fonts.conf</include>
+  <match target="font">
+    <edit name="antialias" mode="assign"><bool>true</bool></edit>
+    <edit name="hinting" mode="assign"><bool>true</bool></edit>
+    <edit name="hintstyle" mode="assign"><const>hintslight</const></edit>
+    <edit name="rgba" mode="assign"><const>none</const></edit>
+    <edit name="lcdfilter" mode="assign"><const>lcddefault</const></edit>
+  </match>
+</fontconfig>
+"#;
+
+/// Fixes text rendering so it does not follow the desktop's font settings.
+///
+/// On Linux, points fontconfig at a configuration of our own (see
+/// [`FONTCONFIG`]) through `FONTCONFIG_FILE`. Call it first thing in `main`,
+/// before any thread starts and before the FLTK app is made. Does nothing on
+/// Windows, where GDI draws the bundled fonts directly.
+pub fn pin_font_rendering() {
+    #[cfg(not(windows))]
+    {
+        let dir = font_dir();
+        let path = dir.join("fonts.conf");
+        let ok = std::fs::create_dir_all(&dir).is_ok()
+            && (std::fs::read_to_string(&path).is_ok_and(|s| s == FONTCONFIG)
+                || std::fs::write(&path, FONTCONFIG).is_ok());
+        if ok {
+            // SAFETY: called at the start of `main`, before any other thread
+            // exists, so nothing can read the environment concurrently.
+            unsafe { std::env::set_var("FONTCONFIG_FILE", &path) };
+        }
+    }
 }
 
 /// Directory the bundled fonts are unpacked to. FLTK can only register a font

@@ -52,6 +52,7 @@ impl Toolbar {
         b.set_image(Some(glyph::image(glyph, Size::Small)));
         b.clear_visible_focus();
         b.handle(move |b, ev| match ev {
+            Event::Enter | Event::Leave if !theme::hover_effects() => false,
             Event::Enter => {
                 b.set_color(colors::BUTTON_HOVER);
                 b.set_frame(FrameType::UpBox);

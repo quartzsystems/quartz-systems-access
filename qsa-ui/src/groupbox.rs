@@ -19,10 +19,11 @@ pub const CONTENT_SIDE: i32 = 10;
 /// A group box. The returned group is current: add the content, then call
 /// `end()` on it.
 pub fn group_box(x: i32, y: i32, w: i32, h: i32, title: &str) -> Group {
+    // Take the background of whatever the box sits on: the face, or a white
+    // tab page. Read it before making the box, which becomes current itself.
+    let bg = Group::try_current().map_or(colors::FACE, |p| p.color());
     let mut g = Group::new(x, y, w, h, None);
     g.set_frame(FrameType::FlatBox);
-    // Take the background of whatever the box sits on: the face, or a white tab page.
-    let bg = Group::try_current().map_or(colors::FACE, |p| p.color());
     g.set_color(bg);
     g.set_label(title);
     g.set_align(Align::Inside | Align::TopLeft);

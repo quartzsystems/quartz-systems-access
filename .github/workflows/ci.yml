@@ -41,7 +41,7 @@ jobs:
             libpango1.0-dev libcairo2-dev \
             libwayland-dev wayland-protocols libxkbcommon-dev libdbus-1-dev \
             libgl1-mesa-dev libglu1-mesa-dev \
-            xvfb xauth
+            xvfb xauth weston
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -65,10 +65,47 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --target ${{ matrix.target }} -- -D warnings
 
-      - name: Test (Linux, under Xvfb)
+      # Unit tests and the screenshot tests (X11, under Xvfb).
+      - name: Test (Linux, X11 under Xvfb)
         if: runner.os == 'Linux'
+        env:
+          FLTK_BACKEND: x11
         run: xvfb-run -a -s "-screen 0 1280x1024x24 -dpi 96" cargo test --workspace --target ${{ matrix.target }}
+
+      # The screenshots again under Wayland, against the Wayland goldens.
+      # Weston runs on its X11 backend inside Xvfb: its seat then has a
+      # pointer, which FLTK's Wayland driver requires (it crashes on the
+      # pointer-less seat of Weston's headless backend).
+      - name: Screenshots (Linux, Wayland under Weston)
+        if: runner.os == 'Linux'
+        run: ci/wayland-screenshots.sh --target ${{ matrix.target }}
 
       - name: Test (Windows)
         if: runner.os == 'Windows'
         run: cargo test --workspace --target ${{ matrix.target }}
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ runner.os }}
+          path: target/screenshots/
+          if-no-files-found: warn
+
+  screenshot-report:
+    name: screenshot report (Windows vs Linux)
+    needs: checks
+    if: always()
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: shots
+      - name: Build report
+        run: |
+          python3 ci/screenshot_report.py report             windows=shots/screenshots-Windows/windows             linux-x11=shots/screenshots-Linux/linux             linux-wayland=shots/screenshots-Linux/linux-wayland
+      - uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-report
+          path: report/
