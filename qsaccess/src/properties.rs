@@ -14,7 +14,7 @@ use fltk::menu::Choice;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay};
 use fltk::window::Window;
-use qsa_config::system::{PORT_FIELDS, PortLookup, Ports};
+use qsa_config::system::{PORT_FIELDS, Ports};
 use qsa_config::{AddressLookup, CaCertificate, CredentialMode, Invalid, System, Systems};
 use qsa_ui::controls::{self, Switch};
 use qsa_ui::groupbox::{self, CONTENT_SIDE, CONTENT_TOP};
@@ -45,7 +45,6 @@ pub struct SystemForm {
     default_user: Input,
     lookup: Choice,
     fixed_ip: Input,
-    port_lookup: Choice,
     ports: Vec<(usize, IntInput)>,
     cas: Rc<RefCell<Vec<CaCertificate>>>,
 }
@@ -57,15 +56,6 @@ const MODES: [(CredentialMode, &str); 3] = [
         "Prompt for user ID and password once",
     ),
     (CredentialMode::PromptEveryTime, "Prompt every time"),
-];
-
-const PORT_LOOKUPS: [(PortLookup, &str); 3] = [
-    (
-        PortLookup::MapperThenStandard,
-        "Server mapper, then standard ports",
-    ),
-    (PortLookup::StandardOnly, "Standard ports only"),
-    (PortLookup::Fixed, "Fixed ports as listed"),
 ];
 
 const LOOKUPS: [(AddressLookup, &str); 3] = [
@@ -86,6 +76,7 @@ fn port_field(x: i32, y: i32, value: u16) -> IntInput {
 }
 
 /// Rows of the Ports tab: (service, plain field index, TLS field index).
+/// QAP has only a TLS port: it never runs without TLS.
 fn port_rows() -> Vec<(&'static str, Option<usize>, Option<usize>)> {
     let mut rows: Vec<(&str, Option<usize>, Option<usize>)> = Vec::new();
     for (i, f) in PORT_FIELDS.iter().enumerate() {
@@ -94,6 +85,7 @@ fn port_rows() -> Vec<(&'static str, Option<usize>, Option<usize>)> {
                 rows.last_mut().expect("checked").2 = Some(i);
             }
             Some(service) => rows.push((service, None, Some(i))),
+            None if f.label == "QAP" => rows.push((f.label, None, Some(i))),
             None => rows.push((f.label, Some(i), None)),
         }
     }
@@ -172,23 +164,7 @@ pub fn build(title: &str, system: &System) -> (PropertyDialog, SystemForm) {
 
     // Ports.
     let mut ports = Vec::new();
-    let mut port_lookup = None;
     d.tabs().add_page("Ports", |r| {
-        controls::label(r.x, r.y, 90, fh, "Port lookup:");
-        let mut lookup = controls::combo(r.x + 90, r.y, 230, fh);
-        for (_, l) in PORT_LOOKUPS {
-            lookup.add_choice(l);
-        }
-        let li = PORT_LOOKUPS
-            .iter()
-            .position(|(l, _)| *l == system.port_lookup)
-            .unwrap_or(0);
-        lookup.set_value(li as i32);
-        lookup.set_tooltip(
-            "How the host servers' ports are found; Telnet always uses its ports below",
-        );
-        port_lookup = Some(lookup);
-        let r = fltk::draw::Rect::new(r.x, r.y + fh + 10, r.w, r.h - fh - 10);
         let (c1, c2, c3) = (r.x, r.x + 150, r.x + 230);
         let head = |x: i32, t: &str| {
             let mut l = controls::label(x, r.y, 80, 18, t);
@@ -208,6 +184,15 @@ pub fn build(title: &str, system: &System) -> (PropertyDialog, SystemForm) {
             }
             y += fh + 3;
         }
+        let mut note = controls::label(
+            c1,
+            y + 6,
+            r.w,
+            2 * 18,
+            "QAP always uses TLS. 5250 sessions use the Telnet TLS port
+when Use TLS for all connections is selected.",
+        );
+        note.set_align(Align::Left | Align::Inside | Align::Top);
         let mut reset = controls::button(
             r.x + r.w - 120,
             r.y + r.h - theme::BUTTON_H,
@@ -300,22 +285,6 @@ pub fn build(title: &str, system: &System) -> (PropertyDialog, SystemForm) {
         });
     });
 
-    // The mapper's own port matters only when the mapper is asked.
-    let mut port_lookup = port_lookup.expect("ports page built");
-    if let Some((_, f)) = ports
-        .iter_mut()
-        .find(|(i, _)| PORT_FIELDS[*i].label == "Server mapper")
-    {
-        let mapper = Switch::for_input(f);
-        mapper.set_enabled(system.port_lookup.uses_mapper());
-        port_lookup.set_callback(move |c| {
-            let mode = PORT_LOOKUPS
-                .get(c.value().max(0) as usize)
-                .map_or(PortLookup::MapperThenStandard, |(m, _)| *m);
-            mapper.set_enabled(mode.uses_mapper());
-        });
-    }
-
     let form = SystemForm {
         name,
         description,
@@ -324,7 +293,6 @@ pub fn build(title: &str, system: &System) -> (PropertyDialog, SystemForm) {
         default_user,
         lookup,
         fixed_ip,
-        port_lookup,
         ports,
         cas,
     };
@@ -349,9 +317,6 @@ impl SystemForm {
             .zip(&self.mode)
             .find(|(_, r)| r.value())
             .map_or(CredentialMode::DefaultUser, |((m, _), _)| *m);
-        s.port_lookup = PORT_LOOKUPS
-            .get(self.port_lookup.value().max(0) as usize)
-            .map_or(PortLookup::MapperThenStandard, |(l, _)| *l);
         s.address_lookup = LOOKUPS
             .get(self.lookup.value().max(0) as usize)
             .map_or(AddressLookup::Always, |(l, _)| *l);
@@ -519,9 +484,9 @@ mod tests {
     #[test]
     fn port_rows_pair_plain_and_tls() {
         let rows = port_rows();
-        assert_eq!(rows.len(), 9);
+        assert_eq!(rows.len(), 2);
         assert_eq!(rows[0], ("Telnet", Some(0), Some(1)));
-        assert_eq!(rows[1], ("Server mapper", Some(2), None));
+        assert_eq!(rows[1], ("QAP", None, Some(2)));
         let fields: usize = rows
             .iter()
             .map(|r| r.1.is_some() as usize + r.2.is_some() as usize)

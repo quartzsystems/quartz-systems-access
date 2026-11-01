@@ -268,7 +268,7 @@ pub(crate) mod tests {
         s.default_user = "QSECOFR".into();
         s.address_lookup = AddressLookup::Never;
         s.fixed_ip = "192.0.2.10".into();
-        s.ports.database_tls = 19471;
+        s.ports.qap = 12320;
         s.ca_certificates = vec![
             CaCertificate::Path(PathBuf::from("/etc/ssl/quartz-ca.pem")),
             CaCertificate::Pem(

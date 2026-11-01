@@ -55,6 +55,16 @@ Locally, `QSA_BLESS=1 cargo test -p qsaccess --test screenshots` writes the
 goldens for the machine you are on; use it to look, not to commit, unless the
 machine matches the runner.
 
+### Waiting for a bless run
+
+Views changed on purpose since the last bless. Their goldens are stale
+until CI's bless run writes new ones; take each off this list when it is
+blessed.
+
+| View | Changed by |
+|---|---|
+| `properties-ports` (Windows, X11, Wayland) | Systems file version 3: Telnet and QAP ports replace the host-server ports and Port lookup. |
+
 ## PDF goldens
 
 `qsa-print/tests/pdf_goldens.rs` reads SCS fixtures (the built-in test page,

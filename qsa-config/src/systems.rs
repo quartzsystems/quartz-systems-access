@@ -15,9 +15,15 @@ pub struct Systems {
     list: Vec<System>,
 }
 
-/// The `systems.toml` version written. 2 added `port-lookup`; version 1
-/// files read with it at its default.
-pub(crate) const VERSION: u32 = 2;
+/// The `systems.toml` version written.
+///
+/// - 1: the first.
+/// - 2: added `port_lookup` and the host-server ports.
+/// - 3: QAP replaced the host servers: `ports` holds `telnet`, `telnet_tls`
+///   and `qap`. Reading an older file keeps its Telnet ports, gives QAP
+///   its default port, and drops `port_lookup` and the host-server ports,
+///   which nothing uses any more.
+pub(crate) const VERSION: u32 = 3;
 
 /// On-disk form of `systems.toml`.
 #[derive(Serialize, Deserialize)]
@@ -193,24 +199,48 @@ mod tests {
     }
 
     #[test]
-    fn version_1_files_get_the_default_port_lookup() {
-        let old = "version = 1
+    fn version_2_files_keep_their_telnet_ports_and_get_the_qap_default() {
+        let old = "version = 2
 
 [[system]]
 name = \"old.example\"
 use_tls = true
+port_lookup = \"fixed\"
+
+[system.ports]
+telnet = 2323
+telnet_tls = 9992
+server_mapper = 449
+signon = 8476
+signon_tls = 19476
 ";
         let f: SystemsFile = toml::from_str(old).unwrap();
-        assert_eq!(f.version, 1);
+        assert_eq!(f.version, 2);
         let s = Systems::from_vec(f.systems);
         let sys = s.get("old.example").unwrap();
-        assert_eq!(sys.port_lookup, crate::PortLookup::MapperThenStandard);
+        assert_eq!(sys.ports.telnet, 2323);
+        assert_eq!(sys.ports.telnet_tls, 9992);
+        assert_eq!(sys.ports.qap, crate::system::QAP_PORT);
         assert!(sys.use_tls);
         let written = toml::to_string(&s.to_file()).unwrap();
-        assert!(written.starts_with("version = 2"), "{written}");
-        assert!(
-            written.contains("port_lookup = \"mapper-then-standard\""),
-            "{written}"
+        assert!(written.starts_with("version = 3"), "{written}");
+        assert!(!written.contains("port_lookup"), "{written}");
+        assert!(!written.contains("signon"), "{written}");
+        assert!(written.contains("qap = 2320"), "{written}");
+    }
+
+    #[test]
+    fn version_1_files_read_with_the_defaults() {
+        let old = "version = 1
+
+[[system]]
+name = \"older.example\"
+";
+        let f: SystemsFile = toml::from_str(old).unwrap();
+        let s = Systems::from_vec(f.systems);
+        assert_eq!(
+            s.get("older.example").unwrap().ports,
+            crate::Ports::default()
         );
     }
 

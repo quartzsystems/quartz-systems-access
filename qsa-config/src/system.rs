@@ -35,71 +35,34 @@ pub enum AddressLookup {
     Never,
 }
 
-/// How a host server's port is found.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum PortLookup {
-    /// Ask the server mapper (port 449, never TLS); if it cannot be
-    /// reached or refuses, use the configured port and say so once.
-    #[default]
-    MapperThenStandard,
-    /// Use the configured ports; never contact the server mapper.
-    StandardOnly,
-    /// Use the configured ports, which must each be set and distinct.
-    Fixed,
-}
-
-impl PortLookup {
-    /// Whether the server mapper is asked.
-    pub fn uses_mapper(self) -> bool {
-        self == PortLookup::MapperThenStandard
-    }
-}
-
-/// The server ports. Each service has a plain port and a TLS port.
+/// The ports a system is reached on: Telnet for 5250 display and printer
+/// sessions (plain and TLS), and QAP for everything else (always TLS).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Ports {
     pub telnet: u16,
     pub telnet_tls: u16,
-    pub server_mapper: u16,
-    pub signon: u16,
-    pub signon_tls: u16,
-    pub central: u16,
-    pub central_tls: u16,
-    pub database: u16,
-    pub database_tls: u16,
-    pub data_queue: u16,
-    pub data_queue_tls: u16,
-    pub file: u16,
-    pub file_tls: u16,
-    pub network_print: u16,
-    pub network_print_tls: u16,
-    pub remote_command: u16,
-    pub remote_command_tls: u16,
+    /// The Quartz Access Protocol port (`docs/qap-protocol-spec.md`).
+    pub qap: u16,
 }
+
+/// The default QAP port.
+pub const QAP_PORT: u16 = 2320;
 
 impl Default for Ports {
     fn default() -> Ports {
         Ports {
             telnet: 23,
             telnet_tls: 992,
-            server_mapper: 449,
-            signon: 8476,
-            signon_tls: 9476,
-            central: 8470,
-            central_tls: 9470,
-            database: 8471,
-            database_tls: 9471,
-            data_queue: 8472,
-            data_queue_tls: 9472,
-            file: 8473,
-            file_tls: 9473,
-            network_print: 8474,
-            network_print_tls: 9474,
-            remote_command: 8475,
-            remote_command_tls: 9475,
+            qap: QAP_PORT,
         }
+    }
+}
+
+impl Ports {
+    /// The Telnet port for a system that does or does not use TLS.
+    pub fn telnet_for(&self, tls: bool) -> u16 {
+        if tls { self.telnet_tls } else { self.telnet }
     }
 }
 
@@ -128,21 +91,7 @@ macro_rules! port_fields {
 port_fields! {
     "Telnet" => telnet,
     "Telnet (TLS)" => telnet_tls,
-    "Server mapper" => server_mapper,
-    "Sign-on" => signon,
-    "Sign-on (TLS)" => signon_tls,
-    "Central" => central,
-    "Central (TLS)" => central_tls,
-    "Database" => database,
-    "Database (TLS)" => database_tls,
-    "Data queue" => data_queue,
-    "Data queue (TLS)" => data_queue_tls,
-    "File" => file,
-    "File (TLS)" => file_tls,
-    "Network print" => network_print,
-    "Network print (TLS)" => network_print_tls,
-    "Remote command" => remote_command,
-    "Remote command (TLS)" => remote_command_tls,
+    "QAP" => qap,
 }
 
 /// A trusted CA certificate: a PEM file on disk, or PEM text kept in the
@@ -183,10 +132,6 @@ pub struct System {
     pub address_lookup: AddressLookup,
     /// Used when `address_lookup` is `Never`.
     pub fixed_ip: String,
-    /// How host server ports are found. Telnet ports always come from
-    /// `ports`. Systems saved before this setting existed read as the
-    /// default.
-    pub port_lookup: PortLookup,
     pub ports: Ports,
     pub ca_certificates: Vec<CaCertificate>,
 }
@@ -210,7 +155,7 @@ pub enum Invalid {
     FixedIpBad(String),
     #[error("{0} port must be from 1 to 65535.")]
     PortZero(&'static str),
-    #[error("{0} and {1} cannot use the same port when ports are fixed.")]
+    #[error("{0} and {1} cannot use the same port.")]
     PortShared(&'static str, &'static str),
     #[error("A CA certificate entry is empty.")]
     CaEmpty,
@@ -277,18 +222,10 @@ impl System {
                 return Err(Invalid::PortZero(f.label));
             }
         }
-        if self.port_lookup == PortLookup::Fixed {
-            // The mapper's own port is not used in this mode.
-            let used: Vec<&PortField> = PORT_FIELDS
-                .iter()
-                .filter(|f| f.label != "Server mapper")
-                .collect();
-            for (i, a) in used.iter().enumerate() {
-                for b in &used[i + 1..] {
-                    if (a.get)(&self.ports) == (b.get)(&self.ports) {
-                        return Err(Invalid::PortShared(a.label, b.label));
-                    }
-                }
+        // QAP cannot share a port with Telnet.
+        for f in PORT_FIELDS.iter().filter(|f| f.label != "QAP") {
+            if (f.get)(&self.ports) == self.ports.qap {
+                return Err(Invalid::PortShared(f.label, "QAP"));
             }
         }
         for ca in &self.ca_certificates {
@@ -311,16 +248,9 @@ mod tests {
     #[test]
     fn default_ports() {
         let p = Ports::default();
-        assert_eq!((p.telnet, p.telnet_tls), (23, 992));
-        assert_eq!(p.server_mapper, 449);
-        assert_eq!((p.signon, p.signon_tls), (8476, 9476));
-        assert_eq!((p.central, p.central_tls), (8470, 9470));
-        assert_eq!((p.database, p.database_tls), (8471, 9471));
-        assert_eq!((p.data_queue, p.data_queue_tls), (8472, 9472));
-        assert_eq!((p.file, p.file_tls), (8473, 9473));
-        assert_eq!((p.network_print, p.network_print_tls), (8474, 9474));
-        assert_eq!((p.remote_command, p.remote_command_tls), (8475, 9475));
-        assert_eq!(PORT_FIELDS.len(), 17);
+        assert_eq!((p.telnet, p.telnet_tls, p.qap), (23, 992, 2320));
+        assert_eq!((p.telnet_for(false), p.telnet_for(true)), (23, 992));
+        assert_eq!(PORT_FIELDS.len(), 3);
     }
 
     #[test]
@@ -396,17 +326,13 @@ mod tests {
             }),
             Ok(())
         );
-        assert_eq!(v(|s| s.ports.file = 0), Err(Invalid::PortZero("File")));
-        // Shared ports are only an error when ports are fixed.
-        assert_eq!(v(|s| s.ports.file = 8476), Ok(()));
+        assert_eq!(v(|s| s.ports.qap = 0), Err(Invalid::PortZero("QAP")));
         assert_eq!(
-            v(|s| {
-                s.port_lookup = PortLookup::Fixed;
-                s.ports.file = 8476;
-            }),
-            Err(Invalid::PortShared("Sign-on", "File"))
+            v(|s| s.ports.qap = 992),
+            Err(Invalid::PortShared("Telnet (TLS)", "QAP"))
         );
-        assert_eq!(v(|s| s.port_lookup = PortLookup::Fixed), Ok(()));
+        // The two Telnet ports may be the same; only one is used.
+        assert_eq!(v(|s| s.ports.telnet_tls = 23), Ok(()));
         assert_eq!(
             v(|s| s.ca_certificates.push(CaCertificate::Pem(" ".into()))),
             Err(Invalid::CaEmpty)
