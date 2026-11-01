@@ -14,8 +14,10 @@ weston --backend=x11 --socket=wl-qsa --idle-time=0 --width=1280 --height=1024 &
 w=\$!
 for _ in \$(seq 100); do [ -S "\$XDG_RUNTIME_DIR/wl-qsa" ] && break; sleep 0.1; done
 status=0
-env -u DISPLAY WAYLAND_DISPLAY=wl-qsa FLTK_BACKEND=wayland QSA_SCREENSHOT_TAG=wayland \
-  cargo test -p qsaccess --test screenshots $* || status=\$?
+for p in qsaccess qsa-install; do
+  env -u DISPLAY WAYLAND_DISPLAY=wl-qsa FLTK_BACKEND=wayland QSA_SCREENSHOT_TAG=wayland \
+    cargo test -p \$p --test screenshots $* || status=\$?
+done
 kill \$w || true
 exit \$status
 INNER

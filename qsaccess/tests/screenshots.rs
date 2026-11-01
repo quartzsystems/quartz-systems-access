@@ -23,32 +23,19 @@
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
-use fltk::{app, prelude::*, window::Window};
+use fltk::window::Window;
 use qsa_config::KeyMap;
 use qsa_config::credentials::Memory;
 use qsa_config::settings::{ColorMap, ScreenSize};
 use qsa_config::system::CaCertificate;
 use qsa_config::{AddressLookup, CredentialMode, Credentials, Settings, System, Systems};
-use qsa_ui::snapshot::{self, Rgb};
+use qsa_ui::goldens::Goldens;
 use qsaccess::app::{AppState, Shared};
 use qsaccess::session::start::StartOptions;
 use qsaccess::session::window::{Conn, SessionWindow};
-use qsaccess::session::{cert, keymapdlg, start};
+use qsaccess::session::{cert, keymapdlg, loadmap, start};
 use qsaccess::{mainwin, properties, sysconfig};
 use std::rc::Rc;
-
-fn platform() -> &'static str {
-    if cfg!(windows) { "windows" } else { "linux" }
-}
-
-/// `windows`, `linux`, or `linux-<tag>` when `QSA_SCREENSHOT_TAG` is set (for
-/// example `linux-wayland`). Goldens and captures are kept per variant.
-fn variant() -> String {
-    match std::env::var("QSA_SCREENSHOT_TAG") {
-        Ok(tag) if !tag.is_empty() => format!("{}-{tag}", platform()),
-        _ => platform().to_owned(),
-    }
-}
 
 fn fixture() -> Shared {
     let mut systems = Systems::new();
@@ -82,37 +69,6 @@ fn fixture() -> Shared {
         Credentials::with(Box::new(Memory::default())),
     )
     .shared()
-}
-
-fn settle() {
-    for _ in 0..15 {
-        let _ = app::wait_for(0.02);
-    }
-}
-
-/// Shows a window beyond the right edge of the screen (so the real pointer
-/// cannot hover over it), parks focus on it (so no field shows a caret), lets
-/// it draw, captures it and hides it. The capture draws offscreen, so the
-/// window's screen position does not matter.
-fn render(mut win: Window) -> Rgb {
-    let (sw, _) = app::screen_size();
-    win.set_pos(sw as i32 + 200, 0);
-    win.show();
-    settle();
-    // FLTK may move focus to the first field as the window maps; keep parking
-    // it on the window until it stays there.
-    for _ in 0..20 {
-        app::set_focus(&win);
-        win.redraw();
-        settle();
-        if app::focus().is_some_and(|f| f.as_widget_ptr() == win.as_widget_ptr()) {
-            break;
-        }
-    }
-    let img = snapshot::capture(&win);
-    win.hide();
-    settle();
-    img
 }
 
 /// The final screen of a recorded session.
@@ -214,6 +170,15 @@ fn session_properties(state: &Shared, tab: usize) -> Window {
     d.window().clone()
 }
 
+/// The keyboard map in `tests/data/operations.qkm`, as loaded into a
+/// session.
+fn loaded_keymap() -> KeyMap {
+    let p = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/data/operations.qkm");
+    qsa_config::qkm::KeymapFile::load(&p)
+        .expect("fixture keyboard map")
+        .map
+}
+
 /// The Macro editor with the sign-on and WRKACTJOB macro.
 fn macro_editor() -> Window {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -287,6 +252,21 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
         "session-properties-hotspots".to_owned(),
         session_properties(state, 1),
     ));
+    out.push((
+        "keyboard-map-loaded".to_owned(),
+        keymapdlg::build("Keyboard Map - sys1.example.net", &loaded_keymap()).window,
+    ));
+    out.push((
+        "load-keyboard-map".to_owned(),
+        loadmap::build(
+            Path::new("operations.qkm"),
+            &[
+                ("Payroll".to_owned(), "sys1.example.net".to_owned()),
+                ("Development".to_owned(), "dev.example.net".to_owned()),
+            ],
+        )
+        .window,
+    ));
     out.push(("macro-editor".to_owned(), macro_editor()));
     out.push(("macro-step".to_owned(), macro_step()));
     out.push((
@@ -304,119 +284,17 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     out
 }
 
-/// Pixels that differ by more than `tol` in any channel. `None` if the sizes
-/// differ.
-fn diff(a: &Rgb, b: &Rgb, tol: u8) -> Option<(usize, Rgb)> {
-    if (a.w, a.h) != (b.w, b.h) {
-        return None;
-    }
-    let mut count = 0;
-    let mut px = Vec::with_capacity(a.px.len());
-    for (pa, pb) in a.px.chunks(3).zip(b.px.chunks(3)) {
-        let off = pa.iter().zip(pb).any(|(x, y)| x.abs_diff(*y) > tol);
-        if off {
-            count += 1;
-            px.extend_from_slice(&[0xFF, 0x00, 0x00]);
-        } else {
-            // Faded copy of the capture, so the red marks stand out.
-            px.extend(pa.iter().map(|v| 0xC0 + v / 4));
-        }
-    }
-    Some((count, Rgb { w: a.w, h: a.h, px }))
-}
-
-fn env_num(name: &str, default: u32) -> u32 {
-    std::env::var(name)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default)
-}
-
-fn out_dir(manifest: &Path) -> PathBuf {
-    if let Ok(d) = std::env::var("QSA_SCREENSHOT_OUT") {
-        return PathBuf::from(d);
-    }
-    manifest
-        .join("..")
-        .join("target")
-        .join("screenshots")
-        .join(variant())
-}
-
 fn main() -> ExitCode {
-    qsa_ui::theme::pin_font_rendering();
-    // `cargo test -- --list` and filters come through here; only run when
-    // not asked merely to list.
-    if std::env::args().any(|a| a == "--list") {
-        println!("screenshots: test");
+    if Goldens::listing("screenshots") {
         return ExitCode::SUCCESS;
     }
-    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let goldens = manifest.join("tests").join("goldens").join(variant());
-    let out = out_dir(&manifest);
-    let bless = std::env::var("QSA_BLESS").is_ok_and(|v| v == "1");
-    let tol = env_num("QSA_SCREENSHOT_TOLERANCE", 40) as u8;
-    let max_per_mille = env_num("QSA_SCREENSHOT_MAX_DIFF", 2) as usize;
-
-    let _app = app::App::default();
-    app::set_screen_scale(0, 1.0);
-    qsa_ui::theme::set_hover_effects(false);
-    if let Err(e) = qsa_ui::theme::init() {
-        eprintln!("screenshots: fonts not loaded: {e}");
+    let Some((_app, mut g)) = Goldens::start(Path::new(env!("CARGO_MANIFEST_DIR"))) else {
         return ExitCode::FAILURE;
-    }
-
+    };
     let state = fixture();
-    let mut failed = Vec::new();
     let mut keep = Vec::new();
     for (name, win) in views(&state, &mut keep) {
-        let img = render(win);
-        let file = format!("{name}.png");
-        if let Err(e) = snapshot::write_png(&out.join(&file), &img) {
-            eprintln!("screenshots: {}: {e}", out.join(&file).display());
-            return ExitCode::FAILURE;
-        }
-        let golden = goldens.join(&file);
-        if bless {
-            if let Err(e) = snapshot::write_png(&golden, &img) {
-                eprintln!("screenshots: {}: {e}", golden.display());
-                return ExitCode::FAILURE;
-            }
-            println!("blessed  {name}");
-            continue;
-        }
-        let Ok(want) = snapshot::read_png(&golden) else {
-            println!("MISSING  {name}: no golden at {}", golden.display());
-            failed.push(name);
-            continue;
-        };
-        match diff(&img, &want, tol) {
-            None => {
-                println!(
-                    "FAILED   {name}: size {}x{}, golden {}x{}",
-                    img.w, img.h, want.w, want.h
-                );
-                failed.push(name);
-            }
-            Some((n, d)) => {
-                let total = (img.w * img.h) as usize;
-                let per_mille = n * 1000 / total.max(1);
-                if n * 1000 > max_per_mille * total {
-                    let _ = snapshot::write_png(&out.join(format!("{name}.diff.png")), &d);
-                    println!("FAILED   {name}: {n} pixels differ ({per_mille}\u{2030})");
-                    failed.push(name);
-                } else {
-                    println!("ok       {name}: {n} pixels differ");
-                }
-            }
-        }
+        g.check(&name, win);
     }
-    println!("screenshots written to {}", out.display());
-    if failed.is_empty() {
-        ExitCode::SUCCESS
-    } else {
-        println!("{} view(s) failed: {}", failed.len(), failed.join(", "));
-        println!("If the change is intended, run with QSA_BLESS=1 and commit the goldens.");
-        ExitCode::FAILURE
-    }
+    g.finish()
 }

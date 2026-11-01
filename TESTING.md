@@ -23,6 +23,14 @@ Windows on `windows-2022`, Linux in `ubuntu:24.04` pinned by digest in
 `.github/workflows/ci.yml`, under Xvfb (X11) and Weston (Wayland), with every
 system font removed so only the bundled fonts exist.
 
+Two crates have them: `qsaccess/tests/goldens/` (main window, System
+Configurations, system and Session Properties, Start, sessions, Keyboard Map
+with the defaults and with `tests/data/operations.qkm` loaded, Load Keyboard
+Map, certificate, Session Manager, Macro editor and step, Run Macro, a long
+message) and `qsa-install/tests/goldens/` (every wizard page, Uninstall,
+Repair). Both use `qsa_ui::goldens`. Locally, the Linux goldens can be made in
+`ci/linux-ci.Dockerfile`, the same image as the CI job.
+
 To regenerate after an intended change:
 
 ```

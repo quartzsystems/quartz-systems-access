@@ -71,7 +71,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: goldens-windows
-          path: qsaccess/tests/goldens/windows/
+          path: |
+            qsaccess/tests/goldens/windows/
+            qsa-install/tests/goldens/windows/
 
   linux:
     name: checks (x86_64-unknown-linux-gnu)
@@ -165,6 +167,49 @@ jobs:
           path: |
             qsaccess/tests/goldens/linux/
             qsaccess/tests/goldens/linux-wayland/
+            qsa-install/tests/goldens/linux/
+            qsa-install/tests/goldens/linux-wayland/
+
+  # The installer, end to end and silently: install, upgrade, repair and
+  # uninstall, then nothing left behind. See TESTING.md.
+  installer-windows:
+    name: installer (Windows, just me and all users)
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: installer-windows
+      - name: Build the installer
+        run: cargo xtask dist
+      - name: Just me
+        run: ci/installer-test-windows.ps1 -Installer target/dist/QS400-Access-V1R0M0-windows-x86_64.exe -Scope user
+      # The runner's account is an administrator, so there is no consent
+      # prompt.
+      - name: All users
+        run: ci/installer-test-windows.ps1 -Installer target/dist/QS400-Access-V1R0M0-windows-x86_64.exe -Scope machine
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-windows
+          path: target/dist/QS400-Access-V1R0M0-windows-x86_64.exe
+
+  installer-linux:
+    name: installer (Linux, glibc 2.31 build; Ubuntu 24.04 and AlmaLinux 9)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the installer in the glibc 2.31 image
+        run: ci/dist-linux.sh
+      - name: Root and user, in fresh containers
+        run: ci/installer-test-linux-containers.sh target/dist/QS400-Access-V1R0M0-linux-x86_64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-linux
+          path: target/dist/QS400-Access-V1R0M0-linux-x86_64
 
   screenshot-report:
     name: screenshot report (Windows vs Linux)

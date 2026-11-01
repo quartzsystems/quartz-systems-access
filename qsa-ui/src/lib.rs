@@ -10,6 +10,7 @@
 pub mod console;
 pub mod controls;
 pub mod glyph;
+pub mod goldens;
 pub mod groupbox;
 pub mod inputbox;
 pub mod listtable;

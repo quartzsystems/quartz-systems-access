@@ -476,6 +476,18 @@ impl Wizard {
         self.window.redraw();
     }
 
+    /// Sets the install folder shown on the Location page.
+    pub fn set_location(&mut self, dir: &Path) {
+        self.dir.set_value(&dir.display().to_string());
+        self.dir_edited.set(true);
+    }
+
+    /// Sets how far the Progress page shows the install has got.
+    pub fn set_progress(&mut self, fraction: f32, text: &str) {
+        self.progress.set_value(f64::from(fraction));
+        self.progress_text.set_label(text);
+    }
+
     /// The choices made.
     pub fn options(&self) -> Options {
         let scope = if self.all_users.value() {
@@ -732,8 +744,21 @@ pub struct UninstallDialog {
 
 /// Builds the Uninstall dialog for the install in `dir`.
 pub fn build_uninstall(dir: &Path, repair: bool) -> (UninstallDialog, app::Receiver<bool>) {
+    let sessions = qsa_config::store::default_sessions_dir()
+        .map(|d| d.display().to_string())
+        .unwrap_or_else(|| "your Sessions folder".into());
+    build_uninstall_with(dir, &sessions, repair)
+}
+
+/// Builds the Uninstall (or Repair) dialog, naming the Sessions folder as
+/// `sessions`.
+pub fn build_uninstall_with(
+    dir: &Path,
+    sessions: &str,
+    repair: bool,
+) -> (UninstallDialog, app::Receiver<bool>) {
     let (tx, rx) = app::channel::<bool>();
-    let (w, h) = (440, 210);
+    let (w, h) = (440, 232);
     let m = 14;
     let mut window = Window::new(0, 0, w, h, None);
     window.set_label(&if repair {
@@ -745,9 +770,6 @@ pub fn build_uninstall(dir: &Path, repair: bool) -> (UninstallDialog, app::Recei
     window.make_modal(true);
     let mut icon = Frame::new(m, m, 32, 32, None);
     icon.set_image(Some(glyph::image(Glyph::Terminal, Size::Large)));
-    let sessions = qsa_config::store::default_sessions_dir()
-        .map(|d| d.display().to_string())
-        .unwrap_or_else(|| "your Sessions folder".into());
     let text = if repair {
         format!(
             "Setup will put back the program files, shortcuts and file types of the install in {}.\n\n\
@@ -757,7 +779,8 @@ pub fn build_uninstall(dir: &Path, repair: bool) -> (UninstallDialog, app::Recei
     } else {
         format!(
             "Setup will remove QS/400 Access for Desktop from {}, with its shortcuts and file types.\n\n\
-             Your session files in {sessions} are kept.",
+             Your session files in {sessions} are kept, and so are your settings, system \
+             configurations and saved passwords unless you tick Also remove my settings.",
             dir.display()
         )
     };
@@ -771,7 +794,7 @@ pub fn build_uninstall(dir: &Path, repair: bool) -> (UninstallDialog, app::Recei
         h - m - theme::BUTTON_H - 34,
         w - 3 * m - 32,
         20,
-        "Also remove my settings, system configurations and saved passwords",
+        "Also remove my settings",
     );
     if repair {
         remove_settings.hide();

@@ -42,3 +42,7 @@ qsa-icons.workspace = true
 
 [lints]
 workspace = true
+
+[[test]]
+name = "screenshots"
+harness = false
