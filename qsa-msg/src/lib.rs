@@ -35,6 +35,19 @@ pub mod id {
     pub const SYSTEMS_EXPORTED: &str = "QAD0021";
     pub const SETTINGS_UNREADABLE: &str = "QAD0030";
     pub const NO_CREDENTIAL_STORE: &str = "QAD0040";
+    pub const CONNECTING: &str = "QAD1001";
+    pub const CONNECTION_REFUSED: &str = "QAD1002";
+    pub const HOST_NOT_FOUND: &str = "QAD1003";
+    pub const CONNECT_TIMED_OUT: &str = "QAD1004";
+    pub const SESSION_ENDED: &str = "QAD1005";
+    pub const TLS_FAILED: &str = "QAD1010";
+    pub const CERT_UNTRUSTED: &str = "QAD1011";
+    pub const CERT_TRUSTED: &str = "QAD1012";
+    pub const DEVICE_IN_USE: &str = "QAD1020";
+    pub const DEVICE_NOT_VALID: &str = "QAD1021";
+    pub const BASIC_5250: &str = "QAD1022";
+    pub const PROTOCOL_ERROR: &str = "QAD1030";
+    pub const SCREEN_PRINTED: &str = "QAD1040";
 }
 
 /// Errors in the catalogue itself.
@@ -204,7 +217,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 8] = [
+    const SEEDS: [&str; 21] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -213,7 +226,74 @@ mod tests {
         id::SYSTEMS_EXPORTED,
         id::SETTINGS_UNREADABLE,
         id::NO_CREDENTIAL_STORE,
+        id::CONNECTING,
+        id::CONNECTION_REFUSED,
+        id::HOST_NOT_FOUND,
+        id::CONNECT_TIMED_OUT,
+        id::SESSION_ENDED,
+        id::TLS_FAILED,
+        id::CERT_UNTRUSTED,
+        id::CERT_TRUSTED,
+        id::DEVICE_IN_USE,
+        id::DEVICE_NOT_VALID,
+        id::BASIC_5250,
+        id::PROTOCOL_ERROR,
+        id::SCREEN_PRINTED,
     ];
+
+    #[test]
+    fn phase_1_session_texts() {
+        let t = |id: &str, args: &[&str]| message(id, args).text;
+        assert_eq!(
+            t(id::CONNECTING, &["SYS", "23"]),
+            "Connecting to SYS port 23."
+        );
+        assert_eq!(
+            t(id::CONNECTION_REFUSED, &["SYS"]),
+            "Connection to SYS refused."
+        );
+        assert_eq!(t(id::HOST_NOT_FOUND, &["SYS"]), "Host SYS not found.");
+        assert_eq!(
+            t(id::CONNECT_TIMED_OUT, &["SYS"]),
+            "Connection to SYS timed out."
+        );
+        assert_eq!(
+            t(id::SESSION_ENDED, &["SYS"]),
+            "Session to SYS ended by the system."
+        );
+        assert_eq!(
+            t(id::TLS_FAILED, &["SYS", "why"]),
+            "TLS handshake with SYS failed: why."
+        );
+        assert_eq!(
+            t(id::CERT_UNTRUSTED, &["SYS"]),
+            "Certificate for SYS is not trusted."
+        );
+        assert_eq!(
+            t(id::CERT_TRUSTED, &["SYS"]),
+            "Certificate for SYS added to trusted list."
+        );
+        assert_eq!(
+            t(id::DEVICE_IN_USE, &["DSP01"]),
+            "Device name DSP01 is in use."
+        );
+        assert_eq!(
+            t(id::DEVICE_NOT_VALID, &["DSP01"]),
+            "Device name DSP01 is not valid."
+        );
+        assert_eq!(
+            t(id::BASIC_5250, &[]),
+            "System does not support TN5250E; using basic 5250."
+        );
+        assert_eq!(
+            t(id::PROTOCOL_ERROR, &["SYS", "x"]),
+            "Protocol error from SYS: x."
+        );
+        assert_eq!(
+            t(id::SCREEN_PRINTED, &["f.pdf"]),
+            "Screen printed to f.pdf."
+        );
+    }
 
     #[test]
     fn builtin_catalogue_parses_and_has_every_seed() {

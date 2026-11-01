@@ -56,3 +56,83 @@ severity = 10
 text = "Credential store not available; you will be prompted each time."
 cause = "No credential store could be reached. On Windows this is the Windows Credential Manager; on Linux it is a Secret Service provider on the session bus. Passwords are never saved anywhere else."
 recovery = "On Linux, start a Secret Service provider for your session and start QS/400 Access for Desktop again. Until then, enter your password whenever you are prompted."
+
+# 5250 display sessions.
+
+[QAD1001]
+severity = 0
+text = "Connecting to &1 port &2."
+cause = "A 5250 display session is opening a connection to system &1 on port &2."
+recovery = "None needed. If the connection does not complete within 15 seconds it is ended and another message says why."
+
+[QAD1002]
+severity = 30
+text = "Connection to &1 refused."
+cause = "System &1 answered, but nothing accepted the connection on the port used. The Telnet server may not be started, or the port in the system configuration may be wrong, or TLS may be selected for a system with no TLS listener."
+recovery = "Check that the Telnet server is started on &1, and check the Telnet ports on the Ports tab of the system's properties and the TLS setting on its Security tab. Then select Reconnect."
+
+[QAD1003]
+severity = 30
+text = "Host &1 not found."
+cause = "The name &1 could not be turned into an address. The name may be misspelt, or the name server may not know it."
+recovery = "Correct the system name in System Configurations, or give a fixed IP address on the Connection tab. Then start the session again."
+
+[QAD1004]
+severity = 30
+text = "Connection to &1 timed out."
+cause = "No answer came from system &1 within 15 seconds. The system may be down, or a firewall may be dropping the connection."
+recovery = "Check that &1 is running and can be reached from this computer, then select Reconnect."
+
+[QAD1005]
+severity = 20
+text = "Session to &1 ended by the system."
+cause = "System &1 closed the connection. This happens when the job ends after sign-off, when the device is varied off, or when the connection is lost."
+recovery = "Select Reconnect to start a new session. The last screen stays visible until then."
+
+[QAD1010]
+severity = 30
+text = "TLS handshake with &1 failed: &2."
+cause = "A TLS session could not be set up with system &1. The reason given was: &2"
+recovery = "Check that the port on the Ports tab is the system's TLS Telnet port and that the system's TLS configuration is complete. If the system offers no TLS, clear TLS on the Security tab."
+
+[QAD1011]
+severity = 30
+text = "Certificate for &1 is not trusted."
+cause = "System &1 presented a certificate that does not chain to a certificate authority this computer trusts, or that is not valid for the name &1. The reason given was: &2"
+recovery = "Compare the certificate's SHA-256 fingerprint with the one shown on the system itself. If they match and you trust the system, select Trust for this system; the certificate is added to this system's CA list. Otherwise do not connect."
+
+[QAD1012]
+severity = 0
+text = "Certificate for &1 added to trusted list."
+cause = "The certificate presented by system &1 was added to the CA certificates of this system's configuration. Connections to &1 that present it are trusted from now on. Other systems are not affected."
+recovery = "None needed. To withdraw the trust, remove the certificate from the Security tab of the system's properties."
+
+[QAD1020]
+severity = 30
+text = "Device name &1 is in use."
+cause = "The system could not give this session the display device &1: the device is in use by another session or is not available (start-up response code &2)."
+recovery = "Select Retry without device name to let the system choose a device, or change the device name and start the session again."
+
+[QAD1021]
+severity = 30
+text = "Device name &1 is not valid."
+cause = "The system refused display device name &1 for this session (start-up response code &2: &3)."
+recovery = "Select Retry without device name to let the system choose a device, or give a device name of 1 to 10 letters, digits, #, $ or @, starting with a letter."
+
+[QAD1022]
+severity = 10
+text = "System does not support TN5250E; using basic 5250."
+cause = "The system did not take up the enhanced Telnet options (NEW-ENVIRON). The session continues as a basic 5250 display: the device name and the code page settings are not passed to the system."
+recovery = "None needed for a working session. To choose the device name, enable the enhanced Telnet support on the system."
+
+[QAD1030]
+severity = 30
+text = "Protocol error from &1: &2."
+cause = "System &1 sent data that does not follow the 5250 protocol. The reason was: &2. A negative response was sent where the protocol defines one, and the details were written to the log."
+recovery = "If the screen looks wrong, press Enter or select Reconnect. Report the problem with the log file qsaccess.log; it names the bytes that were not valid."
+
+[QAD1040]
+severity = 0
+text = "Screen printed to &1."
+cause = "The screen was written as a PDF file to &1."
+recovery = "None needed. Open the file to view or print it."
