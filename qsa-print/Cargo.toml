@@ -1,0 +1,34 @@
+[package]
+name = "qsa-print"
+description = "Printed output for QS/400 Access for Desktop: PDF, Windows GDI and CUPS"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+scs.workspace = true
+tn5250.workspace = true
+printpdf.workspace = true
+thiserror.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Graphics_Printing",
+    "Win32_Storage_Xps",
+    "Win32_System_Memory",
+    "Win32_UI_Controls_Dialogs",
+] }
+
+[dev-dependencies]
+png.workspace = true
+
+[lints]
+workspace = true
+
+[[test]]
+name = "pdf_goldens"
+harness = false

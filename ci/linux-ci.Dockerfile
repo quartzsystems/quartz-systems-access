@@ -12,6 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libwayland-dev wayland-protocols libxkbcommon-dev libdbus-1-dev \
     libgl1-mesa-dev libglu1-mesa-dev \
     xvfb xauth weston \
+    poppler-utils=24.02.0-1ubuntu9.11 \
  && rm -rf /usr/share/fonts/* /usr/local/share/fonts/* && fc-cache -f
 RUN curl -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal -c clippy,rustfmt
 ENV PATH=/root/.cargo/bin:$PATH

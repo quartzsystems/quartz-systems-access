@@ -1,0 +1,7 @@
+
+
+
+    Total 1,234.56
+Bold by repeat
+Underscore by backspace: AB
+Mixed: X

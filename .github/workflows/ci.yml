@@ -47,7 +47,7 @@ jobs:
       - name: Build
         run: cargo build --workspace --all-targets --target $TARGET
 
-      - name: tn5250 has no UI dependencies
+      - name: tn5250 and scs have no UI dependencies
         run: ci/deps.sh
 
       - name: Clippy
@@ -100,7 +100,8 @@ jobs:
             libpango1.0-dev libcairo2-dev \
             libwayland-dev wayland-protocols libxkbcommon-dev libdbus-1-dev \
             libgl1-mesa-dev libglu1-mesa-dev \
-            xvfb xauth weston
+            xvfb xauth weston \
+            poppler-utils=24.02.0-1ubuntu9.11
           # Only the fonts the application bundles may be used.
           rm -rf /usr/share/fonts/* /usr/local/share/fonts/*
           fc-cache -f
@@ -131,7 +132,7 @@ jobs:
       - name: Build
         run: cargo build --workspace --all-targets --target $TARGET
 
-      - name: tn5250 has no UI dependencies
+      - name: tn5250 and scs have no UI dependencies
         run: ci/deps.sh
 
       - name: Clippy
@@ -139,9 +140,12 @@ jobs:
 
       # Unit tests, the replay fixtures, the console pixel test and the
       # screenshot tests (X11, under Xvfb).
+      # The PDF goldens' page images need the pinned pdftoppm installed
+      # above.
       - name: Test (X11 under Xvfb)
         env:
           FLTK_BACKEND: x11
+          QSA_REQUIRE_PDFTOPPM: "1"
         run: xvfb-run -a -s "-screen 0 1280x1024x24 -dpi 96" cargo test --workspace --target $TARGET
 
       # The screenshots again under Wayland, against the Wayland goldens.
@@ -169,6 +173,7 @@ jobs:
             qsaccess/tests/goldens/linux-wayland/
             qsa-install/tests/goldens/linux/
             qsa-install/tests/goldens/linux-wayland/
+            qsa-print/tests/goldens/
 
   # The installer, end to end and silently: install, upgrade, repair and
   # uninstall, then nothing left behind. See TESTING.md.

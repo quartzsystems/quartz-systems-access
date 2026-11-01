@@ -53,6 +53,27 @@ Locally, `QSA_BLESS=1 cargo test -p qsaccess --test screenshots` writes the
 goldens for the machine you are on; use it to look, not to commit, unless the
 machine matches the runner.
 
+## PDF goldens
+
+`qsa-print/tests/pdf_goldens.rs` reads SCS fixtures (the built-in test page,
+the RFC 4777 example print record, a three-page 132-column listing, an A4 job
+with overstrike and underline) through the page model to PDF, and checks:
+
+- the text rendering against `qsa-print/tests/goldens/<name>.txt`, everywhere;
+- that every embedded face is a subset of Courier Prime;
+- every page, rasterised by `pdftoppm -r 50 -gray`, against
+  `<name>-<page>.png`, at most 16 pixels off.
+
+The page images need poppler 24.02.0 (`poppler-utils=24.02.0-1ubuntu9.11`,
+pinned in the Linux CI job and `ci/linux-ci.Dockerfile`; a test tool, never
+shipped). CI sets `QSA_REQUIRE_PDFTOPPM=1` there; elsewhere the images are
+skipped when `pdftoppm` is missing, and `QSA_PDFTOPPM` can name one. Bless with
+`QSA_BLESS=1` in the CI image only, and look at the PNGs before committing.
+
+`qsa-print/tests/gdi_print_to_pdf.rs` prints the test page through the Windows
+spooler to "Microsoft Print to PDF" (skipped when that printer is missing) and
+leaves the PDF in `target/gdi-print/`.
+
 ## Wayland, by hand
 
 CI runs the Wayland screenshots under Weston's X11 backend. A real compositor

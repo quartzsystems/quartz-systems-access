@@ -57,7 +57,7 @@ pub struct Player {
 }
 
 fn secs(ms: u32) -> String {
-    if ms % 1000 == 0 {
+    if ms.is_multiple_of(1000) {
         format!("{} s", ms / 1000)
     } else {
         format!("{ms} ms")

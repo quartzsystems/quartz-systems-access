@@ -276,13 +276,13 @@ impl TerminalView {
             Event::Drag => {
                 let cell = Self::cell_under(w, &i3.borrow());
                 let mut inner = i3.borrow_mut();
-                if let (Some(a), Some(c)) = (inner.anchor, cell) {
-                    if c != a || inner.dragged {
-                        inner.dragged = true;
-                        inner.selection = Some((a, c));
-                        drop(inner);
-                        w.set_damage_type(Damage::User1);
-                    }
+                if let (Some(a), Some(c)) = (inner.anchor, cell)
+                    && (c != a || inner.dragged)
+                {
+                    inner.dragged = true;
+                    inner.selection = Some((a, c));
+                    drop(inner);
+                    w.set_damage_type(Damage::User1);
                 }
                 true
             }

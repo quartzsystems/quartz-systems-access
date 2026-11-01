@@ -90,7 +90,7 @@ const RT_MANIFEST: u16 = 24;
 const LANG_EN_US: u16 = 0x0409;
 
 fn pad4(v: &mut Vec<u8>) {
-    while v.len() % 4 != 0 {
+    while !v.len().is_multiple_of(4) {
         v.push(0);
     }
 }

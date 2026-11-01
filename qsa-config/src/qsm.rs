@@ -107,7 +107,7 @@ impl Action {
     /// A one-line description, as the Macro editor lists it.
     pub fn describe(&self) -> String {
         let secs = |ms: &u32| {
-            if ms % 1000 == 0 {
+            if ms.is_multiple_of(1000) {
                 format!("{} s", ms / 1000)
             } else {
                 format!("{ms} ms")

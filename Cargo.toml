@@ -1,11 +1,11 @@
 [workspace]
 resolver = "3"
-members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "tn5250", "scs", "xtask"]
+members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "tn5250", "scs", "qsa-print", "xtask"]
 
 [workspace.package]
 version = "1.0.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "MIT"
 authors = ["Quartz Systems"]
 repository = "https://github.com/quartzsystems/quartz-systems-access"
@@ -28,6 +28,7 @@ ico = "0.4"
 zstd = "0.13"
 tar = "0.4"
 windows = "0.61"
+printpdf = { version = "0.12.8", default-features = false, features = ["text_layout"] }
 
 qsa-ui = { path = "qsa-ui" }
 qsa-glyph = { path = "qsa-glyph" }
@@ -36,6 +37,7 @@ qsa-config = { path = "qsa-config" }
 qsa-msg = { path = "qsa-msg" }
 tn5250 = { path = "tn5250" }
 scs = { path = "scs" }
+qsa-print = { path = "qsa-print" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

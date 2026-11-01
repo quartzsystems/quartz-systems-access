@@ -20,8 +20,17 @@ components below. Each is used under its own licence.
 | `rustls-pki-types` | 1 | MIT OR Apache-2.0 | Certificate and PEM types |
 | `rustls-native-certs` | 0.8 | Apache-2.0 OR ISC OR MIT | The platform's trusted roots |
 | `sha2` | 0.10 | MIT OR Apache-2.0 | Certificate fingerprints |
+| `printpdf` (`text_layout` feature, for font subsetting) | 0.12 | MIT | PDF output of printer sessions |
+| `windows` | 0.61 | MIT OR Apache-2.0 | Windows printing: spooler, GDI, print setup dialog (Windows only) |
 
 Transitive dependencies are listed in `Cargo.lock`.
+
+`printpdf` brings in, among others, `lopdf` (MIT), `allsorts-azul` (Apache-2.0,
+the font subsetter) and the `azul-*` layout crates (MIT). One of those,
+`azul-simplecss` 0.2, is under the Mozilla Public License 2.0: it is used
+unmodified, and its source is published on crates.io, which MPL-2.0 asks for.
+The rest of `printpdf`'s tree is under MIT, Apache-2.0, BSD-3-Clause, Zlib or
+Unicode-3.0 terms.
 
 ## Bundled fonts
 
@@ -55,3 +64,19 @@ vendored byte for byte from `github.com/quartzsystems/quartz-systems-400`
 (`lic/console/font/qs400-9x16.txt`, commit `79cbecf8`). Its palette and drawing
 rules are reproduced in `qsa-ui/src/console.rs`. Provenance:
 `qsa-ui/assets/console/SOURCE.md`.
+
+## Print font
+
+Printer sessions print every font the data selects in one monospace face,
+bundled in `qsa-print/fonts/` and embedded, subset, in every PDF. On Windows it
+is loaded privately for the process (`AddFontMemResourceEx`), never installed.
+
+| File | Family | Version | Licence | Use |
+|------|--------|---------|---------|-----|
+| `CourierPrime-Regular.ttf` | Courier Prime | 3.018 | SIL OFL 1.1 | Printed output |
+| `CourierPrime-Bold.ttf` | Courier Prime Bold | 3.018 | as above | Printed output, bold and overstruck |
+| `CourierPrime-Italic.ttf` | Courier Prime Italic | 3.018 | as above | Printed output, italic font IDs |
+
+Copyright 2015 The Courier Prime Project Authors. Source: `google/fonts`,
+`ofl/courierprime/` (commit `6c1dbe27`), bundled unmodified. Licence text:
+`qsa-print/fonts/OFL-CourierPrime.txt`.
