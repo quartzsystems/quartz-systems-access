@@ -3,3 +3,29 @@
 // root directory of this project.
 
 //! The QS/400 Access for Desktop look: scheme, colours, fonts, glyphs and widgets.
+//!
+//! Call [`theme::init`] once, after creating the FLTK app and before making
+//! any widget.
+
+pub mod controls;
+pub mod glyph;
+pub mod groupbox;
+pub mod listtable;
+pub mod msgbox;
+pub mod propdialog;
+pub mod sampler;
+pub mod snapshot;
+pub mod statusbar;
+pub mod tabs;
+pub mod taskpane;
+pub mod theme;
+pub mod toolbar;
+
+pub use glyph::Glyph;
+pub use listtable::ListTable;
+pub use msgbox::MessageBox;
+pub use propdialog::PropertyDialog;
+pub use statusbar::{Status, StatusBar};
+pub use tabs::Tabs;
+pub use taskpane::TaskPane;
+pub use toolbar::Toolbar;

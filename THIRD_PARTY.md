@@ -20,4 +20,19 @@ Transitive dependencies are listed in `Cargo.lock`.
 
 ## Bundled fonts (placeholders)
 
-None yet.
+The UI and monospace faces are placeholders until Quartz Systems' own fonts
+exist. They are embedded in the binary (`qsa-ui/fonts/`) and registered
+privately with the process at start-up, so layouts match on every platform.
+
+| File | Family | Version | Licence | Use |
+|------|--------|---------|---------|-----|
+| `DejaVuSansCondensed.ttf` | DejaVu Sans Condensed | 2.37 | Bitstream Vera licence, Arev additions; DejaVu changes public domain | UI text, 11 px |
+| `DejaVuSansCondensed-Bold.ttf` | DejaVu Sans Condensed Bold | 2.37 | as above | Group titles |
+| `DejaVuSansMono.ttf` | DejaVu Sans Mono | 2.37 | as above | System output |
+| `DejaVuSansMono-Bold.ttf` | DejaVu Sans Mono Bold | 2.37 | as above | System output, bold |
+
+Source: the `dejavu-fonts-ttf-2.37` release of the DejaVu project. The licence
+text is in `qsa-ui/fonts/LICENSE-DejaVu.txt`; it carries the Bitstream Vera and
+Arev sections, which are the ones that cover these four faces. The release's
+licence file also has a section for the separate DejaVu Math font, which is
+not bundled.
