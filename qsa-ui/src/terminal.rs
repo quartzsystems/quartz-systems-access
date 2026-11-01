@@ -38,6 +38,7 @@ pub struct KeyPress {
 
 type KeyCb = Box<dyn FnMut(&KeyPress) -> bool>;
 type ClickCb = Box<dyn FnMut(usize, usize)>;
+type HoverCb = Box<dyn FnMut(Option<(usize, usize)>) -> bool>;
 type PasteCb = Box<dyn FnMut(&str)>;
 
 struct Inner {
@@ -61,6 +62,9 @@ struct Inner {
     dragged: bool,
     on_key: Option<KeyCb>,
     on_click: Option<ClickCb>,
+    on_hover: Option<HoverCb>,
+    /// Whether the hand pointer is showing.
+    hand: bool,
     on_paste: Option<PasteCb>,
 }
 
@@ -84,6 +88,8 @@ impl Inner {
             dragged: false,
             on_key: None,
             on_click: None,
+            on_hover: None,
+            hand: false,
             on_paste: None,
         }
     }
@@ -258,6 +264,32 @@ impl TerminalView {
                 }
                 true
             }
+            Event::Enter | Event::Move | Event::Leave => {
+                let cell = if ev == Event::Leave {
+                    None
+                } else {
+                    Self::cell_under(w, &i3.borrow())
+                };
+                let cb = i3.borrow_mut().on_hover.take();
+                let hand = match cb {
+                    Some(mut cb) => {
+                        let hand = cb(cell);
+                        i3.borrow_mut().on_hover = Some(cb);
+                        hand
+                    }
+                    None => false,
+                };
+                if std::mem::replace(&mut i3.borrow_mut().hand, hand) != hand
+                    && let Some(mut win) = w.window()
+                {
+                    win.set_cursor(if hand {
+                        fltk::enums::Cursor::Hand
+                    } else {
+                        fltk::enums::Cursor::Default
+                    });
+                }
+                true
+            }
             Event::Released => {
                 let (clicked, cell) = {
                     let inner = i3.borrow();
@@ -342,6 +374,13 @@ impl TerminalView {
     /// it used the key.
     pub fn on_key(&self, cb: impl FnMut(&KeyPress) -> bool + 'static) {
         self.inner.borrow_mut().on_key = Some(Box::new(cb));
+    }
+
+    /// The pointer moved over a cell (0-based row and column), or left the
+    /// terminal (`None`). The callback answers whether to show the hand
+    /// pointer there. Nothing else changes on screen.
+    pub fn on_hover(&self, cb: impl FnMut(Option<(usize, usize)>) -> bool + 'static) {
+        self.inner.borrow_mut().on_hover = Some(Box::new(cb));
     }
 
     /// A click on a cell without a drag (0-based row and column).

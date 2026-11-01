@@ -11,12 +11,14 @@
 //! - [`cert`]: the untrusted-certificate dialog; [`pdf`]: Print Screen.
 //! - [`props`]: Session Properties; [`loadmap`]: loading a `.qkm` into an
 //!   open session.
+//! - [`hotspots`]: text on the screen that acts when clicked.
 //!
 //! Every open session window is kept here; the main loop calls [`pump`]
 //! after each wait, which hands each window its commands and network
 //! events.
 
 pub mod cert;
+pub mod hotspots;
 pub mod keymapdlg;
 pub mod keys;
 pub mod loadmap;

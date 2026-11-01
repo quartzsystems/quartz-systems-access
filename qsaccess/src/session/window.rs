@@ -458,6 +458,12 @@ impl SessionWindow {
                     s.click(r, c);
                 }
             });
+            let me4 = me.clone();
+            term.on_hover(move |cell| {
+                me4.upgrade()
+                    .zip(cell)
+                    .is_some_and(|(s, (r, c))| s.hotspot_at(r, c).is_some())
+            });
             let me3 = me.clone();
             term.on_paste(move |text| {
                 if let Some(s) = me3.upgrade() {
@@ -1281,7 +1287,27 @@ impl SessionWindow {
         true
     }
 
+    /// The hotspot that a click at a cell (from 0) would act on: only while
+    /// connected with the keyboard open, so that a click always does what
+    /// the hand pointer promises.
+    pub fn hotspot_at(&self, r: usize, c: usize) -> Option<super::hotspots::Hotspot> {
+        let st = self.st.borrow();
+        if st.conn != Conn::Connected
+            || !st.terminal.screen.keyboard.is_open()
+            || st.pick != Pick::Off
+        {
+            return None;
+        }
+        let list = super::hotspots::detect(&st.terminal.screen, &st.doc.hotspots);
+        super::hotspots::at(&list, r, c)
+    }
+
     fn click(&self, r: usize, c: usize) {
+        if let Some(h) = self.hotspot_at(r, c) {
+            crate::log!("hotspot at {},{}: {:?}", r + 1, c + 1, h.key);
+            self.key(h.key);
+            return;
+        }
         let mut st = self.st.borrow_mut();
         if st.pick == Pick::Waiting {
             st.pick = Pick::Got(r, c);
