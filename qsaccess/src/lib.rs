@@ -10,8 +10,12 @@ pub mod app;
 pub mod files;
 pub mod ipc;
 pub mod log;
+pub mod macros;
 pub mod mainwin;
+pub mod open;
 pub mod properties;
+pub mod recent;
+pub mod request;
 pub mod session;
 pub mod sysconfig;
 

@@ -345,9 +345,34 @@ pub fn edit(
         Some(s) => format!("System Properties - {}", s.name),
         None => "New System Configuration".to_owned(),
     };
-    let (mut d, form) = build(&title, original.unwrap_or(&blank));
+    run_form(
+        parent,
+        systems,
+        &title,
+        original.unwrap_or(&blank),
+        original.map(|s| s.name.as_str()),
+    )
+}
+
+/// Runs the dialog for a new system filled in from `template` (for "Create
+/// system from session file"). Returns the system to add, or `None`.
+pub fn create(
+    parent: Option<&dyn WindowExt>,
+    systems: &Systems,
+    template: &System,
+) -> Option<System> {
+    run_form(parent, systems, "New System Configuration", template, None)
+}
+
+fn run_form(
+    parent: Option<&dyn WindowExt>,
+    systems: &Systems,
+    title: &str,
+    initial: &System,
+    old_name: Option<&str>,
+) -> Option<System> {
+    let (mut d, form) = build(title, initial);
     let mut result = None;
-    let old_name = original.map(|s| s.name.as_str());
     let mut tabs = d.tabs().clone();
     let ok = d.run(parent, || {
         let s = form.read().map_err(|(tab, e)| {

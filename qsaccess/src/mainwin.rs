@@ -5,9 +5,12 @@
 //! The main window: menu bar, toolbar, task pane with the system selector,
 //! a welcome panel, and the status bar.
 
+use std::cell::Cell;
+use std::rc::Rc;
+
 use fltk::draw;
 use fltk::enums::{Align, FrameType, Key, Shortcut};
-use fltk::menu::{Choice, MenuFlag};
+use fltk::menu::{Choice, MenuBar, MenuFlag};
 use fltk::prelude::*;
 use fltk::widget::Widget;
 use fltk::window::Window;
@@ -18,7 +21,10 @@ use qsa_ui::theme::{self, colors};
 use qsa_ui::{Status, StatusBar, TaskPane, Toolbar, controls};
 
 use crate::app::Shared;
-use crate::{PRODUCT, VERSION, about};
+use crate::{PRODUCT, VERSION, about, files, recent};
+
+/// Path of the Recent Sessions submenu.
+const RECENT_MENU: &str = "&File/Recent Se&ssions";
 
 /// Default width of the main window.
 pub const W: i32 = 980;
@@ -96,6 +102,10 @@ pub struct Ui {
     pub status: StatusBar,
     pub system: Choice,
     pub state: Shared,
+    menu: MenuBar,
+    tx: fltk::app::Sender<Action>,
+    /// The recent sessions generation the menu shows.
+    recent_gen: Rc<Cell<Option<u64>>>,
 }
 
 impl Ui {
@@ -161,6 +171,35 @@ impl Ui {
     pub fn selected_system(&self) -> Option<String> {
         self.system.choice()
     }
+
+    /// Redraws the Recent Sessions submenu if the list has changed.
+    pub fn refresh_recent(&self) {
+        let (gen_now, list) = {
+            let st = self.state.borrow();
+            (st.recent_gen, st.settings.recent_sessions.clone())
+        };
+        if self.recent_gen.get() == Some(gen_now) {
+            return;
+        }
+        self.recent_gen.set(Some(gen_now));
+        let tx = self.tx;
+        recent::fill(&mut self.menu.clone(), RECENT_MENU, &list, |m, path, i| {
+            m.add_emit(
+                path,
+                Shortcut::None,
+                MenuFlag::Normal,
+                tx,
+                Action::Recent(i),
+            );
+        });
+    }
+
+    /// The window to put dialogs over: this one if it is shown.
+    fn parent(&self) -> Option<&dyn WindowExt> {
+        self.window
+            .shown()
+            .then_some(&self.window as &dyn WindowExt)
+    }
 }
 
 fn welcome_panel(x: i32, y: i32, w: i32, h: i32) -> Widget {
@@ -218,6 +257,8 @@ fn welcome_panel(x: i32, y: i32, w: i32, h: i32) -> Widget {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Action {
     Task(Task),
+    Open,
+    Recent(usize),
     NotAvailable,
     Refresh,
     About,
@@ -230,6 +271,19 @@ impl Ui {
     pub fn handle(&self, action: Action) {
         match action {
             Action::Task(t) => self.run(t),
+            Action::Open => {
+                if let Some(p) =
+                    files::choose_open_in(&files::sessions_dir(), "Open", files::ANY_PATTERN)
+                {
+                    crate::open::open_path(&self.state, &p, self.parent());
+                }
+            }
+            Action::Recent(i) => {
+                let p = self.state.borrow().settings.recent_sessions.get(i).cloned();
+                if let Some(p) = p {
+                    crate::open::open_path(&self.state, &p, self.parent());
+                }
+            }
             Action::NotAvailable => self.not_available(),
             Action::Refresh => reload(self),
             Action::About => about::show(Some(&self.window)),
@@ -258,6 +312,22 @@ pub fn build(state: Shared) -> (Ui, fltk::app::Receiver<Action>) {
     let add = |menu: &mut fltk::menu::MenuBar, path: &str, sc: Shortcut, a: Action| {
         menu.add_emit(path, sc, MenuFlag::Normal, tx, a);
     };
+    add(
+        &mut menu,
+        "&File/&Open...",
+        Shortcut::Ctrl | 'o',
+        Action::Open,
+    );
+    menu.add_emit(
+        &format!("{RECENT_MENU}/(none)"),
+        Shortcut::None,
+        MenuFlag::Inactive,
+        tx,
+        Action::Recent(0),
+    );
+    if let Some(mut item) = menu.find_item(RECENT_MENU) {
+        item.set_flag(MenuFlag::MenuDivider);
+    }
     add(
         &mut menu,
         "&File/E&xit",
@@ -364,8 +434,12 @@ pub fn build(state: Shared) -> (Ui, fltk::app::Receiver<Action>) {
         status,
         system,
         state,
+        menu,
+        tx,
+        recent_gen: Rc::new(Cell::new(None)),
     };
     ui.refresh_systems();
+    ui.refresh_recent();
     (ui, rx)
 }
 

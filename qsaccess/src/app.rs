@@ -24,6 +24,9 @@ pub struct AppState {
     pub record_next: Option<std::path::PathBuf>,
     /// Messages to show in the main window's status bar once it is up.
     pub startup_messages: Vec<Message>,
+    /// Moves on whenever the recent sessions change, so that every window
+    /// can redraw its Recent Sessions menu.
+    pub recent_gen: u64,
 }
 
 /// Shared, mutable application state.
@@ -64,6 +67,32 @@ impl AppState {
             startup_errors: Vec::new(),
             record_next: None,
             startup_messages: Vec::new(),
+            recent_gen: 0,
+        }
+    }
+
+    /// Puts a session file at the top of Recent Sessions and saves the
+    /// settings.
+    pub fn note_recent(&mut self, path: &std::path::Path) {
+        let path = std::path::absolute(path).unwrap_or_else(|_| path.to_owned());
+        self.settings.add_recent(&path);
+        self.recent_gen += 1;
+        if let Err(e) = self.save_settings() {
+            crate::log!("settings not saved: {e}");
+        }
+    }
+
+    /// Takes a session file off Recent Sessions (it could not be opened).
+    pub fn forget_recent(&mut self, path: &std::path::Path) {
+        let before = self.settings.recent_sessions.len();
+        self.settings
+            .recent_sessions
+            .retain(|p| !qsa_config::settings::same_path(p, path));
+        if self.settings.recent_sessions.len() != before {
+            self.recent_gen += 1;
+            if let Err(e) = self.save_settings() {
+                crate::log!("settings not saved: {e}");
+            }
         }
     }
 

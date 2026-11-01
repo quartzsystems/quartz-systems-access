@@ -4,7 +4,12 @@
 
 //! Application settings (`settings.toml`).
 
+use std::path::{Path, PathBuf};
+
 use serde::{Deserialize, Serialize};
+
+/// How many sessions File > Recent Sessions lists.
+pub const RECENT_MAX: usize = 10;
 
 /// Position and size of a window.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,7 +115,7 @@ impl Default for Display {
 
 /// Application settings. Every field has a default, so older and partial
 /// files load.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Settings {
     pub version: u32,
@@ -120,6 +125,12 @@ pub struct Settings {
     pub window: Option<Geometry>,
     /// 5250 display settings by system name.
     pub display: std::collections::BTreeMap<String, Display>,
+    /// Session files opened or saved most recently, newest first.
+    pub recent_sessions: Vec<PathBuf>,
+    /// The keyboard map new sessions start from, as changes from the
+    /// built-in defaults. `None`: the defaults.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub new_session_keymap: Option<crate::qsd::KeymapOverrides>,
 }
 
 impl Default for Settings {
@@ -129,11 +140,39 @@ impl Default for Settings {
             last_system: String::new(),
             window: None,
             display: Default::default(),
+            recent_sessions: Vec::new(),
+            new_session_keymap: None,
         }
     }
 }
 
+/// Whether two paths name the same file, ignoring case on Windows.
+pub fn same_path(a: &Path, b: &Path) -> bool {
+    if cfg!(windows) {
+        a.to_string_lossy()
+            .eq_ignore_ascii_case(&b.to_string_lossy())
+    } else {
+        a == b
+    }
+}
+
 impl Settings {
+    /// Puts `path` at the top of the recent sessions, keeping at most
+    /// [`RECENT_MAX`].
+    pub fn add_recent(&mut self, path: &Path) {
+        self.recent_sessions.retain(|p| !same_path(p, path));
+        self.recent_sessions.insert(0, path.to_owned());
+        self.recent_sessions.truncate(RECENT_MAX);
+    }
+
+    /// The keyboard map a new session starts from.
+    pub fn new_session_keymap(&self) -> crate::KeyMap {
+        self.new_session_keymap
+            .as_ref()
+            .and_then(|k| k.to_map().ok())
+            .unwrap_or_default()
+    }
+
     /// A system's display settings (the defaults if it has none).
     pub fn display_for(&self, system: &str) -> Display {
         self.display
@@ -199,6 +238,40 @@ mod tests {
         );
         assert!(s.display_for("sys1").legacy_keymap.is_some());
         assert_eq!(s.display_for("sys1").ccsid, 285);
+    }
+
+    #[test]
+    fn recent_sessions_newest_first_without_repeats() {
+        let mut s = Settings::default();
+        for n in 0..12 {
+            s.add_recent(Path::new(&format!("/s/{n}.qsd")));
+        }
+        assert_eq!(s.recent_sessions.len(), RECENT_MAX);
+        assert_eq!(s.recent_sessions[0], Path::new("/s/11.qsd"));
+        s.add_recent(Path::new("/s/5.qsd"));
+        assert_eq!(s.recent_sessions[0], Path::new("/s/5.qsd"));
+        assert_eq!(s.recent_sessions.len(), RECENT_MAX);
+        assert_eq!(
+            s.recent_sessions
+                .iter()
+                .filter(|p| p.ends_with("5.qsd"))
+                .count(),
+            1
+        );
+        let text = toml::to_string(&s).unwrap();
+        let back: Settings = toml::from_str(&text).unwrap();
+        assert_eq!(back.recent_sessions, s.recent_sessions);
+    }
+
+    #[test]
+    fn new_session_keymap_defaults_until_set() {
+        let mut s = Settings::default();
+        assert_eq!(s.new_session_keymap(), crate::KeyMap::defaults());
+        let mut m = crate::KeyMap::defaults();
+        m.assign("Ctrl+Enter", "FieldExit");
+        s.new_session_keymap = Some(crate::qsd::KeymapOverrides::from_map(&m));
+        let back: Settings = toml::from_str(&toml::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back.new_session_keymap(), m);
     }
 
     #[test]

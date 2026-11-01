@@ -248,8 +248,8 @@ mod windows {
     use std::ptr::{null, null_mut};
 
     use windows_sys::Win32::Foundation::{
-        CloseHandle, ERROR_ACCESS_DENIED, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, HANDLE,
-        INVALID_HANDLE_VALUE, LocalFree,
+        CloseHandle, ERROR_ACCESS_DENIED, ERROR_NO_DATA, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED,
+        HANDLE, INVALID_HANDLE_VALUE, LocalFree,
     };
     use windows_sys::Win32::Security::Authorization::ConvertSidToStringSidW;
     use windows_sys::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
@@ -415,9 +415,14 @@ mod windows {
                 let mut current = first as HANDLE;
                 loop {
                     // SAFETY: `current` is a pipe instance this thread owns.
+                    // A client may connect, write its frame and close before
+                    // this call: that is ERROR_NO_DATA, and the frame is
+                    // still waiting in the pipe to be read.
                     let ok = unsafe { ConnectNamedPipe(current, null_mut()) } != 0
-                        || io::Error::last_os_error().raw_os_error()
-                            == Some(ERROR_PIPE_CONNECTED as i32);
+                        || matches!(
+                            io::Error::last_os_error().raw_os_error(),
+                            Some(e) if e == ERROR_PIPE_CONNECTED as i32 || e == ERROR_NO_DATA as i32
+                        );
                     // Make the next instance before closing this one, so the
                     // name is never free for another process to take.
                     let next = match create_instance(&name, false) {
@@ -508,10 +513,33 @@ mod tests {
         let (tx, rx) = mpsc::channel();
         let _server = server.spawn(move |a| tx.send(a).unwrap());
         for n in 0..3 {
-            let a = args(&["--open", &format!("file{n}.qss")]);
+            let a = args(&["open", &format!("file{n}.qsd")]);
             assert!(matches!(start(&ep, &a).unwrap(), Startup::Secondary));
             assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), a);
         }
+    }
+
+    #[test]
+    fn quick_clients_are_not_lost() {
+        // Clients that write and close at once, many in a row, as a burst
+        // of double-clicks does: every frame must arrive.
+        let ep = endpoint("burst");
+        let Startup::Primary(server) = start(&ep, &[]).unwrap() else {
+            panic!("first start should be primary");
+        };
+        let (tx, rx) = mpsc::channel();
+        let _server = server.spawn(move |a| tx.send(a).unwrap());
+        let n = 40;
+        for i in 0..n {
+            assert!(ep.send(&args(&["open", &format!("{i}.qsd")])).unwrap());
+        }
+        let mut got: Vec<String> = (0..n)
+            .map(|_| rx.recv_timeout(Duration::from_secs(10)).unwrap()[1].clone())
+            .collect();
+        got.sort();
+        let mut want: Vec<String> = (0..n).map(|i| format!("{i}.qsd")).collect();
+        want.sort();
+        assert_eq!(got, want);
     }
 
     #[cfg(unix)]

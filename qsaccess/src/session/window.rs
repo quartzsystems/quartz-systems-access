@@ -6,9 +6,13 @@
 //! keypad, and a status bar. Each session is its own window in the one
 //! `qsaccess` process. The network runs on a worker thread
 //! ([`super::worker`]); the screen is kept and drawn here, on the GUI thread.
+//!
+//! A window always has a [`SessionFile`]: the one it was opened from, or a
+//! new one for a session started from the Start 5250 Display dialog. Save
+//! Session writes it.
 
-use std::cell::RefCell;
-use std::path::PathBuf;
+use std::cell::{Cell, RefCell};
+use std::path::{Path, PathBuf};
 use std::rc::{Rc, Weak};
 
 use fltk::app;
@@ -18,7 +22,9 @@ use fltk::group::Group;
 use fltk::menu::{MenuBar, MenuFlag};
 use fltk::prelude::*;
 use fltk::window::Window;
-use qsa_config::settings::{ColorMap, ScreenSize as CfgSize};
+use qsa_config::qkm::KeymapFile;
+use qsa_config::qsd::{self, SessionFile};
+use qsa_config::settings::{ColorMap, Geometry, ScreenSize as CfgSize};
 use qsa_config::system::CaCertificate;
 use qsa_config::{AddressLookup, KeyMap, System};
 use qsa_msg::{Message, id};
@@ -40,8 +46,9 @@ use tn5250::terminal::Terminal;
 use super::keys::{Action, Decoder};
 use super::start::StartOptions;
 use super::worker::{Ended, FromNet, ToNet, Worker};
-use super::{cert, keymapdlg, pdf};
+use super::{cert, keymapdlg, pdf, props};
 use crate::app::Shared;
+use crate::{files, recent};
 
 /// Width of the keypad panel.
 pub const KEYPAD_W: i32 = 3 * 54 + 4 * 4;
@@ -86,9 +93,19 @@ pub const KEYPAD: &[(&str, K5250)] = &[
     ("Clear", K5250::Clear),
 ];
 
+/// Path of the Recent Sessions submenu.
+const RECENT_MENU: &str = "&File/Recent Se&ssions";
+
 /// What menus, toolbar and keypad ask for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Cmd {
+    Open,
+    Save,
+    SaveAs,
+    Recent(usize),
+    Properties,
+    LoadKeymap,
+    ExportKeymap,
     Connect,
     Disconnect,
     Copy,
@@ -114,7 +131,12 @@ pub enum Conn {
 }
 
 struct State {
+    /// The connection's settings, from the session file.
     opts: StartOptions,
+    /// The session file's contents; written back on Save Session.
+    doc: SessionFile,
+    /// Where it was read from or last saved to.
+    file: Option<PathBuf>,
     terminal: Terminal,
     worker: Option<Worker>,
     conn: Conn,
@@ -138,8 +160,11 @@ pub struct SessionWindow {
     status: StatusBar,
     menu: MenuBar,
     rx: app::Receiver<Cmd>,
+    tx: app::Sender<Cmd>,
     state: Shared,
     st: RefCell<State>,
+    /// The recent sessions generation the menu shows.
+    recent_gen: Cell<Option<u64>>,
 }
 
 fn tn_size(s: CfgSize) -> ScreenSize {
@@ -164,11 +189,60 @@ fn initial_scale(rows: usize, cols: usize, extra_w: i32, extra_h: i32) -> usize 
     fit(sw, extra_w, w1).min(fit(sh, extra_h, h1)).max(1) as usize
 }
 
+/// The connection settings a session file gives.
+pub fn options_for(doc: &SessionFile) -> StartOptions {
+    StartOptions {
+        system: doc.system.name.clone(),
+        size: doc.session.screen_size,
+        ccsid: doc.session.ccsid,
+        device: doc.session.device_name.clone(),
+        tls: doc.system.tls,
+        color: doc.session.colour_map,
+    }
+}
+
+/// A new session file for options chosen in the Start 5250 Display dialog.
+/// Its keyboard map is the one new sessions start from.
+pub fn file_for(state: &Shared, opts: &StartOptions) -> SessionFile {
+    let st = state.borrow();
+    let mut f = match st.systems.get(&opts.system) {
+        Some(sys) => SessionFile::new(sys),
+        None => SessionFile::new(&System::new(&opts.system)),
+    };
+    if let Some(sys) = st.systems.get(&opts.system) {
+        f.system.telnet_port = if opts.tls {
+            sys.ports.telnet_tls
+        } else {
+            sys.ports.telnet
+        };
+    }
+    f.system.tls = opts.tls;
+    f.session.screen_size = opts.size;
+    f.session.ccsid = opts.ccsid;
+    f.session.device_name = opts.device.clone();
+    f.session.colour_map = opts.color;
+    f.keymap = st.settings.new_session_keymap.clone();
+    f
+}
+
 impl SessionWindow {
     /// Builds a session window for `opts` without connecting. `scale`
     /// fixes the terminal's scale (for screenshots); otherwise it is chosen
     /// for the screen.
     pub fn build(state: &Shared, opts: StartOptions, scale: Option<usize>) -> Rc<SessionWindow> {
+        let doc = file_for(state, &opts);
+        SessionWindow::build_file(state, doc, None, scale)
+    }
+
+    /// Builds a session window for a session file without connecting.
+    pub fn build_file(
+        state: &Shared,
+        doc: SessionFile,
+        file: Option<PathBuf>,
+        scale: Option<usize>,
+    ) -> Rc<SessionWindow> {
+        let opts = options_for(&doc);
+        let keymap = doc.keymap();
         let (tx, rx) = app::channel::<Cmd>();
         let size = tn_size(opts.size);
         let chrome_h = MENU_H + Toolbar::HEIGHT + StatusBar::HEIGHT;
@@ -177,7 +251,7 @@ impl SessionWindow {
         let (tw, th) = TerminalView::size_for(size.rows(), size.cols(), s);
         let (w, h) = (tw, chrome_h + th);
         let mut window = Window::new(0, 0, w, h, None);
-        window.set_label(&format!("{} - 5250 Display", opts.system));
+        window.set_label(&window_title(&doc, file.as_deref()));
         window.set_color(colors::FACE);
         window.size_range(320, 240, 0, 0);
 
@@ -186,7 +260,27 @@ impl SessionWindow {
             menu.add_emit(path, sc, flag, tx, c);
         };
         let n = MenuFlag::Normal;
-        add("&File/&Print Screen", Shortcut::Ctrl | 'p', Cmd::Print, n);
+        add("&File/&Open Session...", Shortcut::Ctrl | 'o', Cmd::Open, n);
+        add("&File/&Save Session", Shortcut::Ctrl | 's', Cmd::Save, n);
+        add("&File/Save Session &As...", Shortcut::None, Cmd::SaveAs, n);
+        add(
+            &format!("{RECENT_MENU}/(none)"),
+            Shortcut::None,
+            Cmd::Recent(0),
+            MenuFlag::Inactive,
+        );
+        add(
+            "&File/P&roperties...",
+            Shortcut::None,
+            Cmd::Properties,
+            MenuFlag::MenuDivider,
+        );
+        add(
+            "&File/&Print Screen",
+            Shortcut::Ctrl | 'p',
+            Cmd::Print,
+            MenuFlag::MenuDivider,
+        );
         add("&File/&Close", Shortcut::Alt | Key::F4, Cmd::Close, n);
         add("&Edit/&Copy", Shortcut::Ctrl | 'c', Cmd::Copy, n);
         add("&Edit/&Paste", Shortcut::Ctrl | 'v', Cmd::Paste, n);
@@ -237,6 +331,18 @@ impl SessionWindow {
             Shortcut::None,
             Cmd::KeyMap,
             MenuFlag::MenuDivider,
+        );
+        add(
+            "&Actions/&Load Keyboard Map...",
+            Shortcut::None,
+            Cmd::LoadKeymap,
+            n,
+        );
+        add(
+            "&Actions/E&xport Keyboard Map...",
+            Shortcut::None,
+            Cmd::ExportKeymap,
+            n,
         );
         add(
             "&Help/&About QS\\/400 Access for Desktop...",
@@ -321,9 +427,13 @@ impl SessionWindow {
                 status,
                 menu,
                 rx,
+                tx,
                 state: state.clone(),
+                recent_gen: Cell::new(None),
                 st: RefCell::new(State {
                     opts,
+                    doc,
+                    file,
                     terminal,
                     worker: None,
                     conn: Conn::Idle,
@@ -331,7 +441,7 @@ impl SessionWindow {
                     mode: None,
                     device: None,
                     decoder: Decoder::default(),
-                    keymap: KeyMap::defaults(),
+                    keymap,
                     recorder: None,
                     record_to,
                     keypad: false,
@@ -346,8 +456,248 @@ impl SessionWindow {
         });
         let color = sw.st.borrow().opts.color;
         sw.set_color_map(color);
+        sw.refresh_recent();
         sw.refresh();
         sw
+    }
+
+    /// Puts the window where the session file says, with its keypad, or
+    /// centres it on `parent`. Call before showing.
+    pub fn place(&self, parent: Option<&dyn WindowExt>) {
+        let (geometry, keypad) = {
+            let st = self.st.borrow();
+            (st.doc.session.window, st.doc.session.keypad_visible)
+        };
+        let mut w = self.window.clone();
+        match geometry {
+            Some(g) if g.w > 100 && g.h > 100 => {
+                let (sx, sy, sw, sh) = app::screen_work_area(0);
+                let x = g.x.clamp(sx, (sx + sw - 100).max(sx));
+                let y = g.y.clamp(sy, (sy + sh - 100).max(sy));
+                w.resize(x, y, g.w, g.h);
+                self.layout();
+            }
+            _ => qsa_ui::propdialog::center_on(&mut w, parent),
+        }
+        if keypad {
+            self.set_keypad(true);
+        }
+    }
+
+    /// The session's title, as Session Manager and the window show it.
+    pub fn title(&self) -> String {
+        let st = self.st.borrow();
+        st.doc.display_title(st.file.as_deref())
+    }
+
+    /// The session file it was opened from or saved to.
+    pub fn file(&self) -> Option<PathBuf> {
+        self.st.borrow().file.clone()
+    }
+
+    /// The name of the system the session connects to.
+    pub fn system_name(&self) -> String {
+        self.st.borrow().opts.system.clone()
+    }
+
+    /// Whether the session file says to connect when it opens.
+    pub fn auto_connect(&self) -> bool {
+        self.st.borrow().doc.session.auto_connect
+    }
+
+    /// Redraws the Recent Sessions submenu if the list has changed.
+    fn refresh_recent(&self) {
+        let (gen_now, list) = {
+            let st = self.state.borrow();
+            (st.recent_gen, st.settings.recent_sessions.clone())
+        };
+        if self.recent_gen.get() == Some(gen_now) {
+            return;
+        }
+        self.recent_gen.set(Some(gen_now));
+        let tx = self.tx;
+        recent::fill(&mut self.menu.clone(), RECENT_MENU, &list, |m, path, i| {
+            m.add_emit(path, Shortcut::None, MenuFlag::Normal, tx, Cmd::Recent(i));
+        });
+    }
+
+    fn set_title(&self) {
+        let t = {
+            let st = self.st.borrow();
+            window_title(&st.doc, st.file.as_deref())
+        };
+        self.window.clone().set_label(&t);
+    }
+
+    /// The session file brought up to date with the window: its settings,
+    /// keyboard map, keypad and geometry.
+    fn current_file(&self) -> SessionFile {
+        let st = self.st.borrow();
+        let mut f = st.doc.clone();
+        f.system.name = st.opts.system.clone();
+        f.system.tls = st.opts.tls;
+        f.session.screen_size = st.opts.size;
+        f.session.ccsid = st.opts.ccsid;
+        f.session.device_name = st.opts.device.clone();
+        f.session.colour_map = st.opts.color;
+        f.session.keypad_visible = st.keypad;
+        let w = &self.window;
+        let kw = if st.keypad { KEYPAD_W } else { 0 };
+        f.session.window = Some(Geometry {
+            x: w.x(),
+            y: w.y(),
+            w: w.w() - kw,
+            h: w.h(),
+        });
+        if f.keymap.is_some() || st.keymap != KeyMap::defaults() {
+            f.set_keymap(&st.keymap);
+        }
+        f
+    }
+
+    /// Saves to the session's file, or asks for one.
+    fn save(&self) {
+        match self.file() {
+            Some(path) => self.save_to(&path),
+            None => self.save_as(),
+        }
+    }
+
+    fn save_as(&self) {
+        let (dir, name) = {
+            let st = self.st.borrow();
+            let dir = st
+                .file
+                .as_deref()
+                .and_then(Path::parent)
+                .map(Path::to_owned)
+                .unwrap_or_else(files::sessions_dir);
+            let name =
+                files::file_name_for(&st.doc.display_title(st.file.as_deref()), qsd::EXTENSION);
+            (dir, name)
+        };
+        let Some(path) =
+            files::choose_save_in(&dir, "Save Session As", files::SESSION_PATTERN, &name)
+        else {
+            return;
+        };
+        self.save_to(&files::with_extension(path, qsd::EXTENSION));
+    }
+
+    fn save_to(&self, path: &Path) {
+        let f = self.current_file();
+        match f.save(path) {
+            Ok(()) => {
+                let abs = std::path::absolute(path).unwrap_or_else(|_| path.to_owned());
+                {
+                    let mut st = self.st.borrow_mut();
+                    st.doc = f;
+                    st.file = Some(abs.clone());
+                }
+                self.set_title();
+                self.state.borrow_mut().note_recent(&abs);
+                self.report(
+                    &qsa_msg::message(id::SESSION_SAVED, &[&abs.display().to_string()]),
+                    false,
+                );
+            }
+            Err(e) => {
+                crate::log!("{}: {e}", path.display());
+                MessageBox::new(
+                    "Save Session",
+                    &format!("{} could not be written: {e}", path.display()),
+                )
+                .glyph(Glyph::Cross)
+                .run(Some(&self.window));
+            }
+        }
+    }
+
+    fn properties(&self) {
+        let (title, p) = {
+            let f = self.current_file();
+            let st = self.st.borrow();
+            (
+                format!(
+                    "Session Properties - {}",
+                    f.display_title(st.file.as_deref())
+                ),
+                props::Props::from_file(&f),
+            )
+        };
+        let edited = {
+            let app = self.state.borrow();
+            props::edit(Some(&self.window), &title, &p, &app.systems)
+        };
+        let Some(p) = edited else { return };
+        {
+            let systems = self.state.borrow().systems.clone();
+            let mut st = self.st.borrow_mut();
+            let mut f = st.doc.clone();
+            p.apply(&mut f, &systems);
+            st.opts.system = f.system.name.clone();
+            st.opts.tls = f.system.tls;
+            st.opts.size = f.session.screen_size;
+            st.opts.ccsid = f.session.ccsid;
+            st.opts.device = f.session.device_name.clone();
+            st.doc = f;
+        }
+        self.set_color_map(p.color);
+        self.set_title();
+    }
+
+    /// Takes a keyboard map into the session, as loaded from `from`.
+    pub fn load_keymap(&self, map: KeyMap, from: &Path) {
+        self.st.borrow_mut().keymap = map;
+        self.report(
+            &qsa_msg::message(id::KEYMAP_LOADED, &[&from.display().to_string()]),
+            false,
+        );
+    }
+
+    fn choose_keymap(&self) {
+        let Some(path) = files::choose_open_in(
+            &files::sessions_dir(),
+            "Load Keyboard Map",
+            files::KEYMAP_PATTERN,
+        ) else {
+            return;
+        };
+        match KeymapFile::load(&path) {
+            Ok(k) => self.load_keymap(k.map, &path),
+            Err(e) => self.report(&e.message(&path), true),
+        }
+    }
+
+    fn export_keymap(&self) {
+        let (map, name) = {
+            let st = self.st.borrow();
+            (
+                st.keymap.clone(),
+                files::file_name_for(
+                    &st.doc.display_title(st.file.as_deref()),
+                    qsa_config::qkm::EXTENSION,
+                ),
+            )
+        };
+        let Some(path) = files::choose_save_in(
+            &files::sessions_dir(),
+            "Export Keyboard Map",
+            files::KEYMAP_PATTERN,
+            &name,
+        ) else {
+            return;
+        };
+        let path = files::with_extension(path, qsa_config::qkm::EXTENSION);
+        if let Err(e) = KeymapFile::new(map).save(&path) {
+            crate::log!("{}: {e}", path.display());
+            MessageBox::new(
+                "Export Keyboard Map",
+                &format!("{} could not be written: {e}", path.display()),
+            )
+            .glyph(Glyph::Cross)
+            .run(Some(&self.window));
+        }
     }
 
     /// Puts a terminal in the window as if connected, for screenshots and
@@ -687,8 +1037,29 @@ impl SessionWindow {
     /// Handles everything waiting: commands, then network events. Returns
     /// false once the window is closed.
     pub fn pump(&self) -> bool {
+        self.refresh_recent();
         while let Some(c) = self.rx.recv() {
             match c {
+                Cmd::Open => {
+                    if let Some(p) = files::choose_open_in(
+                        &files::sessions_dir(),
+                        "Open Session",
+                        files::SESSION_PATTERN,
+                    ) {
+                        crate::open::open_path(&self.state, &p, Some(&self.window));
+                    }
+                }
+                Cmd::Save => self.save(),
+                Cmd::SaveAs => self.save_as(),
+                Cmd::Recent(i) => {
+                    let p = self.state.borrow().settings.recent_sessions.get(i).cloned();
+                    if let Some(p) = p {
+                        crate::open::open_path(&self.state, &p, Some(&self.window));
+                    }
+                }
+                Cmd::Properties => self.properties(),
+                Cmd::LoadKeymap => self.choose_keymap(),
+                Cmd::ExportKeymap => self.export_keymap(),
                 Cmd::Connect => self.connect(None),
                 Cmd::Disconnect => self.user_disconnect(),
                 Cmd::Copy => self.copy(),
@@ -888,4 +1259,9 @@ fn trust_for(system: &System) -> Trust {
         }
     }
     Trust::from_pem(pems.iter().map(String::as_str))
+}
+
+/// `<title> - 5250 Display`.
+fn window_title(doc: &SessionFile, file: Option<&Path>) -> String {
+    format!("{} - 5250 Display", doc.display_title(file))
 }
