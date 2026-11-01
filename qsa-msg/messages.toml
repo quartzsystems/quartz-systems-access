@@ -49,7 +49,7 @@ recovery = "None needed. The file contains no passwords."
 severity = 30
 text = "Settings file &1 could not be read."
 cause = "The file &1 could not be opened, or it holds a value that is not valid. The reason given was: &2"
-recovery = "Correct or remove the file, then start QS/400 Access for Desktop again. Until then the program runs with default values and does not overwrite the file."
+recovery = "Correct the file and start QS/400 Access for Desktop again, or carry on with default values. If you carry on, the unreadable file is kept as &1.unreadable the first time the program saves."
 
 [QAD0040]
 severity = 10

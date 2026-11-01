@@ -3,3 +3,24 @@
 // root directory of this project.
 
 //! Settings and System Configurations for QS/400 Access for Desktop.
+//!
+//! - [`system`]: one system configuration and its validation.
+//! - [`systems`]: the list of systems.
+//! - [`settings`]: application settings.
+//! - [`store`]: where `settings.toml` and `systems.toml` live, and atomic
+//!   reads and writes.
+//! - [`qsc`]: `.qsc` export and import.
+//! - [`credentials`]: saved passwords, in the platform credential store only.
+
+pub mod credentials;
+pub mod qsc;
+pub mod settings;
+pub mod store;
+pub mod system;
+pub mod systems;
+
+pub use credentials::{Credentials, Saved, Secret};
+pub use settings::Settings;
+pub use store::{ConfigDir, ReadError};
+pub use system::{AddressLookup, CaCertificate, CredentialMode, Invalid, Ports, System};
+pub use systems::Systems;
