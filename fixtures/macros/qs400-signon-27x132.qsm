@@ -1,0 +1,15 @@
+# Against fixtures/replay/qs400-signon-27x132.qsr: the wide sign-on display.
+[qsaccess]
+kind = "macro"
+version = 1
+
+[macro]
+name = "Wide sign-on display"
+screen_size = "27x132"
+
+[[step]]
+action = "wait-text"
+row = 1
+col = 36
+text = "Sign On"
+timeout_ms = 15000

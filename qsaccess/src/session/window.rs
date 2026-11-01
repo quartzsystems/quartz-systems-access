@@ -24,6 +24,7 @@ use fltk::prelude::*;
 use fltk::window::Window;
 use qsa_config::qkm::KeymapFile;
 use qsa_config::qsd::{self, SessionFile};
+use qsa_config::qsm::MacroFile;
 use qsa_config::settings::{ColorMap, Geometry, ScreenSize as CfgSize};
 use qsa_config::system::CaCertificate;
 use qsa_config::{AddressLookup, KeyMap, System};
@@ -48,6 +49,8 @@ use super::start::StartOptions;
 use super::worker::{Ended, FromNet, ToNet, Worker};
 use super::{cert, keymapdlg, pdf, props};
 use crate::app::Shared;
+use crate::macros::player::{Act, Player};
+use crate::macros::recorder::Recorder as MacroRecorder;
 use crate::{files, recent};
 
 /// Width of the keypad panel.
@@ -95,6 +98,19 @@ pub const KEYPAD: &[(&str, K5250)] = &[
 
 /// Path of the Recent Sessions submenu.
 const RECENT_MENU: &str = "&File/Recent Se&ssions";
+/// Path of the Record item, relabelled while recording.
+const RECORD_ITEM: &str = "&Macro/&Record...";
+/// Path of the submenu of the session's own macros.
+const RUN_MENU: &str = "&Macro/R&un";
+
+/// Picking a screen position for the Macro editor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Pick {
+    Off,
+    Waiting,
+    Got(usize, usize),
+    Cancelled,
+}
 
 /// What menus, toolbar and keypad ask for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -106,6 +122,11 @@ enum Cmd {
     Properties,
     LoadKeymap,
     ExportKeymap,
+    MacroRecord,
+    MacroPlay,
+    MacroStop,
+    MacroEdit,
+    MacroRun(usize),
     Connect,
     Disconnect,
     Copy,
@@ -149,6 +170,10 @@ struct State {
     /// Record the next connection to this file.
     record_to: Option<PathBuf>,
     keypad: bool,
+    /// A macro being recorded, and one being run.
+    macro_rec: Option<MacroRecorder>,
+    player: Option<Player>,
+    pick: Pick,
 }
 
 /// One session window.
@@ -344,6 +369,26 @@ impl SessionWindow {
             Cmd::ExportKeymap,
             n,
         );
+        add(RECORD_ITEM, Shortcut::None, Cmd::MacroRecord, n);
+        add("&Macro/&Play...", Shortcut::None, Cmd::MacroPlay, n);
+        add(
+            "&Macro/&Stop",
+            Shortcut::None,
+            Cmd::MacroStop,
+            MenuFlag::MenuDivider,
+        );
+        add(
+            "&Macro/&Edit...",
+            Shortcut::None,
+            Cmd::MacroEdit,
+            MenuFlag::MenuDivider,
+        );
+        add(
+            &format!("{RUN_MENU}/(none)"),
+            Shortcut::None,
+            Cmd::MacroRun(0),
+            MenuFlag::Inactive,
+        );
         add(
             "&Help/&About QS\\/400 Access for Desktop...",
             Shortcut::None,
@@ -445,6 +490,9 @@ impl SessionWindow {
                     recorder: None,
                     record_to,
                     keypad: false,
+                    macro_rec: None,
+                    player: None,
+                    pick: Pick::Off,
                 }),
             }
         });
@@ -457,8 +505,279 @@ impl SessionWindow {
         let color = sw.st.borrow().opts.color;
         sw.set_color_map(color);
         sw.refresh_recent();
+        sw.refresh_macros();
         sw.refresh();
         sw
+    }
+
+    /// Rebuilds Macro > Run from the session file's macro list.
+    fn refresh_macros(&self) {
+        let files = self.st.borrow().doc.macros.files.clone();
+        let tx = self.tx;
+        let mut menu = self.menu.clone();
+        let idx = menu.find_index(RUN_MENU);
+        if idx >= 0 {
+            let _ = menu.clear_submenu(idx);
+        }
+        if files.is_empty() {
+            menu.add_emit(
+                &format!("{RUN_MENU}/(none)"),
+                Shortcut::None,
+                MenuFlag::Inactive,
+                tx,
+                Cmd::MacroRun(0),
+            );
+            return;
+        }
+        for (i, p) in files.iter().enumerate() {
+            let name = MacroFile::load(p)
+                .map(|m| m.display_name(Some(p)))
+                .unwrap_or_else(|_| {
+                    p.file_stem()
+                        .map(|s| s.to_string_lossy().into_owned())
+                        .unwrap_or_default()
+                });
+            let label = format!("&{} {}", i + 1, recent::escape(&name));
+            menu.add_emit(
+                &format!("{RUN_MENU}/{label}"),
+                Shortcut::None,
+                MenuFlag::Normal,
+                tx,
+                Cmd::MacroRun(i),
+            );
+        }
+    }
+
+    /// Whether a macro is running in this session.
+    pub fn playing(&self) -> bool {
+        self.st.borrow().player.is_some()
+    }
+
+    /// Starts running a macro read from `path`.
+    pub fn play(&self, m: &MacroFile, path: &Path) {
+        if self.st.borrow().macro_rec.is_some() {
+            self.status
+                .clone()
+                .set_message("Stop recording before running a macro.");
+            return;
+        }
+        let name = m.display_name(Some(path));
+        crate::log!("running macro {name} from {}", path.display());
+        self.st.borrow_mut().player = Some(Player::new(m, &name));
+        self.status
+            .clone()
+            .set_message(&format!("Running macro {name}."));
+        self.run_macro();
+    }
+
+    fn play_file(&self, path: &Path) {
+        match MacroFile::load(path) {
+            Ok(m) => self.play(&m, path),
+            Err(e) => self.report(&e.message(path), true),
+        }
+    }
+
+    /// Carries out what the running macro asks, until it has to wait.
+    fn run_macro(&self) {
+        loop {
+            let (act, name) = {
+                let mut st = self.st.borrow_mut();
+                let st = &mut *st;
+                let connected = st.conn == Conn::Connected;
+                let Some(p) = st.player.as_mut() else { return };
+                (
+                    p.poll(&st.terminal.screen, connected, std::time::Instant::now()),
+                    p.name.clone(),
+                )
+            };
+            match act {
+                Act::Type(text) => {
+                    for c in text.chars() {
+                        self.key(K5250::Char(c));
+                    }
+                }
+                Act::Key(k) => self.key(k),
+                Act::Prompt { label, hidden } => {
+                    let v = qsa_ui::InputBox::new(&format!("Macro {name}"), &format!("{label}:"))
+                        .hidden(hidden)
+                        .run(Some(&self.window));
+                    if let Some(p) = self.st.borrow_mut().player.as_mut() {
+                        p.answer(v);
+                    }
+                }
+                Act::Wait => {
+                    super::tick_while_playing();
+                    return;
+                }
+                Act::Done => {
+                    self.st.borrow_mut().player = None;
+                    crate::log!("macro {name} ended");
+                    self.status
+                        .clone()
+                        .set_message(&format!("Macro {name} ended."));
+                    return;
+                }
+                Act::Failed { step, reason } => {
+                    self.st.borrow_mut().player = None;
+                    let m =
+                        qsa_msg::message(id::MACRO_STOPPED, &[&name, &step.to_string(), &reason]);
+                    self.report(&m, !reason.contains("your request"));
+                    return;
+                }
+            }
+        }
+    }
+
+    fn stop_macro(&self) {
+        let act = self.st.borrow_mut().player.as_mut().map(Player::stop);
+        if act.is_some() {
+            let name = self
+                .st
+                .borrow_mut()
+                .player
+                .take()
+                .map(|p| p.name)
+                .unwrap_or_default();
+            if let Some(Act::Failed { step, reason }) = act {
+                let m = qsa_msg::message(id::MACRO_STOPPED, &[&name, &step.to_string(), &reason]);
+                self.report(&m, false);
+            }
+        }
+    }
+
+    fn toggle_recording(&self) {
+        let rec = self.st.borrow_mut().macro_rec.take();
+        let menu = self.menu.clone();
+        let Some(rec) = rec else {
+            if self.playing() {
+                self.status
+                    .clone()
+                    .set_message("Wait for the macro to end, or stop it, before recording.");
+                return;
+            }
+            self.st.borrow_mut().macro_rec = Some(MacroRecorder::new());
+            if let Some(mut item) = menu.find_item(RECORD_ITEM) {
+                item.set_label("Stop &Recording");
+            }
+            self.status
+                .clone()
+                .set_message("Recording a macro. Select Macro > Stop Recording when done.");
+            return;
+        };
+        let idx = menu.find_index("&Macro/Stop &Recording");
+        if idx >= 0
+            && let Some(mut item) = menu.at(idx)
+        {
+            item.set_label("&Record...");
+        }
+        let steps = rec.finish();
+        if steps.is_empty() {
+            self.status.clone().set_message("Nothing was recorded.");
+            return;
+        }
+        let Some(name) = qsa_ui::InputBox::new("Record Macro", "Macro name:")
+            .value("Macro")
+            .run(Some(&self.window))
+            .map(|n| n.trim().to_owned())
+            .filter(|n| !n.is_empty())
+        else {
+            self.status.clone().set_message("The macro was not kept.");
+            return;
+        };
+        let file = files::file_name_for(&name, qsa_config::qsm::EXTENSION);
+        let Some(path) = files::choose_save_in(
+            &files::sessions_dir(),
+            "Save Macro",
+            files::MACRO_PATTERN,
+            &file,
+        ) else {
+            self.status.clone().set_message("The macro was not kept.");
+            return;
+        };
+        let path = files::with_extension(path, qsa_config::qsm::EXTENSION);
+        let size = if self.st.borrow().terminal.screen.rows() > 24 {
+            CfgSize::S27x132
+        } else {
+            CfgSize::S24x80
+        };
+        let mut m = MacroFile::new(&name, size);
+        m.steps = steps;
+        let n = m.steps.len();
+        if let Err(e) = m.save(&path) {
+            MessageBox::new(
+                "Record Macro",
+                &format!("{} could not be written: {e}", path.display()),
+            )
+            .glyph(Glyph::Cross)
+            .run(Some(&self.window));
+            return;
+        }
+        let abs = std::path::absolute(&path).unwrap_or(path);
+        {
+            let mut st = self.st.borrow_mut();
+            if !st
+                .doc
+                .macros
+                .files
+                .iter()
+                .any(|p| qsa_config::settings::same_path(p, &abs))
+            {
+                st.doc.macros.files.push(abs.clone());
+            }
+        }
+        self.refresh_macros();
+        self.report(
+            &qsa_msg::message(id::MACRO_RECORDED, &[&name, &n.to_string()]),
+            false,
+        );
+    }
+
+    /// Starts waiting for a click on the screen (for the Macro editor).
+    pub fn begin_pick(&self) {
+        self.st.borrow_mut().pick = Pick::Waiting;
+        self.status
+            .clone()
+            .set_message("Click the text to wait for. Press Esc to cancel.");
+    }
+
+    /// Where picking has got to; ends it once there is an answer.
+    pub fn take_pick(&self) -> Pick {
+        let mut st = self.st.borrow_mut();
+        let p = st.pick;
+        if !matches!(p, Pick::Waiting) {
+            st.pick = Pick::Off;
+        }
+        p
+    }
+
+    /// Stops waiting for a click.
+    pub fn end_pick(&self) {
+        self.st.borrow_mut().pick = Pick::Off;
+        self.status.clone().set_message("");
+    }
+
+    /// The word at a screen position (from 0): its column (from 1) and text.
+    pub fn word_at(&self, row: usize, col: usize) -> (usize, String) {
+        let st = self.st.borrow();
+        let line: Vec<char> = st
+            .terminal
+            .screen
+            .text_rows()
+            .get(row)
+            .map(|l| l.chars().collect())
+            .unwrap_or_default();
+        if line.get(col).is_none_or(|c| c.is_whitespace()) {
+            return (col + 1, String::new());
+        }
+        let mut a = col;
+        while a > 0 && !line[a - 1].is_whitespace() {
+            a -= 1;
+        }
+        let mut b = col;
+        while b + 1 < line.len() && !line[b + 1].is_whitespace() {
+            b += 1;
+        }
+        (a + 1, line[a..=b].iter().collect())
     }
 
     /// Puts the window where the session file says, with its keypad, or
@@ -924,6 +1243,12 @@ impl SessionWindow {
         if let (Some(b), Some(r)) = (before, st.recorder.as_mut()) {
             r.key(&b, k);
         }
+        {
+            let st = &mut *st;
+            if let Some(m) = st.macro_rec.as_mut() {
+                m.key(&st.terminal.screen, k);
+            }
+        }
         let out = st.terminal.key(k);
         if out.error.is_some() {
             fltk::dialog::beep(fltk::dialog::BeepType::Error);
@@ -936,6 +1261,12 @@ impl SessionWindow {
     }
 
     fn key_event(&self, p: &qsa_ui::terminal::KeyPress) -> bool {
+        if self.st.borrow().pick == Pick::Waiting {
+            if p.key == Key::Escape {
+                self.st.borrow_mut().pick = Pick::Cancelled;
+            }
+            return true;
+        }
         let action = {
             let mut st = self.st.borrow_mut();
             let map = st.keymap.clone();
@@ -952,6 +1283,10 @@ impl SessionWindow {
 
     fn click(&self, r: usize, c: usize) {
         let mut st = self.st.borrow_mut();
+        if st.pick == Pick::Waiting {
+            st.pick = Pick::Got(r, c);
+            return;
+        }
         if st.conn == Conn::Connected && st.terminal.screen.keyboard.is_open() {
             let a = st.terminal.screen.addr(r, c);
             st.terminal.screen.cursor = a;
@@ -964,6 +1299,12 @@ impl SessionWindow {
         let mut st = self.st.borrow_mut();
         if st.conn != Conn::Connected {
             return;
+        }
+        {
+            let st = &mut *st;
+            if let Some(m) = st.macro_rec.as_mut() {
+                m.paste(&st.terminal.screen, text);
+            }
         }
         let out = st.terminal.paste(text);
         if out.error.is_some() {
@@ -1060,6 +1401,32 @@ impl SessionWindow {
                 Cmd::Properties => self.properties(),
                 Cmd::LoadKeymap => self.choose_keymap(),
                 Cmd::ExportKeymap => self.export_keymap(),
+                Cmd::MacroRecord => self.toggle_recording(),
+                Cmd::MacroPlay => {
+                    if let Some(p) = files::choose_open_in(
+                        &files::sessions_dir(),
+                        "Play Macro",
+                        files::MACRO_PATTERN,
+                    ) {
+                        self.play_file(&p);
+                    }
+                }
+                Cmd::MacroStop => self.stop_macro(),
+                Cmd::MacroEdit => {
+                    if let Some(p) = files::choose_open_in(
+                        &files::sessions_dir(),
+                        "Edit Macro",
+                        files::MACRO_PATTERN,
+                    ) {
+                        crate::macros::editor::open(&p, Some(&self.window));
+                    }
+                }
+                Cmd::MacroRun(i) => {
+                    let p = self.st.borrow().doc.macros.files.get(i).cloned();
+                    if let Some(p) = p {
+                        self.play_file(&p);
+                    }
+                }
                 Cmd::Connect => self.connect(None),
                 Cmd::Disconnect => self.user_disconnect(),
                 Cmd::Copy => self.copy(),
@@ -1077,6 +1444,7 @@ impl SessionWindow {
                 }
                 Cmd::About => crate::about::show(Some(&self.window)),
                 Cmd::Close => {
+                    self.st.borrow_mut().player = None;
                     self.disconnect_quietly();
                     self.window.clone().hide();
                 }
@@ -1092,6 +1460,9 @@ impl SessionWindow {
             };
             let Some(ev) = ev else { break };
             self.net(ev);
+        }
+        if self.playing() {
+            self.run_macro();
         }
         self.window.shown()
     }

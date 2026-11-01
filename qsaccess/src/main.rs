@@ -151,13 +151,18 @@ fn main() {
         }
         qsaccess::session::pump();
         qsaccess::manager::pump();
+        qsaccess::macros::editor::pump();
         ui.refresh_recent();
         while let Ok(received) = args_rx.try_recv() {
             qsaccess::log!("request from another instance: {received:?}");
             let r = Request::parse(&received);
             serve(&ui, &state, &r, &mut main_shown);
         }
-        if !win.shown() && !qsaccess::session::any_open() && !qsaccess::manager::shown() {
+        if !win.shown()
+            && !qsaccess::session::any_open()
+            && !qsaccess::manager::shown()
+            && !qsaccess::macros::editor::any_open()
+        {
             break;
         }
     }

@@ -214,6 +214,29 @@ fn session_properties(state: &Shared, tab: usize) -> Window {
     d.window().clone()
 }
 
+/// The Macro editor with the sign-on and WRKACTJOB macro.
+fn macro_editor() -> Window {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../fixtures/macros/sign-on-wrkactjob-f3.qsm");
+    let m = qsa_config::qsm::MacroFile::load(&path).expect("fixture macro");
+    let e = qsaccess::macros::editor::build(m, None);
+    let mut list = e.list.clone();
+    list.select(Some(3));
+    e.window.clone()
+}
+
+/// The Step dialog for a step that waits for text.
+fn macro_step() -> Window {
+    use qsa_config::qsm::{Action, Step};
+    let step = Step::new(Action::WaitText {
+        row: 1,
+        col: 36,
+        text: "Sign On".into(),
+        timeout_ms: 15000,
+    });
+    qsaccess::macros::editor::build_step("Edit Step", &step).0
+}
+
 /// QAD0030 for a settings file with a long path, which must wrap.
 fn long_path_message() -> Window {
     let p = r"C:\Users\someone\AppData\Local\Temp\claude\c--Users-someone-Documents-GitHub-example\e77d43e6-eac0-4c01-9379-4ad509a246ef\scratchpad\e2e\cfg\settings.toml";
@@ -263,6 +286,20 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     out.push((
         "session-properties-hotspots".to_owned(),
         session_properties(state, 1),
+    ));
+    out.push(("macro-editor".to_owned(), macro_editor()));
+    out.push(("macro-step".to_owned(), macro_step()));
+    out.push((
+        "run-macro".to_owned(),
+        qsaccess::macros::build_run(
+            "Sign on and WRKACTJOB",
+            &[
+                ("Payroll".to_owned(), "sys1.example.net".to_owned()),
+                ("Development".to_owned(), "dev.example.net".to_owned()),
+            ],
+        )
+        .0
+        .window,
     ));
     out
 }

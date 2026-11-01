@@ -170,6 +170,70 @@ pub fn windows() -> Vec<Rc<SessionWindow>> {
     })
 }
 
+thread_local! {
+    static TICKING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+/// While a macro runs anywhere, wakes the event loop ten times a second so
+/// that its waits are looked at.
+pub fn tick_while_playing() {
+    if TICKING.with(|t| t.replace(true)) {
+        return;
+    }
+    fltk::app::add_timeout3(0.1, |h| {
+        if any_playing() {
+            fltk::app::repeat_timeout3(0.1, h);
+        } else {
+            TICKING.with(|t| t.set(false));
+        }
+    });
+}
+
+/// Whether a macro is running in any session.
+pub fn any_playing() -> bool {
+    SESSIONS.with(|v| v.borrow().iter().any(|s| s.playing()))
+}
+
+/// Waits for a click on any open session's screen, for the Macro editor.
+/// Returns the row and column (from 1) of the word clicked, and the word.
+/// `None` if Esc is pressed, or no session is open.
+pub fn pick_position(parent: Option<&dyn WindowExt>) -> Option<(usize, usize, String)> {
+    use window::Pick;
+    let open = windows();
+    if open.is_empty() {
+        MessageBox::new(
+            "Pick from Screen",
+            "Open a session that shows the screen first, then pick again.",
+        )
+        .run(parent);
+        return None;
+    }
+    for s in &open {
+        s.begin_pick();
+        s.window.clone().show();
+    }
+    let mut result = None;
+    'wait: while open.iter().any(|s| s.window.shown()) {
+        fltk::app::wait();
+        pump();
+        for s in &open {
+            match s.take_pick() {
+                Pick::Got(r, c) => {
+                    let (col, word) = s.word_at(r, c);
+                    result = Some((r + 1, col, word));
+                    break 'wait;
+                }
+                Pick::Cancelled => break 'wait,
+                Pick::Waiting | Pick::Off => {}
+            }
+        }
+    }
+    for s in &open {
+        s.end_pick();
+    }
+    result
+}
+
 /// Adds a window built elsewhere (tests) to the ones [`pump`] serves.
 pub fn adopt(s: Rc<SessionWindow>) {
     SESSIONS.with(|v| v.borrow_mut().push(s));

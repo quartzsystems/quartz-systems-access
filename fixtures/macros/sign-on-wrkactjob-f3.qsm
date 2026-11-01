@@ -1,0 +1,68 @@
+# Against fixtures/replay/sign-on-wrkactjob-f3.qsr (still to be recorded;
+# see fixtures/README.md): sign on, prompting for the password, run
+# WRKACTJOB, page down once and leave with F3. The same macro is run by
+# hand against QS/400 and pub400 for the Phase 2 acceptance.
+[qsaccess]
+kind = "macro"
+version = 1
+
+[macro]
+name = "Sign on and WRKACTJOB"
+description = "Signs on as QSATEST, runs WRKACTJOB, pages down once, F3"
+screen_size = "24x80"
+
+[[step]]
+action = "wait-text"
+row = 1
+col = 36
+text = "Sign On"
+timeout_ms = 15000
+
+[[step]]
+action = "type"
+text = "QSATEST"
+
+[[step]]
+action = "key"
+key = "FieldExit"
+
+[[step]]
+action = "prompt"
+label = "Password"
+hidden = true
+
+[[step]]
+action = "key"
+key = "Enter"
+
+[[step]]
+action = "wait-unlock"
+timeout_ms = 30000
+
+[[step]]
+action = "type"
+text = "WRKACTJOB"
+
+[[step]]
+action = "key"
+key = "Enter"
+
+[[step]]
+action = "wait-unlock"
+timeout_ms = 30000
+
+[[step]]
+action = "key"
+key = "PageDown"
+
+[[step]]
+action = "wait-unlock"
+timeout_ms = 15000
+
+[[step]]
+action = "key"
+key = "F:3"
+
+[[step]]
+action = "wait-unlock"
+timeout_ms = 15000

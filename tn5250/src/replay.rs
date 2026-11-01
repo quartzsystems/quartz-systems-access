@@ -25,7 +25,8 @@
 //!
 //! [`replay`] drives a [`Terminal`] with the events and checks that it
 //! sends what was recorded; [`Golden`] is the final screen as text, to
-//! compare with a stored one.
+//! compare with a stored one. [`Host`] plays the host's side of a
+//! recording to a terminal driven by something else (a macro).
 
 use std::fmt::Write as _;
 use std::fs::File;
@@ -33,7 +34,7 @@ use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::path::Path;
 use std::time::Instant;
 
-use crate::input::Key;
+use crate::input::{Key, Outcome};
 use crate::negotiate::ScreenSize;
 use crate::record::Record;
 use crate::screen::{Read, Screen, attr, byte};
@@ -378,6 +379,96 @@ pub fn replay(rec: &Recording) -> Replayed {
         terminal,
         divergences,
         errors,
+    }
+}
+
+/// The host's side of a recording, for a terminal that something other
+/// than the recording drives (a macro, say).
+///
+/// The recorded inbound records are delivered in order. Each time the
+/// terminal sends a record, the host moves on past the next recorded
+/// outbound record and delivers what followed it. The recorded keystrokes
+/// are not used: whoever drives the terminal supplies its own. What the
+/// terminal sends is not compared byte for byte (a macro may type a
+/// different password than the scrubbed one), only counted.
+#[derive(Debug)]
+pub struct Host {
+    events: Vec<Event>,
+    pos: usize,
+    pub terminal: Terminal,
+    /// Records the terminal sent that the recording has not answered yet.
+    pending: usize,
+    /// Data stream errors met on the way.
+    pub errors: Vec<String>,
+}
+
+impl Host {
+    /// A host for `rec`, with the records it sends before the terminal's
+    /// first record already delivered.
+    pub fn new(rec: &Recording) -> Host {
+        let mut h = Host {
+            events: rec.events.iter().map(|(_, e)| e.clone()).collect(),
+            pos: 0,
+            terminal: Terminal::new(rec.size, rec.ccsid),
+            pending: 0,
+            errors: Vec::new(),
+        };
+        h.run();
+        h
+    }
+
+    fn sent(&mut self, n: usize) {
+        self.pending += n;
+        self.run();
+    }
+
+    /// Delivers recorded records until the recording waits for the
+    /// terminal to send something.
+    fn run(&mut self) {
+        while let Some(ev) = self.events.get(self.pos) {
+            match ev {
+                Event::In(bytes) => {
+                    self.pos += 1;
+                    match Record::parse(bytes) {
+                        Ok(r) => {
+                            let a = self.terminal.receive(&r);
+                            self.errors.extend(
+                                a.errors.iter().map(|e| format!("event {}: {e}", self.pos)),
+                            );
+                            self.pending += a.replies.len();
+                        }
+                        Err(e) => self.errors.push(format!("event {}: {e}", self.pos)),
+                    }
+                }
+                Event::Key(_) => self.pos += 1,
+                Event::Out(_) if self.pending > 0 => {
+                    self.pending -= 1;
+                    self.pos += 1;
+                }
+                Event::Out(_) => break,
+            }
+        }
+    }
+
+    /// A key typed into the terminal; the host answers what it sends.
+    pub fn key(&mut self, k: Key) -> Outcome {
+        let out = self.terminal.key(k);
+        let n = out.send.len();
+        self.sent(n);
+        out
+    }
+
+    /// Text typed into the terminal.
+    pub fn paste(&mut self, text: &str) -> Outcome {
+        let out = self.terminal.paste(text);
+        let n = out.send.len();
+        self.sent(n);
+        out
+    }
+
+    /// Whether every recorded event has been played.
+    pub fn finished(&self) -> bool {
+        self.pos >= self.events.len()
     }
 }
 

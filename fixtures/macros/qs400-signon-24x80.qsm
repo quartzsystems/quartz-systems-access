@@ -1,0 +1,32 @@
+# Against fixtures/replay/qs400-signon-24x80.qsr: Enter on an empty
+# sign-on display gets the "Type a user profile name." error line.
+[qsaccess]
+kind = "macro"
+version = 1
+
+[macro]
+name = "Empty sign-on"
+description = "Press Enter on the sign-on display without a user"
+screen_size = "24x80"
+
+[[step]]
+action = "wait-text"
+row = 1
+col = 36
+text = "Sign On"
+timeout_ms = 15000
+
+[[step]]
+action = "key"
+key = "Enter"
+
+[[step]]
+action = "wait-unlock"
+timeout_ms = 15000
+
+[[step]]
+action = "wait-text"
+row = 24
+col = 2
+text = "Type a user profile name."
+timeout_ms = 15000
