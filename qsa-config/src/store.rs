@@ -110,22 +110,19 @@ impl ConfigDir {
 }
 
 /// The folder session files are kept in unless the user picks another:
-/// `%USERPROFILE%\Documents\Quartz Access\Sessions` on Windows, and
-/// `$XDG_DOCUMENTS_DIR/Quartz Access/Sessions` (else
-/// `~/Documents/Quartz Access/Sessions`) elsewhere. It may not exist yet.
+/// `Quartz Access/Sessions` in the user's Documents folder. It may not
+/// exist yet.
+///
+/// - Windows: the Documents known folder, so it follows Documents wherever
+///   it has been moved, OneDrive included; else
+///   `%USERPROFILE%\Documents`.
+/// - Linux: `$XDG_DOCUMENTS_DIR`, else `~/Documents`.
 pub fn default_sessions_dir() -> Option<PathBuf> {
-    let documents = if cfg!(windows) {
-        std::env::var_os("USERPROFILE")
-            .map(PathBuf::from)
-            .or_else(|| directories::BaseDirs::new().map(|b| b.home_dir().to_owned()))
-            .map(|home| home.join("Documents"))
-    } else {
-        directories::UserDirs::new().map(|u| {
-            u.document_dir()
-                .map(Path::to_owned)
-                .unwrap_or_else(|| u.home_dir().join("Documents"))
-        })
-    };
+    let documents = directories::UserDirs::new().map(|u| {
+        u.document_dir()
+            .map(Path::to_owned)
+            .unwrap_or_else(|| u.home_dir().join("Documents"))
+    });
     documents.map(|d| d.join("Quartz Access").join("Sessions"))
 }
 
@@ -368,11 +365,12 @@ pub(crate) mod tests {
         if let Some(d) = default_sessions_dir() {
             let p = d.to_string_lossy().replace('\\', "/");
             assert!(p.ends_with("/Quartz Access/Sessions"), "{p}");
-            if cfg!(windows)
-                && let Some(home) = std::env::var_os("USERPROFILE")
+            // It is under the Documents folder the platform reports, which
+            // on Windows is wherever Documents has been moved to.
+            if let Some(docs) = directories::UserDirs::new()
+                .and_then(|u| u.document_dir().map(Path::to_owned))
             {
-                let home = home.to_string_lossy().replace('\\', "/");
-                assert_eq!(p, format!("{home}/Documents/Quartz Access/Sessions"));
+                assert_eq!(d, docs.join("Quartz Access").join("Sessions"));
             }
         }
     }
