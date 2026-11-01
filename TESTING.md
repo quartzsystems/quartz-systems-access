@@ -114,3 +114,35 @@ window in the middle of the main monitor; Settings > Apps must list the
 program with Uninstall and Modify (repair); uninstalling from there with
 **Also remove my settings** ticked must remove `%APPDATA%\Quartz Systems\Access`
 and leave `Documents\Quartz Access\Sessions` alone.
+
+## Installer: Linux
+
+Build the installer in the pinned glibc 2.31 image, then run the scripted
+test in fresh Ubuntu 24.04 and AlmaLinux 9 containers (both pinned by
+digest), as root for All users and as an ordinary user for Just me:
+
+```
+ci/dist-linux.sh
+ci/installer-test-linux-containers.sh target/dist/QS400-Access-V1R0M0-linux-x86_64
+```
+
+Each container gets only the libraries the program loads (see README.md), the
+desktop tools the installer runs (shared-mime-info, desktop-file-utils,
+xdg-utils), GIO and Xvfb. `ci/installer-test-linux.sh` snapshots
+`~/.local`, `~/.config` and `~/Desktop` (or `/opt`, `/usr/local` and `/etc`
+for root), then: a damaged installer exits 2 and changes nothing; silent
+install exits 0, with links, both desktop entries, the MIME package, icons and
+the MIME database entry; (Just me) `gio` sees a `.qsd` as
+`application/x-qsaccess-session` with QS/400 Access for Desktop as its default,
+`gio open` on it (what a file manager does on a double-click) starts
+`qsaccess open <file>`, and `qsaccess --quit` closes it; upgrade over the top,
+repair and uninstall exit 0; and the snapshot after uninstall equals the one
+before. User data is not compared: the program's settings, and
+`~/.config/fltk.org`, where the toolkit keeps its preferences once the program
+has run.
+
+The same script runs in full VMs. In Ubuntu 24.04 and AlmaLinux 9 desktop VMs
+also check by hand: double-clicking a `.qsd` in Files opens a connected session
+to QS/400 at 10.42.70.150, a second double-click opens a second window in the
+same process, and the desktop shortcut (GNOME: marked trusted through `gio`)
+starts the program.

@@ -294,6 +294,11 @@ pub fn integrate(
     }
     if opts.associations && opts.scope == Scope::User {
         let list = mimeapps();
+        // xdg-mime makes the config folder if there is none; note it, so
+        // that it goes again if it is left empty.
+        if let Some(d) = list.parent() {
+            m.make_dirs(d)?;
+        }
         let existed = list.exists();
         let mut set = Vec::new();
         for (mime, ..) in MIME_TYPES {

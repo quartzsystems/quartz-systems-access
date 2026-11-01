@@ -37,6 +37,31 @@ rights for that choice only. The Start menu folder is **Quartz Systems**; a
 file name cannot hold `/`, so the program's shortcut is named
 *QS400 Access for Desktop*.
 
+On Linux, Just me installs to `~/.local/opt/quartz-access`, with links in
+`~/.local/bin` and menu entries, MIME types and icons under `~/.local/share`;
+All users (run the installer as root) installs to `/opt/quartz-access`, with
+links in `/usr/local/bin` and entries under `/usr/local/share`. `.qsd`, `.qkm`
+and `.qsm` are registered as `application/x-qsaccess-session`, `-keymap` and
+`-macro`, by name and by their `[qsaccess]` header. The installer runs
+`update-mime-database`, `update-desktop-database` and `xdg-mime default` when
+they are there, and warns (without failing) when they are not, or when
+`~/.local/bin` is not on `PATH`.
+
+The Linux binaries are built against glibc 2.31 (Ubuntu 20.04, in
+`ci/dist-linux.Dockerfile`) and need no glibc newer than 2.30. They run under
+Wayland and X11 alike, and load only these libraries, which every desktop
+installation has:
+
+| Library | For |
+|---|---|
+| `libwayland-client.so.0`, `libwayland-cursor.so.0`, `libxkbcommon.so.0` | Wayland |
+| `libX11.so.6`, `libXinerama.so.1`, `libXcursor.so.1`, `libXfixes.so.3` | X11 |
+| `libfontconfig.so.1`, `libpango-1.0.so.0`, `libpangocairo-1.0.so.0`, `libcairo.so.2`, `libgobject-2.0.so.0` | Text and drawing |
+| `libgcc_s.so.1`, `libc.so.6`, `libm.so.6`, `libdl.so.2`, `libpthread.so.0` | The C runtime |
+
+The saved-password store talks to the Secret Service over D-Bus with its own
+code, so no D-Bus library is needed.
+
 **Windows SmartScreen.** The installer is not code-signed yet, so the first
 time it is run from a download Windows shows *Windows protected your PC*.
 Select **More info**, check that the file name is
