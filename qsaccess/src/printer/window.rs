@@ -926,8 +926,12 @@ impl PrinterWindow {
                 {
                     let mut st = self.st.borrow_mut();
                     if record.status == JobStatus::Failed {
-                        st.state = State::Error;
-                        st.not_ready = true;
+                        // A refused record leaves the session as it was:
+                        // its row and message say what happened.
+                        if record.problems.iter().any(|p| p.not_ready()) {
+                            st.state = State::Error;
+                            st.not_ready = true;
+                        }
                     } else if st.state != State::Error {
                         st.state = State::Ready;
                     }

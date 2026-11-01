@@ -164,7 +164,13 @@ fn serve(
                 Event::Ready(m) => send(tx, FromNet::Ready(m)),
                 Event::Startup(s) => send(tx, FromNet::Startup(s)),
                 Event::ProtocolError(e) => send(tx, FromNet::ProtocolError(e)),
-                Event::Rejected(why) => send(tx, FromNet::ProtocolError(why)),
+                Event::Rejected(why) => send(
+                    tx,
+                    FromNet::Job {
+                        record: spooler.rejected(session.host(), &why),
+                        idle: false,
+                    },
+                ),
                 Event::Print(events) => {
                     let ok = print_events(spooler, &events, tx);
                     session.respond(if ok {
@@ -253,8 +259,19 @@ mod tests {
         r
     }
 
-    /// A scripted server: negotiation, a start-up response, one job in two
-    /// records and the null record; it reads one response for each.
+    /// The record QS/400 sent before its writer was fixed (data flow 0000,
+    /// a four-byte variable header, operation 00), with made-up SCS.
+    fn unfixed_record(data: &[u8]) -> Vec<u8> {
+        let mut r = vec![0, 0, 0x12, 0xA0, 0x00, 0x00, 4, 0x00, 0x00, 0x00];
+        r.extend_from_slice(data);
+        let len = r.len() as u16;
+        r[..2].copy_from_slice(&len.to_be_bytes());
+        r
+    }
+
+    /// A scripted server: negotiation, a start-up response, a record the
+    /// client must refuse, then one job in two records and the null
+    /// record; it reads one response for each.
     #[test]
     fn a_job_from_the_server_becomes_a_pdf() {
         let dir = std::env::temp_dir().join(format!("qsa-pworker-{}", std::process::id()));
@@ -302,6 +319,17 @@ mod tests {
             let len = startup.len() as u16;
             startup[..2].copy_from_slice(&len.to_be_bytes());
             s.write_all(&codec::encode_record(&startup)).unwrap();
+            // Refused with RFC 4777's invalid print command, operation 01.
+            s.write_all(&codec::encode_record(&unfixed_record(&first)))
+                .unwrap();
+            wait_for(
+                &mut s,
+                &mut got,
+                &codec::encode_record(&[
+                    0x00, 0x0E, 0x12, 0xA0, 0x01, 0x02, 0x08, 0x80, 0x00, 0x01, 0x08, 0x11, 0x02,
+                    0x28,
+                ]),
+            );
             let complete = codec::encode_record(&Response::Complete.encode(op::PRINT));
             for rec in [
                 print_record(flag::FIRST_OF_CHAIN, &first),
@@ -354,7 +382,18 @@ mod tests {
         w.close();
         assert!(events.iter().any(|e| e.contains("I902")), "{events:?}");
         assert!(events.iter().any(|e| e == "Receiving"), "{events:?}");
-        let job = events.iter().find(|e| e.starts_with("Job")).expect("a job");
+        let rejected = events
+            .iter()
+            .find(|e| e.starts_with("Job") && e.contains("Rejected"))
+            .expect("an error row for the refused record");
+        assert!(
+            rejected.contains("status: Failed") && rejected.contains("operation 00"),
+            "{rejected}"
+        );
+        let job = events
+            .iter()
+            .find(|e| e.starts_with("Job") && !e.contains("Rejected"))
+            .expect("a job");
         assert!(
             job.contains("status: Done") && job.contains("pages: 1"),
             "{job}"
@@ -379,6 +418,7 @@ mod tests {
             replayed.divergences
         );
         assert_eq!(replayed.jobs.len(), 1);
+        assert_eq!(replayed.rejected, 1);
         let txt = pdf.with_extension("txt");
         assert_eq!(
             std::fs::read_to_string(txt).unwrap(),

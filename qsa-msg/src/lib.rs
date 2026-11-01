@@ -75,6 +75,7 @@ pub mod id {
     pub const OUTPUT_FOLDER_NOT_WRITABLE: &str = "QAD3014";
     pub const TRANSFORMED_DATA: &str = "QAD3020";
     pub const JOB_IDLE_CLOSED: &str = "QAD3021";
+    pub const RECORD_REJECTED: &str = "QAD3022";
     pub const PRINTER_RECONNECTING: &str = "QAD3030";
 }
 
@@ -245,7 +246,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 49] = [
+    const SEEDS: [&str; 50] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -294,6 +295,7 @@ mod tests {
         id::OUTPUT_FOLDER_NOT_WRITABLE,
         id::TRANSFORMED_DATA,
         id::JOB_IDLE_CLOSED,
+        id::RECORD_REJECTED,
         id::PRINTER_RECONNECTING,
     ];
 

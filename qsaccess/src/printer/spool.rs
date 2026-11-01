@@ -77,6 +77,9 @@ pub enum Problem {
     Printer(String, String),
     /// The computer cannot print (`QAD3012`); the PDF was kept instead.
     PrintingUnavailable(String),
+    /// The system sent a record the session refused (`QAD3022`): system,
+    /// reason.
+    Rejected(String, String),
 }
 
 impl Problem {
@@ -90,13 +93,19 @@ impl Problem {
             Problem::PrintingUnavailable(why) => {
                 qsa_msg::message(id::SYSTEM_PRINTING_UNAVAILABLE, &[why])
             }
+            Problem::Rejected(system, why) => qsa_msg::message(id::RECORD_REJECTED, &[system, why]),
         }
     }
 
-    /// Whether the output is lost for now: the server should hear that the
-    /// printer is not ready.
+    /// Whether the job failed.
     pub fn fails_job(&self) -> bool {
         !matches!(self, Problem::PrintingUnavailable(_))
+    }
+
+    /// Whether the output is lost for now: the server should hear that the
+    /// printer is not ready. A refused record was already answered.
+    pub fn not_ready(&self) -> bool {
+        self.fails_job() && !matches!(self, Problem::Rejected(..))
     }
 }
 
@@ -137,6 +146,7 @@ impl JobRecord {
             JobStatus::Failed => match self.problems.iter().find(|p| p.fails_job()) {
                 Some(Problem::Folder(..)) => "Error: folder".into(),
                 Some(Problem::Printer(..)) => "Error: printer".into(),
+                Some(Problem::Rejected(..)) => "Error: rejected".into(),
                 _ => "Error".into(),
             },
             JobStatus::Done => match (&self.pdf, &self.printer) {
@@ -337,6 +347,24 @@ impl Spooler {
             }
         }
         Some(Ended::Rendered(rec))
+    }
+
+    /// The Received Output row for a record the session refused. Any job
+    /// in progress stays open.
+    pub fn rejected(&self, system: &str, reason: &str) -> JobRecord {
+        JobRecord {
+            time: crate::localtime::now(),
+            title: format!("{} rejected record", self.out.device),
+            pages: 0,
+            bytes: 0,
+            target: self.out.target,
+            pdf: None,
+            text: None,
+            printer: None,
+            status: JobStatus::Failed,
+            spool: None,
+            problems: vec![Problem::Rejected(system.to_owned(), reason.to_owned())],
+        }
     }
 
     /// Renders print data to the session's targets.
@@ -646,6 +674,30 @@ mod tests {
         assert_eq!(rec.status_text(), "Saved");
         let m = rec.messages("PRT01");
         assert_eq!(m[0].id, id::OUTPUT_SAVED);
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
+    fn a_rejected_record_is_an_error_row_and_leaves_the_job_open() {
+        let dir = temp("rejected");
+        let mut s = Spooler::in_dir(output(&dir), dir.join("spool"));
+        s.begin(false).unwrap();
+        s.data(b"\xC1").unwrap();
+        let rec = s.rejected(
+            "QS400",
+            "printer operation 00 is not print (01) or clear (02)",
+        );
+        assert_eq!(rec.status, JobStatus::Failed);
+        assert_eq!(rec.status_text(), "Error: rejected");
+        assert!(rec.pdf.is_none() && rec.printer.is_none());
+        let m = rec.messages("PRT01");
+        assert_eq!(m.len(), 1);
+        assert_eq!(m[0].id, id::RECORD_REJECTED);
+        assert!(m[0].text.contains("QS400") && m[0].text.contains("operation 00"));
+        // Already answered: the server is not told the printer is not ready.
+        assert!(rec.problems[0].fails_job() && !rec.problems[0].not_ready());
+        // The job in progress goes on.
+        assert!(matches!(s.end(), Some(Ended::Rendered(r)) if r.status == JobStatus::Done));
         let _ = fs::remove_dir_all(dir);
     }
 

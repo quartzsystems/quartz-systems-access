@@ -303,6 +303,12 @@ text = "Print job closed after idle timeout."
 cause = "The system does not mark where print jobs end, so the printer session ended the job after 10 seconds without data."
 recovery = "None needed. If one spooled file was split into two outputs, print it again; the system may be slow to send it."
 
+[QAD3022]
+severity = 30
+text = "Print record from &1 rejected: &2."
+cause = "System &1 sent a print record that this printer session cannot handle: &2. The session answered with the negative response for an invalid print command, so the system's writer is told the data was not printed. Nothing was saved or printed for the record."
+recovery = "Look at the writer for the device and its message queue on system &1. If the system's writer keeps sending such records, report the problem to the system's administrator with the session's log file."
+
 [QAD3030]
 severity = 10
 text = "Reconnecting printer session &1 in &2 seconds."
