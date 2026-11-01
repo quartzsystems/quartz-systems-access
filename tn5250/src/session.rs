@@ -142,11 +142,17 @@ impl Session {
 
     /// Sends a record.
     pub fn send(&mut self, record: &Record) -> Result<(), SessionError> {
-        let bytes = record.encode();
+        self.send_bytes(&record.encode())
+    }
+
+    /// Sends a record already encoded, before Telnet framing: for records
+    /// whose variable header is longer than [`Record::encode`] writes, such
+    /// as a printer's error responses.
+    pub fn send_bytes(&mut self, bytes: &[u8]) -> Result<(), SessionError> {
         if let Some(rec) = self.recorder.as_mut() {
-            rec(Direction::Out, &bytes);
+            rec(Direction::Out, bytes);
         }
-        self.neg.send(record);
+        self.neg.send_bytes(bytes);
         self.flush()
     }
 

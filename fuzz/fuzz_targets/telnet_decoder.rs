@@ -36,8 +36,17 @@ fuzz_target!(|data: &[u8]| {
         assert_eq!(out, vec![codec::Token::Record(rest.to_vec())]);
     }
     let _ = tn5250::negotiate::parse_send(rest);
+    let _ = tn5250::negotiate::startup_response(rest, tn5250::codepage::default_page());
     if let Ok(r) = tn5250::record::Record::parse(rest) {
-        let _ = tn5250::negotiate::startup_response(&r, tn5250::codepage::default_page());
+        let mut p = tn5250::printer::Printer::new();
+        let now = std::time::Instant::now();
+        for _ in 0..2 {
+            let _ = p.record(&r, now);
+        }
+        let _ = p.idle(
+            now + std::time::Duration::from_secs(11),
+            std::time::Duration::from_secs(10),
+        );
     }
     let _ = tn5250::screen::Snapshot::decode(rest);
     let _ = tn5250::replay::Recording::parse(rest);

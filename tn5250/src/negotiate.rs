@@ -69,17 +69,18 @@ impl ScreenSize {
     }
 }
 
-/// What the client asks the server for. A printer session later uses the
-/// same request with a printer terminal type and its own variables in
-/// `extra`.
+/// What the client asks the server for. A printer session uses the same
+/// request with a printer terminal type and its own variables in `extra`
+/// (see [`crate::printer`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Request {
     pub terminal_type: String,
     /// `DEVNAME`, upper case; `None` lets the server choose.
     pub device_name: Option<String>,
     pub ccsid: u16,
-    /// More `USERVAR`s, sent after the standard ones.
-    pub extra: Vec<(String, String)>,
+    /// More `USERVAR`s, sent after the standard ones. Values are bytes:
+    /// some printer variables are binary.
+    pub extra: Vec<(String, Vec<u8>)>,
 }
 
 impl Request {
@@ -97,15 +98,15 @@ impl Request {
     }
 
     /// The `USERVAR`s this request sends, in order.
-    pub fn user_vars(&self) -> Vec<(String, String)> {
+    pub fn user_vars(&self) -> Vec<(String, Vec<u8>)> {
         let env = codepage::environ(self.ccsid);
         let mut v = Vec::new();
         if let Some(d) = &self.device_name {
-            v.push(("DEVNAME".to_owned(), d.clone()));
+            v.push(("DEVNAME".to_owned(), d.clone().into_bytes()));
         }
-        v.push(("KBDTYPE".to_owned(), env.kbdtype.to_owned()));
-        v.push(("CODEPAGE".to_owned(), env.codepage.to_string()));
-        v.push(("CHARSET".to_owned(), env.charset.to_string()));
+        v.push(("KBDTYPE".to_owned(), env.kbdtype.as_bytes().to_vec()));
+        v.push(("CODEPAGE".to_owned(), env.codepage.to_string().into_bytes()));
+        v.push(("CHARSET".to_owned(), env.charset.to_string().into_bytes()));
         v.extend(self.extra.iter().cloned());
         v
     }
@@ -140,6 +141,8 @@ pub struct StartupResponse {
     pub code: String,
     /// The device the server gave, when it said.
     pub device: Option<String>,
+    /// The server's system name, when the record has RFC 4777's layout.
+    pub system: Option<String>,
 }
 
 impl StartupResponse {
@@ -201,27 +204,73 @@ pub fn is_rfc_startup_layout(rec: &Record) -> bool {
     rec.reserved == 0x9000
 }
 
-/// Reads a start-up response from a record, if it is one: opcode 0 (or the
-/// RFC's reserved field `9000`), then four EBCDIC characters, a letter
-/// `I` or a digit followed by three digits. The device name follows: as
-/// exactly ten characters (QS/400 sends that alone), else as the last
-/// name-like run of characters after the code. Both layouts are read; the
-/// older one is logged as a warning, since QS/400 is moving to RFC 4777's.
-pub fn startup_response(rec: &Record, page: &dyn CodePage) -> Option<StartupResponse> {
-    if rec.opcode != opcode::NO_OP && !is_rfc_startup_layout(rec) {
+/// RFC 4777 section 10: in the start-up response record, after twelve bytes
+/// of fixed fields, the response code (4 bytes), the system name (8) and
+/// the device name (10), all EBCDIC.
+const RFC_CODE_AT: usize = 16;
+const RFC_SYSTEM_LEN: usize = 8;
+const RFC_DEVICE_LEN: usize = 10;
+
+/// Whether four characters are a response code: a letter `I` or a digit,
+/// then three digits.
+fn is_code(code: &str) -> bool {
+    let c: Vec<char> = code.chars().collect();
+    c.len() == 4
+        && (c[0] == 'I' || c[0].is_ascii_digit())
+        && c[1..].iter().all(char::is_ascii_digit)
+}
+
+/// An EBCDIC name field, trimmed of blanks and padding nulls.
+fn name_field(bytes: &[u8], page: &dyn CodePage) -> Option<String> {
+    let text = page.decode(bytes);
+    Some(
+        text.trim_matches(|c: char| c == ' ' || c == '\0')
+            .to_owned(),
+    )
+    .filter(|t| !t.is_empty())
+}
+
+/// Reads a start-up response from a whole record (before Telnet framing),
+/// if it is one.
+///
+/// - RFC 4777's layout (reserved field `9000`): the code, system name and
+///   device name at their fixed places (section 10).
+/// - The older layout QS/400 still sends: opcode 0, then the code, then the
+///   device name as exactly ten characters, else as the last name-like run
+///   of characters after the code. Logged as a warning, since QS/400 is
+///   moving to RFC 4777's layout.
+///
+/// Anything else, a first data record say, is not a start-up response.
+pub fn startup_response(bytes: &[u8], page: &dyn CodePage) -> Option<StartupResponse> {
+    let rec = Record::parse(bytes).ok()?;
+    if is_rfc_startup_layout(&rec) {
+        if let Some(code_bytes) = bytes.get(RFC_CODE_AT..RFC_CODE_AT + 4) {
+            let code = page.decode(code_bytes);
+            if is_code(&code) {
+                let sys_at = RFC_CODE_AT + 4;
+                let dev_at = sys_at + RFC_SYSTEM_LEN;
+                let field = |at: usize, len: usize| {
+                    bytes
+                        .get(at.min(bytes.len())..(at + len).min(bytes.len()))
+                        .and_then(|b| name_field(b, page))
+                };
+                return Some(StartupResponse {
+                    code,
+                    system: field(sys_at, RFC_SYSTEM_LEN),
+                    device: field(dev_at, RFC_DEVICE_LEN),
+                });
+            }
+        }
+    } else if rec.opcode != opcode::NO_OP {
         return None;
     }
     let text = page.decode(&rec.data);
     let mut chars = text.chars();
     let code: String = chars.by_ref().take(4).collect();
-    let c: Vec<char> = code.chars().collect();
-    let shaped = c.len() == 4
-        && (c[0] == 'I' || c[0].is_ascii_digit())
-        && c[1..].iter().all(char::is_ascii_digit);
-    if !shaped {
+    if !is_code(&code) {
         return None;
     }
-    if !is_rfc_startup_layout(rec) {
+    if !is_rfc_startup_layout(&rec) {
         crate::warn!(
             "tn5250: start-up response {code} is not in the RFC 4777 layout (no 9000 reserved field); read the older way"
         );
@@ -234,7 +283,11 @@ pub fn startup_response(rec: &Record, page: &dyn CodePage) -> Option<StartupResp
             .rfind(|t| !t.is_empty() && t.len() <= 10)
             .map(str::to_owned)
     };
-    Some(StartupResponse { code, device })
+    Some(StartupResponse {
+        code,
+        device,
+        system: None,
+    })
 }
 
 /// What the negotiator passes up.
@@ -332,6 +385,11 @@ impl Negotiator {
         self.telnet.send_record(&rec.encode());
     }
 
+    /// Queues a record already encoded, before Telnet framing.
+    pub fn send_bytes(&mut self, bytes: &[u8]) {
+        self.telnet.send_record(bytes);
+    }
+
     /// Queues a keepalive.
     pub fn keepalive(&mut self) {
         self.telnet.send_nop();
@@ -354,7 +412,7 @@ impl Negotiator {
         };
         if !self.records_seen {
             self.records_seen = true;
-            if let Some(s) = startup_response(&rec, self.page) {
+            if let Some(s) = startup_response(bytes, self.page) {
                 debug!(
                     "tn5250e: start-up response {} ({}), device {}",
                     s.code,
@@ -416,7 +474,7 @@ impl Negotiator {
             describe_send(&asked)
         );
         let ours = self.request.user_vars();
-        let mut answer: Vec<(String, String)> = Vec::new();
+        let mut answer: Vec<(String, Vec<u8>)> = Vec::new();
         let mut want = |name: &str| {
             if let Some(v) = ours.iter().find(|(n, _)| n == name)
                 && !answer.iter().any(|(n, _)| n == name)
@@ -440,7 +498,7 @@ impl Negotiator {
         self.environ_sent = true;
         let shown: Vec<String> = answer
             .iter()
-            .map(|(n, v)| format!("USERVAR {n}={v}"))
+            .map(|(n, v)| format!("USERVAR {n}={}", show_value(v)))
             .collect();
         debug!("tn5250e: send SB NEW-ENVIRON IS {}", shown.join(" "));
     }
@@ -496,6 +554,15 @@ fn describe_send(items: &[(u8, Vec<u8>)]) -> String {
         .join(" ")
 }
 
+/// A value for the debug trace: text when it is printable ASCII, else hex.
+fn show_value(v: &[u8]) -> String {
+    if v.iter().all(|b| (0x20..0x7F).contains(b)) {
+        String::from_utf8_lossy(v).into_owned()
+    } else {
+        format!("x'{}'", crate::log::hex(v).replace(' ', ""))
+    }
+}
+
 fn push_escaped(out: &mut Vec<u8>, s: &[u8]) {
     for &b in s {
         if b <= USERVAR {
@@ -505,14 +572,15 @@ fn push_escaped(out: &mut Vec<u8>, s: &[u8]) {
     }
 }
 
-/// `IS USERVAR name VALUE value ...`.
-pub fn encode_is(vars: &[(String, String)]) -> Vec<u8> {
+/// `IS USERVAR name VALUE value ...`, escaped as RFC 1572 says. Telnet's
+/// own `IAC` doubling happens later, in the codec.
+pub fn encode_is(vars: &[(String, Vec<u8>)]) -> Vec<u8> {
     let mut out = vec![IS];
     for (n, v) in vars {
         out.push(USERVAR);
         push_escaped(&mut out, n.as_bytes());
         out.push(VALUE);
-        push_escaped(&mut out, v.as_bytes());
+        push_escaped(&mut out, v);
     }
     out
 }
@@ -614,7 +682,8 @@ mod tests {
             ev,
             vec![Event::Startup(StartupResponse {
                 code: "I902".into(),
-                device: Some("QSADSP01".into())
+                device: Some("QSADSP01".into()),
+                system: None,
             })]
         );
         // Later records pass through.
@@ -625,35 +694,61 @@ mod tests {
 
     #[test]
     fn rfc_shaped_startup_response() {
-        // Reserved 9000, a five-byte variable header.
         let page = codepage::default_page();
-        let mut b = vec![0, 0, 0x12, 0xA0, 0x90, 0x00, 5, 0, 0, 0, 0];
-        b.extend(page.encode("8902"));
-        b.extend_from_slice(&[0, 0]);
-        b.extend(page.encode("QS400   "));
-        b.extend(page.encode("QSADSP01  "));
-        let len = b.len() as u16;
-        b[..2].copy_from_slice(&len.to_be_bytes());
-        let rec = Record::parse(&b).unwrap();
-        let s = startup_response(&rec, page).unwrap();
+        // RFC 4777 section 10.2, figure 2: device PCPRINTER not available
+        // on system TARGET.
+        let b = hex(concat!(
+            "004912A09000056006008200003D0000F8F9F0F2E3C1D9C7C5E34040D7C3D7D9",
+            "C9D5E3C5D9400000000000000000000000000000000000000000000000000000",
+            "000000000000000000"
+        ));
+        let s = startup_response(&b, page).unwrap();
         assert_eq!(s.code, "8902");
-        assert_eq!(s.device.as_deref(), Some("QSADSP01"));
+        assert_eq!(s.system.as_deref(), Some("TARGET"));
+        assert_eq!(s.device.as_deref(), Some("PCPRINTER"));
         assert_eq!(s.outcome(), Outcome::InUse);
-        assert!(is_rfc_startup_layout(&rec));
+        assert!(is_rfc_startup_layout(&Record::parse(&b).unwrap()));
+        // Section 12: success for printer DUMMYPRT on ELCRTP06.
+        let b = hex(concat!(
+            "004912A090000560060020C0003D0000C9F9F0F2C5D3C3D9E3D7F0F6C4E4D4D4",
+            "E8D7D9E340400000000000000000000000000000000000000000000000000000",
+            "000000000000000000"
+        ));
+        let s = startup_response(&b, page).unwrap();
+        assert_eq!(
+            (s.code.as_str(), s.system.as_deref(), s.device.as_deref()),
+            ("I902", Some("ELCRTP06"), Some("DUMMYPRT"))
+        );
+        assert_eq!(s.outcome(), Outcome::Started);
         // QS/400's older layout is still read, and told apart.
         let mut data = page.encode("I902");
         data.extend(page.encode("QSADSP01  "));
         let old = Record::new(0, data);
         assert!(!is_rfc_startup_layout(&old));
-        assert_eq!(startup_response(&old, page).unwrap().code, "I902");
+        let s = startup_response(&old.encode(), page).unwrap();
+        assert_eq!((s.code.as_str(), s.system), ("I902", None));
+        // Cut short: no panic, and what is there is read.
+        let b = hex("001412A090000560060020C0003D0000C9F9F0F2");
+        assert_eq!(startup_response(&b, page).unwrap().device, None);
+    }
+
+    fn hex(s: &str) -> Vec<u8> {
+        (0..s.len())
+            .step_by(2)
+            .map(|i| u8::from_str_radix(&s[i..i + 2], 16).unwrap())
+            .collect()
     }
 
     #[test]
     fn a_first_data_record_is_not_a_startup_response() {
+        let page = codepage::default_page();
         let rec = Record::new(opcode::PUT_GET, vec![0x04, 0x40]);
-        assert!(startup_response(&rec, codepage::default_page()).is_none());
+        assert!(startup_response(&rec.encode(), page).is_none());
         let rec = Record::new(0, vec![0x04, 0x40, 0x04, 0x11]);
-        assert!(startup_response(&rec, codepage::default_page()).is_none());
+        assert!(startup_response(&rec.encode(), page).is_none());
+        // A print record (data flow 0101) is not one either.
+        let b = hex("001112A001010A08000100000000000000");
+        assert!(startup_response(&b, page).is_none());
     }
 
     #[test]
@@ -682,7 +777,7 @@ mod tests {
         );
         assert!(parse_send(&[]).is_empty());
         assert_eq!(
-            encode_is(&[("A".into(), "\u{3}".into())]),
+            encode_is(&[("A".into(), vec![3])]),
             vec![IS, USERVAR, b'A', VALUE, ESC, 3]
         );
     }
@@ -696,7 +791,7 @@ mod tests {
                 .split(' ')
                 .map(|h| u8::from_str_radix(h, 16).unwrap())
                 .collect();
-            startup_response(&Record::parse(&b).unwrap(), page).unwrap()
+            startup_response(&b, page).unwrap()
         };
         let ok = parse("00 18 12 A0 00 00 04 00 00 00 C9 F9 F0 F2 D8 E2 C1 E3 C5 E2 E3 F0 F1 40");
         assert_eq!(
@@ -715,6 +810,7 @@ mod tests {
         let r = |c: &str| StartupResponse {
             code: c.into(),
             device: None,
+            system: None,
         };
         assert_eq!(r("I902").outcome(), Outcome::Started);
         assert_eq!(r("8902").outcome(), Outcome::InUse);
