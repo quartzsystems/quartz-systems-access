@@ -5,7 +5,7 @@
 //! Connects, negotiates, prints the debug log and the first records, and
 //! disconnects without typing anything.
 //!
-//! `cargo run -p tn5250 --example probe -- HOST [PORT] [--tls] [--132] [--device NAME] [--hex]`
+//! `cargo run -p tn5250 --example probe -- HOST [PORT] [--tls] [--132] [--device NAME] [--hex] [--enter]`
 
 use std::time::{Duration, Instant};
 
@@ -52,10 +52,12 @@ fn main() {
         }
     };
     let hex = args.iter().any(|a| a == "--hex");
+    let mut enter = args.iter().any(|a| a == "--enter");
+    let mut term = tn5250::terminal::Terminal::new(size, 37);
     let mut screen = Screen::new(size, tn5250::codepage::default_page());
     let start = Instant::now();
     let mut records = 0;
-    while start.elapsed() < Duration::from_secs(8) && records < 3 {
+    while start.elapsed() < Duration::from_secs(8) && records < 6 {
         match s.poll(Duration::from_millis(200)) {
             Ok(events) => {
                 for ev in events {
@@ -65,7 +67,18 @@ fn main() {
                             if hex {
                                 println!("hex {}", tn5250::log::hex(&r.encode()));
                             }
-                            let applied = tn5250::stream::apply(&mut screen, &r);
+                            let applied = term.receive(&r);
+                            screen = term.screen.clone();
+                            for reply in &applied.replies {
+                                s.send(reply).ok();
+                            }
+                            if enter && term.screen.keyboard.is_open() {
+                                enter = false;
+                                for rec in term.key(tn5250::input::Key::Enter).send {
+                                    println!("sent {}", tn5250::log::hex(&rec.data));
+                                    s.send(&rec).ok();
+                                }
+                            }
                             for e in &applied.errors {
                                 println!("stream error: {e}");
                             }

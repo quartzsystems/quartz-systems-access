@@ -177,6 +177,8 @@ pub struct Screen {
     pub insert_mode: bool,
     /// Where the cursor goes when the keyboard next opens.
     pub cursor_to: CursorTo,
+    /// A field-exit-required field was filled: more typing is an error.
+    pub exit_pending: bool,
     pub saved: VecDeque<Snapshot>,
     page: &'static dyn CodePage,
     /// Bumped on every change, so a renderer knows to look.
@@ -206,6 +208,7 @@ impl Screen {
             alarm: false,
             insert_mode: false,
             cursor_to: CursorTo::Home,
+            exit_pending: false,
             saved: VecDeque::new(),
             page,
             version: 0,
