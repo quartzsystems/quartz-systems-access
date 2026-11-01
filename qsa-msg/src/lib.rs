@@ -76,6 +76,7 @@ pub mod id {
     pub const TRANSFORMED_DATA: &str = "QAD3020";
     pub const JOB_IDLE_CLOSED: &str = "QAD3021";
     pub const RECORD_REJECTED: &str = "QAD3022";
+    pub const JOB_INCOMPLETE: &str = "QAD3023";
     pub const PRINTER_RECONNECTING: &str = "QAD3030";
 }
 
@@ -246,7 +247,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 50] = [
+    const SEEDS: [&str; 51] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -296,6 +297,7 @@ mod tests {
         id::TRANSFORMED_DATA,
         id::JOB_IDLE_CLOSED,
         id::RECORD_REJECTED,
+        id::JOB_INCOMPLETE,
         id::PRINTER_RECONNECTING,
     ];
 

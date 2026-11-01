@@ -12,8 +12,11 @@
 //!   file beside it if asked for, and the system printer (GDI on Windows,
 //!   CUPS on Linux). Then the spool file is marked done (`.done.scs`); it
 //!   stays for Print Again until the session is opened again.
-//! - A spool file not marked done (the program stopped mid-job) is rendered
-//!   when the session next starts ([`Spooler::recover`]).
+//! - A job cut off before the system ended it (the connection ended) is
+//!   rendered at once with what arrived, and marked incomplete
+//!   (`QAD3023`). A spool file not marked done (the program stopped
+//!   mid-job) is rendered the same way when the session next starts
+//!   ([`Spooler::recover`]).
 //!
 //! Without system printing (no CUPS commands, or no printer), a job meant
 //! only for the printer is saved as a PDF instead.
@@ -136,6 +139,8 @@ pub struct JobRecord {
     /// The spool file, while it is kept.
     pub spool: Option<PathBuf>,
     pub problems: Vec<Problem>,
+    /// The job was cut off before the system ended it.
+    pub incomplete: bool,
 }
 
 impl JobRecord {
@@ -149,6 +154,7 @@ impl JobRecord {
                 Some(Problem::Rejected(..)) => "Error: rejected".into(),
                 _ => "Error".into(),
             },
+            JobStatus::Done if self.incomplete => "Incomplete".into(),
             JobStatus::Done => match (&self.pdf, &self.printer) {
                 (Some(_), Some(_)) => "Saved and printed".into(),
                 (Some(_), None) => "Saved".into(),
@@ -165,6 +171,9 @@ impl JobRecord {
         if self.status == JobStatus::Discarded {
             out.push(qsa_msg::message(id::TRANSFORMED_DATA, &[]));
             return out;
+        }
+        if self.incomplete {
+            out.push(qsa_msg::message(id::JOB_INCOMPLETE, &[device]));
         }
         if let Some(pdf) = &self.pdf {
             out.push(qsa_msg::message(
@@ -316,6 +325,15 @@ impl Spooler {
         }
     }
 
+    /// Renders the job in progress as it stands, marked incomplete: the
+    /// connection ended before the system ended the job.
+    pub fn cut_off(&mut self) -> Option<Ended> {
+        let mut ended = self.end()?;
+        let (Ended::Rendered(r) | Ended::Transformed(r)) = &mut ended;
+        r.incomplete = true;
+        Some(ended)
+    }
+
     /// Ends the job in progress and renders it.
     pub fn end(&mut self) -> Option<Ended> {
         let job = self.open.take()?;
@@ -334,6 +352,7 @@ impl Spooler {
                 status: JobStatus::Discarded,
                 spool: None,
                 problems: Vec::new(),
+                incomplete: false,
             }));
         }
         let data = fs::read(&job.path).unwrap_or_default();
@@ -364,6 +383,7 @@ impl Spooler {
             status: JobStatus::Failed,
             spool: None,
             problems: vec![Problem::Rejected(system.to_owned(), reason.to_owned())],
+            incomplete: false,
         }
     }
 
@@ -390,6 +410,7 @@ impl Spooler {
             status: JobStatus::Done,
             spool: None,
             problems: Vec::new(),
+            incomplete: false,
         };
         let mut want_pdf = self.out.target.pdf();
         if self.out.target.printer()
@@ -578,6 +599,7 @@ impl Spooler {
             let data = fs::read(&p).unwrap_or_default();
             let title = format!("{} recovered job", self.out.device);
             let mut rec = self.render(&data, &title);
+            rec.incomplete = true;
             if rec.status == JobStatus::Done {
                 let done = p.with_extension("done.scs");
                 let _ = fs::rename(&p, &done);
@@ -702,6 +724,33 @@ mod tests {
     }
 
     #[test]
+    fn a_cut_off_job_is_written_and_marked_incomplete() {
+        let dir = temp("cutoff");
+        let mut s = Spooler::in_dir(output(&dir), dir.join("spool"));
+        s.begin(false).unwrap();
+        let mut b = scs::sample::Builder::new();
+        b.text("THE FIRST PART OF A JOB");
+        s.data(&b.bytes()).unwrap();
+        let Some(Ended::Rendered(rec)) = s.cut_off() else {
+            panic!()
+        };
+        assert_eq!(rec.status, JobStatus::Done, "{:?}", rec.problems);
+        assert!(rec.incomplete);
+        assert_eq!(rec.status_text(), "Incomplete");
+        assert!(
+            fs::read(rec.pdf.as_ref().unwrap())
+                .unwrap()
+                .starts_with(b"%PDF-")
+        );
+        let m = rec.messages("PRT01");
+        assert_eq!(m[0].id, id::JOB_INCOMPLETE);
+        assert_eq!(m[1].id, id::OUTPUT_SAVED);
+        // Nothing open: nothing to cut off.
+        assert!(s.cut_off().is_none());
+        let _ = fs::remove_dir_all(dir);
+    }
+
+    #[test]
     fn transformed_and_cleared_jobs_make_nothing() {
         let dir = temp("discard");
         let mut s = Spooler::in_dir(output(&dir), dir.join("spool"));
@@ -746,6 +795,9 @@ mod tests {
         assert_eq!(recovered.len(), 1);
         assert_eq!(recovered[0].status, JobStatus::Done);
         assert!(recovered[0].pdf.as_ref().unwrap().exists());
+        // It never got its end from the system.
+        assert!(recovered[0].incomplete);
+        assert_eq!(recovered[0].status_text(), "Incomplete");
         // Done spool files go at the next start.
         assert!(s.recover().is_empty());
         let _ = fs::remove_dir_all(dir);

@@ -309,6 +309,12 @@ text = "Print record from &1 rejected: &2."
 cause = "System &1 sent a print record that this printer session cannot handle: &2. The session answered with the negative response for an invalid print command, so the system's writer is told the data was not printed. Nothing was saved or printed for the record."
 recovery = "Look at the writer for the device and its message queue on system &1. If the system's writer keeps sending such records, report the problem to the system's administrator with the session's log file."
 
+[QAD3023]
+severity = 20
+text = "Output for &1 is incomplete: the job ended before the system finished sending it."
+cause = "The connection for printer session &1 ended, or the program stopped, while a print job was arriving, before the system marked the end of the job. What arrived was saved or printed as it stands; the rest of the job is missing."
+recovery = "Check the output. If pages are missing, print the spooled file again on the system once the session is connected; the system's writer may also send it again by itself."
+
 [QAD3030]
 severity = 10
 text = "Reconnecting printer session &1 in &2 seconds."

@@ -247,6 +247,7 @@ fn printer_session(state: &Shared) -> Window {
         status,
         spool: None,
         problems: Vec::new(),
+        incomplete: false,
     };
     let mut failed = job(
         1_793_570_400,

@@ -125,8 +125,9 @@ fn run(
     let mut spooler = Spooler::new(output);
     let result = serve(&mut session, &mut spooler, rx, tx);
     session.close();
-    // A job cut off by the connection ending is rendered with what came.
-    if let Some(Spooled::Rendered(record)) = spooler.end() {
+    // A job cut off by the connection ending is rendered with what came,
+    // and marked incomplete.
+    if let Some(Spooled::Rendered(record)) = spooler.cut_off() {
         send(
             tx,
             FromNet::Job {
