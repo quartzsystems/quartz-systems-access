@@ -157,9 +157,14 @@ pub fn to_text<T: Serialize>(value: &T) -> String {
     toml::to_string_pretty(value).expect("file types always serialise")
 }
 
-/// Reads a whole file.
+/// Reads a whole file. A UTF-8 byte-order mark, as some editors write, is
+/// dropped.
 pub fn read(path: &Path) -> Result<String, FileError> {
-    Ok(std::fs::read_to_string(path)?)
+    let text = std::fs::read_to_string(path)?;
+    Ok(match text.strip_prefix('\u{feff}') {
+        Some(rest) => rest.to_owned(),
+        None => text,
+    })
 }
 
 /// Writes `text` to `path` atomically.
@@ -273,6 +278,15 @@ mod tests {
             check_header(newer, DISPLAY),
             Err(FileError::Newer(3))
         ));
+    }
+
+    #[test]
+    fn a_byte_order_mark_is_dropped() {
+        let p = std::env::temp_dir().join(format!("qsa-bom-{}.qsd", std::process::id()));
+        std::fs::write(&p, "\u{feff}[qsaccess]\nkind = \"display\"\nversion = 1\n").unwrap();
+        let text = read(&p).unwrap();
+        assert!(check_header(&text, DISPLAY).is_ok());
+        let _ = std::fs::remove_file(p);
     }
 
     #[test]

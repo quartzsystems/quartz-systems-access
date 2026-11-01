@@ -129,7 +129,8 @@ pub fn default_sessions_dir() -> Option<PathBuf> {
 /// Reads and parses a TOML file. `None` (or the default) for a missing file.
 fn load<T: DeserializeOwned + LoadDefault>(path: &Path) -> (T::Out, Option<ReadError>) {
     match fs::read_to_string(path) {
-        Ok(text) => match toml::from_str::<T>(&text) {
+        // A byte-order mark, as some editors write, is not part of the TOML.
+        Ok(text) => match toml::from_str::<T>(text.strip_prefix('\u{feff}').unwrap_or(&text)) {
             Ok(v) => (T::some(v), None),
             Err(e) => (
                 T::none(),
