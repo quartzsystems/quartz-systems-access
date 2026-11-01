@@ -91,40 +91,10 @@ fn nine_and_ten_character_des_passwords_and_ids() {
 }
 
 #[test]
-#[cfg(feature = "unverified-change")]
-fn change_password_parts_have_the_right_shapes() {
-    let s = seeds("0102030405060708", "1112131415161718");
-    let c = change(0, "QSATEST", "OLDPW", "NEWPASSWD9", &s).unwrap();
-    assert_eq!(c.scheme, Scheme::Des);
-    assert_eq!(
-        c.substitute,
-        substitute(0, "QSATEST", "OLDPW", &s).unwrap(),
-        "the substitute is the old password's"
-    );
-    assert_eq!(c.old_protected.len(), 8);
-    assert_eq!(c.new_protected.len(), 16);
-    assert_eq!((c.old_len, c.new_len), (5, 10));
-
-    let c = change(2, "QSATEST", "old pass", "a much longer new passphrase", &s).unwrap();
-    assert_eq!(c.scheme, Scheme::Sha1);
-    assert_eq!(c.substitute.len(), 20);
-    assert_eq!(c.old_protected.len(), 20);
-    assert_eq!(c.new_protected.len(), 60);
-    assert_eq!((c.old_len, c.new_len), (16, 56));
-}
-
-#[test]
 fn secrets_never_print() {
     let s = seeds("7D4C2319F28004B2", "08BEF662D851F4B1");
     let t = telnet(0, "USER123", "ABCDEFG", &s).unwrap();
-    #[cfg(feature = "unverified-change")]
-    let c = format!(
-        "{:?}",
-        change(2, "USER123", "AbCdEfGh123?+", "N3wPassw0rd!", &s).unwrap()
-    );
-    #[cfg(not(feature = "unverified-change"))]
-    let c = String::new();
-    let shown = format!("{t:?} {c} {s:?}");
+    let shown = format!("{t:?} {s:?}");
     for secret in [
         "5A58BD50",
         "5a58bd50",

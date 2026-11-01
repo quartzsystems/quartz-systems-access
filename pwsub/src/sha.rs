@@ -60,62 +60,6 @@ pub(crate) fn substitute(token: &[u8; 20], uid: &[u8; 20], seeds: &Seeds, seq: u
     h.finalize().into()
 }
 
-/// UNVERIFIED. The change-password protected forms are not in RFC 4777.
-/// They were written from the author's prose notes taken after reading
-/// the open-source Java toolbox's sign-on code (as a specification, no
-/// code copied), and have not been checked against a real system. They
-/// need a clean re-derivation and capture vectors (see
-/// `hostsvr-proto/SIGNON-SPEC.md`) before the feature is turned on by
-/// default.
-#[cfg(feature = "unverified-change")]
-/// A change-password request's parts.
-pub(crate) struct ChangeParts {
-    pub substitute: [u8; 20],
-    pub old_protected: Vec<u8>,
-    pub new_protected: Vec<u8>,
-}
-
-/// Protects `password` with `token`: each 20-byte block XORed with the
-/// substitute for the next sequence number; the length is rounded up to
-/// a whole block, the padding being the substitute's own bytes.
-#[cfg(feature = "unverified-change")]
-fn protect(
-    password: &[u8],
-    token: &[u8; 20],
-    uid: &[u8; 20],
-    seeds: &Seeds,
-    seq: &mut u64,
-) -> Vec<u8> {
-    let blocks = password.len().div_ceil(20);
-    let mut out = Vec::with_capacity(20 * blocks);
-    for b in 0..blocks {
-        *seq += 1;
-        let key = Zeroizing::new(substitute(token, uid, seeds, *seq));
-        for (i, k) in key.iter().enumerate() {
-            out.push(password.get(20 * b + i).map_or(*k, |p| p ^ k));
-        }
-    }
-    out
-}
-
-/// The substitute for the old password (sequence 1), then the new password
-/// protected with the old token, then the old password protected with the
-/// new token, one sequence number per block throughout.
-#[cfg(feature = "unverified-change")]
-pub(crate) fn change(uid: &[u8; 20], old: &[u8], new: &[u8], seeds: &Seeds) -> ChangeParts {
-    let old_token = token(uid, old);
-    let mut seq = 1;
-    let substitute = substitute(&old_token, uid, seeds, seq);
-    let new_protected = protect(new, &old_token, uid, seeds, &mut seq);
-    let new_token = token(uid, new);
-    let old_protected = protect(old, &new_token, uid, seeds, &mut seq);
-    ChangeParts {
-        substitute,
-        old_protected,
-        new_protected,
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -136,26 +80,5 @@ mod tests {
         assert_eq!(password("*NONE"), Err(Error::PasswordCharacter));
         assert!(password(&"x".repeat(128)).is_ok());
         assert_eq!(password(&"x".repeat(129)), Err(Error::PasswordLength(129)));
-    }
-
-    #[test]
-    #[cfg(feature = "unverified-change")]
-    fn protected_passwords_round_up_to_whole_blocks() {
-        let seeds = Seeds {
-            server: [1; 8],
-            client: [2; 8],
-        };
-        let uid = user_id("A").unwrap();
-        let token = token(&uid, b"\0x");
-        let mut seq = 1;
-        let p = protect(&[7u8; 21], &token, &uid, &seeds, &mut seq);
-        assert_eq!(p.len(), 40);
-        assert_eq!(seq, 3);
-        // Undo the XOR with the same keys.
-        let k2 = substitute(&token, &uid, &seeds, 2);
-        assert!(p[..20].iter().zip(k2).all(|(a, k)| a ^ k == 7));
-        let k3 = substitute(&token, &uid, &seeds, 3);
-        assert_eq!(p[20] ^ k3[0], 7);
-        assert_eq!(&p[21..], &k3[1..]);
     }
 }

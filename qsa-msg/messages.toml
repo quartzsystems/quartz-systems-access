@@ -321,31 +321,8 @@ text = "Reconnecting printer session &1 in &2 seconds."
 cause = "The connection for printer session &1 was lost. The session tries again by itself, waiting longer each time, up to 5 minutes."
 recovery = "None needed. To stop trying, select Disconnect. Received output is never lost."
 
-# Host servers: port lookup, sign-on, connection verification.
-
-[QAD4001]
-severity = 0
-text = "Connected to &1 server on &2 port &3."
-cause = "A connection to the &1 server on system &2 was opened on port &3."
-recovery = "None needed."
-
-[QAD4010]
-severity = 0
-text = "Server mapper on &1 returned port &2 for &3."
-cause = "The server mapper on system &1 said that service &3 listens on port &2. The answer is kept as long as the system's address lookup setting allows."
-recovery = "None needed."
-
-[QAD4011]
-severity = 10
-text = "Server mapper on &1 not available; using configured ports."
-cause = "The server mapper on system &1 (port 449) could not be reached or did not answer, so the ports on the Ports tab of the system's properties are used instead. This is reported once while the program runs."
-recovery = "If connections work, none is needed. Otherwise check that the system's server mapper is started and that port 449 is open between this computer and the system, or set Port lookup to Standard ports only on the Ports tab."
-
-[QAD4012]
-severity = 30
-text = "Service &1 is not registered on &2."
-cause = "The server mapper on system &2 does not know service &1: the server is not started, or the system does not offer it."
-recovery = "Start the server on system &2, or ask its administrator to. If the service listens on a fixed port, set Port lookup to Fixed ports as listed and enter the port on the Ports tab."
+# Sign-on and connection verification (QAP). QAD4001 to QAD4012 were for
+# the host servers, which are retired; their numbers stay unused.
 
 [QAD4020]
 severity = 0
@@ -398,7 +375,7 @@ recovery = "None needed."
 [QAD4051]
 severity = 10
 text = "Connection to &1 verified with warnings."
-cause = "The required checks of the connection to system &1 passed, but at least one passed only through a fallback (such as the configured ports instead of the server mapper), was not tested, or an informational check failed."
+cause = "The required checks of the connection to system &1 passed, but at least one optional check failed or was not tested."
 recovery = "Look at the Detail column of the results for each check that did not pass. The system can be used, but some functions may not work."
 
 [QAD4052]
@@ -411,4 +388,4 @@ recovery = "Look at the Detail column of the failed checks. Check the system's n
 severity = 30
 text = "Server &1 on &2 returned an unexpected reply: &3."
 cause = "The &1 server on system &2 sent something this program cannot read: &3. The connection was closed."
-recovery = "Check that the port on the Ports tab belongs to the &1 server. If it does, keep the program's log and report the problem."
+recovery = "Check that the QAP port on the Ports tab is the system's QAP port. If it is, keep the program's log and report the problem."

@@ -5,14 +5,12 @@
 #
 # The protocol crates' wire.rs files are exempt, and nothing else. Each
 # protocol requires some exact strings that carry a vendor prefix (the 5250
-# Telnet RFCs' terminal types and NEW-ENVIRON variable names; the host
-# servers' service names). Those values live in the crate's wire.rs and
+# Telnet RFCs' terminal types and NEW-ENVIRON variable names). Those values live in the crate's wire.rs and
 # nowhere else; code elsewhere uses their constants by name. A new protocol
 # crate adds its wire.rs to this list.
 set -euo pipefail
 allowed=(
   tn5250/src/wire.rs
-  hostsvr-proto/src/wire.rs
 )
 cd "$(dirname "$0")/.."
 patterns="$(mktemp)"

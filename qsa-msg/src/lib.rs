@@ -78,10 +78,6 @@ pub mod id {
     pub const RECORD_REJECTED: &str = "QAD3022";
     pub const JOB_INCOMPLETE: &str = "QAD3023";
     pub const PRINTER_RECONNECTING: &str = "QAD3030";
-    pub const HOSTSVR_CONNECTED: &str = "QAD4001";
-    pub const MAPPER_PORT: &str = "QAD4010";
-    pub const MAPPER_UNAVAILABLE: &str = "QAD4011";
-    pub const SERVICE_NOT_REGISTERED: &str = "QAD4012";
     pub const SIGNON_OK: &str = "QAD4020";
     pub const SIGNON_FAILED: &str = "QAD4021";
     pub const PASSWORD_EXPIRED: &str = "QAD4022";
@@ -262,7 +258,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 66] = [
+    const SEEDS: [&str; 62] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -314,10 +310,6 @@ mod tests {
         id::RECORD_REJECTED,
         id::JOB_INCOMPLETE,
         id::PRINTER_RECONNECTING,
-        id::HOSTSVR_CONNECTED,
-        id::MAPPER_PORT,
-        id::MAPPER_UNAVAILABLE,
-        id::SERVICE_NOT_REGISTERED,
         id::SIGNON_OK,
         id::SIGNON_FAILED,
         id::PASSWORD_EXPIRED,

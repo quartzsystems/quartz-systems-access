@@ -17,9 +17,9 @@ check (`ci/cleanroom.sh`), the copyright header check and `ci/deps.sh`
 (`qsa-net`, `tn5250` and `scs` must not depend on FLTK).
 
 The clean-room check allows an explicit list of files and no others: each
-protocol crate's `wire.rs` (`tn5250/src/wire.rs`, `hostsvr-proto/src/wire.rs`).
+protocol crate's `wire.rs` (today only `tn5250/src/wire.rs`).
 The protocols' vendor-prefixed strings (5250 terminal types and environment
-variable names, host-server service names) live there and nowhere else.
+variable names) live there and nowhere else.
 Other code uses their constants, and logs them only at debug level. A new
 protocol crate adds its `wire.rs` to the list in `ci/cleanroom.sh`.
 

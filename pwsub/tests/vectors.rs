@@ -6,11 +6,9 @@
 //! exchanges recorded from real systems with throwaway test profiles (see
 //! `fixtures/README.md`). A vector holds `key = value` lines:
 //!
-//! - `kind`: `substitute`, `telnet` or `change`;
+//! - `kind`: `substitute` or `telnet`;
 //! - `level`, `user`, `password`, `server_seed`, `client_seed` (hex);
-//! - `substitute` (hex), the expected substitute;
-//! - for `change`: `new_password`, and the expected `old_protected` and
-//!   `new_protected` (hex).
+//! - `substitute` (hex), the expected substitute.
 //!
 //! Recorded vectors also say `accepted = yes`: the system accepted what
 //! the client sent, which is what makes them worth having.
@@ -81,30 +79,6 @@ fn every_vector_matches() {
                 assert_eq!(t.client_seed, seeds.client, "{name}");
                 assert_eq!(t.substitute.expose(), hex(get("substitute")), "{name}");
             }
-            #[cfg(feature = "unverified-change")]
-            "change" => {
-                let c = pwsub::change(
-                    level,
-                    get("user"),
-                    get("password"),
-                    get("new_password"),
-                    &seeds,
-                )
-                .unwrap();
-                assert_eq!(c.substitute.expose(), hex(get("substitute")), "{name}");
-                assert_eq!(
-                    c.old_protected.expose(),
-                    hex(get("old_protected")),
-                    "{name}"
-                );
-                assert_eq!(
-                    c.new_protected.expose(),
-                    hex(get("new_protected")),
-                    "{name}"
-                );
-            }
-            #[cfg(not(feature = "unverified-change"))]
-            "change" => eprintln!("{name}: change vectors need the unverified-change feature"),
             k => panic!("{name}: unknown kind {k}"),
         }
     }

@@ -1,10 +1,25 @@
 # Changelog
 
-Changes to the public API of the crates other projects depend on by git:
-`hostsvr-proto` and `pwsub` (QS/400 pins them to a commit). Breaking
-changes are marked **Breaking**.
+Changes to the public API of the crates other projects depend on by git
+(QS/400 pins them to a commit), and of `pwsub`. Breaking changes are marked
+**Breaking**.
 
 ## Unreleased
+
+### hostsvr-proto
+
+- **Breaking:** removed. QS/400 Access talks to QS/400 over QAP
+  (`docs/qap-protocol-spec.md`) instead of the host-server protocol. The
+  crate stays in git history (last at `c8bff49`); nothing should pin it.
+
+### pwsub
+
+- **Breaking:** removed `change`, `Change` and the `unverified-change`
+  feature (the unverified change-password forms), and `Secret::from_vec`.
+- Kept for TN5250E automatic sign-on only: `Scheme`, `Seeds`, `Secret`,
+  `substitute`, `telnet`, `user_id`, `Error`.
+
+## Earlier (unreleased)
 
 ### pwsub
 
@@ -21,5 +36,4 @@ changes are marked **Breaking**.
   (`HostMessage`, `from_frame`, `push_into`), `rc` (`ReturnCode`,
   `Class`), `wire`, `DecodeError`, `reply_id`.
 - `wire::SIGNON_DATASTREAM_LEVEL` is 5: password levels 0 to 3, no level 4.
-- The sign-on exchanges are not in this version; see
-  `hostsvr-proto/SIGNON-SPEC.md`.
+- The sign-on exchanges were never added.

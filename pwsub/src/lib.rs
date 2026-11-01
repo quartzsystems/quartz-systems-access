@@ -2,13 +2,13 @@
 // licensed under the terms of the MIT license which can be found in the
 // root directory of this project.
 
-//! Password substitutes: what a client sends instead of a password, for the
-//! host servers' sign-on and for TN5250E automatic sign-on (RFC 4777
-//! section 5).
+//! Password substitutes: what a client sends instead of a password for
+//! TN5250E automatic sign-on (RFC 4777 section 5).
 //!
 //! Pure functions: no I/O, no randomness, no logging, no UI. The caller
 //! supplies both seeds (the client seed from a good random source) and
-//! sends the results. Every buffer that holds a password, a password token
+//! sends the results. It serves TN5250E automatic sign-on (RFC 4777
+//! section 5). Every buffer that holds a password, a password token
 //! or a substitute is overwritten when dropped, and no type here shows its
 //! secret in `Debug`.
 //!
@@ -24,9 +24,6 @@
 //! - [`substitute`]: the substitute for a sign-on (sequence number 1).
 //! - [`telnet`]: the same, in the form TN5250E automatic sign-on sends
 //!   (user, client seed, substitute).
-//! - `change` (feature `unverified-change`, off by default): the
-//!   substitute and the protected old and new passwords of a
-//!   change-password request. Not yet checked against a real system.
 //! - [`user_id`]: a user ID as the servers want it: ten EBCDIC bytes.
 
 mod des;
@@ -137,12 +134,6 @@ impl Secret {
         Secret(Zeroizing::new(bytes))
     }
 
-    /// Takes ownership of secret bytes: a request being built, or a
-    /// substitute read from a request (on a server).
-    pub fn from_vec(bytes: Vec<u8>) -> Secret {
-        Secret::new(bytes)
-    }
-
     /// The bytes, for the request being built.
     pub fn expose(&self) -> &[u8] {
         &self.0
@@ -164,8 +155,8 @@ impl fmt::Debug for Secret {
 }
 
 /// The substitute for signing on as `user` with `password` at the server's
-/// password `level`, sequence number 1 (the host servers and the Telnet
-/// server always use 1).
+/// password `level`, sequence number 1 (RFC 4777's examples, and what the
+/// Telnet server uses).
 pub fn substitute(level: u8, user: &str, password: &str, seeds: &Seeds) -> Result<Secret, Error> {
     match Scheme::for_level(level)? {
         Scheme::Des => {
@@ -202,8 +193,8 @@ pub struct TelnetSignOn {
 }
 
 /// The encrypted automatic sign-on for a Telnet server whose seed is
-/// `seeds.server`, at the system's password `level` (which Telnet does not
-/// report: the sign-on server's exchange of attributes does).
+/// `seeds.server`, at the system's password `level`. Telnet does not report
+/// the level, so the caller must know it.
 pub fn telnet(level: u8, user: &str, password: &str, seeds: &Seeds) -> Result<TelnetSignOn, Error> {
     let substitute = substitute(level, user, password, seeds)?;
     Ok(TelnetSignOn {
@@ -211,77 +202,6 @@ pub fn telnet(level: u8, user: &str, password: &str, seeds: &Seeds) -> Result<Te
         client_seed: seeds.client,
         substitute,
     })
-}
-
-/// UNVERIFIED. The change-password protected forms are not in RFC 4777.
-/// They were written from the author's prose notes taken after reading
-/// the open-source Java toolbox's sign-on code (as a specification, no
-/// code copied), and have not been checked against a real system. They
-/// need a clean re-derivation and capture vectors (see
-/// `hostsvr-proto/SIGNON-SPEC.md`) before the feature is turned on by
-/// default.
-#[cfg(feature = "unverified-change")]
-/// The secret parts of a change-password request.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Change {
-    pub scheme: Scheme,
-    /// The substitute for the old password (sequence number 1).
-    pub substitute: Secret,
-    /// The old password, protected with the new password's token.
-    pub old_protected: Secret,
-    /// The new password, protected with the old password's token.
-    pub new_protected: Secret,
-    /// Length of the old password as sent: bytes of UTF-16 at levels 2 and
-    /// 3, characters at levels 0 and 1.
-    pub old_len: u32,
-    /// Length of the new password, likewise.
-    pub new_len: u32,
-}
-
-/// UNVERIFIED. The change-password protected forms are not in RFC 4777.
-/// They were written from the author's prose notes taken after reading
-/// the open-source Java toolbox's sign-on code (as a specification, no
-/// code copied), and have not been checked against a real system. They
-/// need a clean re-derivation and capture vectors (see
-/// `hostsvr-proto/SIGNON-SPEC.md`) before the feature is turned on by
-/// default.
-///
-/// The parts of a change-password request from `old` to `new` for `user`
-/// at password `level`. Whether the new password meets the system's rules
-/// is the server's decision, not this function's.
-#[cfg(feature = "unverified-change")]
-pub fn change(level: u8, user: &str, old: &str, new: &str, seeds: &Seeds) -> Result<Change, Error> {
-    let scheme = Scheme::for_level(level)?;
-    match scheme {
-        Scheme::Des => {
-            let uid = ebcdic::user_id(user)?;
-            let old_pw = ebcdic::des_password(old)?;
-            let new_pw = ebcdic::des_password(new)?;
-            let parts = des::change(&uid, &old_pw, &new_pw, seeds);
-            Ok(Change {
-                scheme,
-                substitute: Secret::new(parts.substitute.to_vec()),
-                old_protected: Secret::new(parts.old_protected),
-                new_protected: Secret::new(parts.new_protected),
-                old_len: old_pw.len as u32,
-                new_len: new_pw.len as u32,
-            })
-        }
-        Scheme::Sha1 => {
-            let uid = sha::user_id(user)?;
-            let old_pw = sha::password(old)?;
-            let new_pw = sha::password(new)?;
-            let parts = sha::change(&uid, &old_pw, &new_pw, seeds);
-            Ok(Change {
-                scheme,
-                substitute: Secret::new(parts.substitute.to_vec()),
-                old_protected: Secret::new(parts.old_protected),
-                new_protected: Secret::new(parts.new_protected),
-                old_len: old_pw.len() as u32,
-                new_len: new_pw.len() as u32,
-            })
-        }
-    }
 }
 
 /// Adds `n` to an 8-byte big-endian number, ignoring overflow.

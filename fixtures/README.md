@@ -185,60 +185,17 @@ instead of a recording.
 `pwsub/tests/vectors.rs` checks every `pwsub/*.vec` here (format in that
 file). Three are the RFC 4777 examples (`rfc4777-*.vec`). The others are
 exchanges recorded against real systems with a throwaway test profile whose
-password is in the file: they show that a real system accepted what
-`pwsub` computed. Each starts with a comment saying it is test-only.
+password is in the file, to show that a real system accepted what `pwsub`
+computed; none are recorded yet. Each will start with a comment saying it
+is test-only.
 
-### Recording vectors (Cody, against the reference system)
+### Recording vectors
 
-The profile exists only while you record; its password is committed, so it
-must never be used for anything else.
-
-1. Signed on as a security officer, look at the password level, since the
-   vectors are for that level only:
-
-   ```
-   DSPSYSVAL SYSVAL(QPWDLVL)
-   ```
-
-2. Create the profile. It can sign on to the host servers and do nothing
-   else useful:
-
-   ```
-   CRTUSRPRF USRPRF(QSAVEC) PASSWORD(VEC4TEST) USRCLS(*USER) +
-             INLMNU(*SIGNOFF) LMTCPB(*YES) PWDEXPITV(*NOMAX) +
-             TEXT('QS/400 Access test vectors - delete after use')
-   ```
-
-   At level 2 or 3, use a mixed-case passphrase instead, for example
-   `PASSWORD('Vec 4 test, mixed Case')`, so the vector covers case and
-   spaces.
-3. Record a sign-on, then a password change (the tool signs on with the
-   new password afterwards to prove it took):
-
-   ```
-   cargo run -p hostsvr --example capture_vectors -- HOST --user QSAVEC
-   cargo run -p hostsvr --example capture_vectors -- HOST --user QSAVEC --change
-   ```
-
-   The tool asks for the passwords, runs the sign-on server's exchange of
-   attributes and retrieve sign-on information (and the change-password
-   request with `--change`), and writes
-   `fixtures/pwsub/capture-<host>-level<N>-{signon,change}.vec` only when
-   the system answered with return code 0. Nothing is written for a
-   failed exchange; the return code is printed instead.
-
-   The `--change` step exercises `pwsub`'s change-password forms, which
-   are unverified and behind the `unverified-change` feature (off by
-   default). A `change` vector the system accepted is the evidence needed
-   to turn the feature on; check it with
-   `cargo test -p pwsub --features unverified-change --test vectors`.
-4. Check `cargo test -p pwsub --test vectors` passes, read the files, and
-   commit them.
-5. Delete the profile:
-
-   ```
-   DLTUSRPRF USRPRF(QSAVEC) OWNOBJOPT(*DLT)
-   ```
+Recorded vectors come with 5250 automatic sign-on, which is not built yet:
+it is the only part of the client that sends a password substitute. The
+recording procedure (a throwaway test profile, created for the recording
+and deleted afterwards) will be written here with it. Until then the RFC
+4777 vectors are the only ones.
 
 These are the only files in the repository that hold a seed, a substitute
 or a password together; everything the client records or logs otherwise is
