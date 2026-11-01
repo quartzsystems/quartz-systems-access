@@ -13,6 +13,7 @@ cargo-fuzz = true
 libfuzzer-sys = "0.4"
 qsa-net = { path = "../qsa-net" }
 pwsub = { path = "../pwsub", features = ["unverified-change"] }
+hostsvr-proto = { path = "../hostsvr-proto" }
 tn5250 = { path = "../tn5250" }
 scs = { path = "../scs" }
 
@@ -50,6 +51,13 @@ bench = false
 [[bin]]
 name = "pwsub_inputs"
 path = "fuzz_targets/pwsub_inputs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "hostsvr_decode"
+path = "fuzz_targets/hostsvr_decode.rs"
 test = false
 doc = false
 bench = false

@@ -1,0 +1,18 @@
+[package]
+name = "hostsvr-proto"
+description = "The host servers' data stream (server mapper, sign-on, central) without I/O, for QS/400 Access for Desktop and QS/400"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+# Only these: QS/400 depends on this crate (and pwsub) by git, pinned to a
+# commit. See CHANGELOG.md for the API's history.
+[dependencies]
+pwsub.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

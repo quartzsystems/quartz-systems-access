@@ -10,6 +10,7 @@ by `cargo build --workspace`.
 | `stream_parser` | a flags byte, then records (opcode, 16-bit length, data) | no panic; after every record the screen is consistent (size, cursor, fields in order and on the screen) |
 | `parser_input` | a flags byte, then records, keys, characters and pastes in any order (format in the target) | as above, through `Terminal`, with the keyboard in play |
 | `pwsub_inputs` | a password level byte, two seeds, then a user ID and two passwords separated by zero bytes | no panic; substitutes have the scheme's length and are deterministic; the Telnet form matches; change-password parts have whole blocks |
+| `hostsvr_decode` | any bytes, read as a host-server frame, a mapper request and a mapper reply | no panic; a frame that decodes encodes back to the same bytes; its messages round-trip; mapper requests and replies round-trip |
 | `scs_parser` | an options byte (code page, paper, device font), then one SCS print job | no panic; no more pages than bytes; every run has text, a line, a column and a height; the text rendering has one form feed between each two pages |
 
 For the first three, the flags byte picks 24×80 or 27×132 (bit 0) and the
@@ -35,7 +36,7 @@ docker run --rm -v "$PWD:/src" -w /src/fuzz rustlang/rust:nightly   sh -c 'cargo
 ## Seeds
 
 `corpus/<target>/seed-*` are committed; everything else the fuzzer adds to
-`corpus/` is not. The `pwsub_inputs` seeds are RFC 4777's substitute examples. The `scs_parser` seeds are the RFC 4777 example print
+`corpus/` is not. The `pwsub_inputs` seeds are RFC 4777's substitute examples; the `hostsvr_decode` seeds are encoded frames, messages and mapper replies from `hostsvr-proto`'s tests. The `scs_parser` seeds are the RFC 4777 example print
 record's SCS and two jobs that use most controls. The others come from the
 replay fixtures:
 

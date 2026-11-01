@@ -954,6 +954,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "hostsvr-proto"
+version = "1.0.0"
+dependencies = [
+ "pwsub",
+ "thiserror",
+]
+
+[[package]]
 name = "hybrid-array"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
