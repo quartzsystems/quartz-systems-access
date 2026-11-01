@@ -25,6 +25,7 @@ use qsa_config::AddressLookup;
 use qsa_config::qsp::{self, PrinterFile, Target as OutTarget};
 use qsa_config::settings::Geometry;
 use qsa_msg::{Message, id};
+use qsa_net::{TlsError, TlsOptions};
 use qsa_ui::chan::{self, MenuEmit};
 use qsa_ui::glyph::{self, Glyph, Size};
 use qsa_ui::listtable::{Cell, ListTable};
@@ -34,15 +35,13 @@ use qsa_ui::{MessageBox, Status, StatusBar, Toolbar, msgdetails};
 use tn5250::negotiate::{Mode, Outcome};
 use tn5250::printer::{FormFeed, Options as PrinterOptions, Paper as SourcePaper};
 use tn5250::session::Target;
-use tn5250::telnet::tls::{TlsError, TlsOptions};
 use tn5250::telnet::{CONNECT_TIMEOUT, ConnectError, Security};
 
 use super::spool::{self, JobRecord, JobStatus, Spooler};
 use super::worker::{FromNet, PrinterWorker, ToNet};
 use crate::app::Shared;
-use crate::session::cert;
-use crate::session::window::trust_for;
 use crate::session::worker::Ended;
+use crate::trust;
 use crate::{files, shell};
 
 pub const W: i32 = 680;
@@ -533,7 +532,7 @@ impl PrinterWindow {
             system.ports.telnet
         };
         let tls_options = tls.then(|| TlsOptions {
-            trust: trust_for(&system),
+            trust: trust::for_system(&system),
             system_roots: true,
             timeout: CONNECT_TIMEOUT,
         });
@@ -1058,39 +1057,20 @@ impl PrinterWindow {
                 certificate,
                 info,
             })) => {
-                self.report(
-                    &qsa_msg::message(id::CERT_UNTRUSTED, &[system, &reason]),
-                    false,
-                );
-                if cert::ask(Some(&self.window), system, &reason, &info)
-                    && self.trust(system, &certificate)
-                {
-                    self.report(&qsa_msg::message(id::CERT_TRUSTED, &[system]), false);
+                if trust::ask_and_trust(
+                    Some(&self.window),
+                    &self.state,
+                    system,
+                    &reason,
+                    &info,
+                    &certificate,
+                    |m| self.report(m, false),
+                ) {
                     self.connect();
                 }
                 return;
             }
         }
         self.retry_later();
-    }
-
-    /// Adds a certificate to the system's CA list and saves it.
-    fn trust(&self, system: &str, der: &[u8]) -> bool {
-        let mut app_state = self.state.borrow_mut();
-        let Some(mut sys) = app_state.systems.get(system).cloned() else {
-            return false;
-        };
-        sys.ca_certificates
-            .push(qsa_config::system::CaCertificate::Pem(
-                tn5250::telnet::tls::to_pem(der),
-            ));
-        app_state.systems.upsert(sys);
-        match app_state.save_systems() {
-            Ok(()) => true,
-            Err(e) => {
-                crate::log!("systems not saved: {e}");
-                false
-            }
-        }
     }
 }

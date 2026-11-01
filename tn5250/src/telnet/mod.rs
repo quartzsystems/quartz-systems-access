@@ -9,20 +9,16 @@
 //! - [`options`]: option negotiation with loop protection.
 //! - [`Telnet`]: the two together, without I/O: bytes from the server go in,
 //!   events and the bytes to send come out.
-//! - [`transport`]: plain TCP; [`tls`]: TLS over it, with
-//!   [`x509`] to show a certificate to the user.
+//!
+//! The transports under it (TCP, TLS) are [`qsa_net`]'s; the names below
+//! are re-exported for the session types.
 
 pub mod codec;
 pub mod options;
-pub mod tls;
-pub mod transport;
-pub mod x509;
-
-use std::time::Duration;
 
 pub use codec::{DecodeError, Verb};
 pub use options::{Change, Side};
-pub use transport::{ConnectError, Security, Transport};
+pub use qsa_net::{CONNECT_TIMEOUT, ConnectError, KEEPALIVE, Security, Transport};
 
 use crate::debug;
 
@@ -45,13 +41,6 @@ pub const TERMINAL_TYPE: u8 = 24;
 pub const EOR_OPTION: u8 = 25;
 /// RFC 1572.
 pub const NEW_ENVIRON: u8 = 39;
-
-/// How long a connection may take to open, TLS handshake included.
-pub const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
-/// How long the session may be quiet before a Telnet `NOP` goes out. The
-/// `NOP` keeps NAT and firewall state alive and lets a dead peer show as a
-/// failed write.
-pub const KEEPALIVE: Duration = Duration::from_secs(60);
 
 /// Options we perform: binary, end of record, terminal type, environment.
 pub const LOCAL_OPTIONS: &[u8] = &[BINARY, EOR_OPTION, TERMINAL_TYPE, NEW_ENVIRON];

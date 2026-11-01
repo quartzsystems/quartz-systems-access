@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "tn5250", "scs", "qsa-print", "xtask"]
+members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "qsa-net", "tn5250", "scs", "qsa-print", "xtask"]
 
 [workspace.package]
 version = "1.0.0"
@@ -35,6 +35,7 @@ qsa-glyph = { path = "qsa-glyph" }
 qsa-icons = { path = "qsa-icons" }
 qsa-config = { path = "qsa-config" }
 qsa-msg = { path = "qsa-msg" }
+qsa-net = { path = "qsa-net" }
 tn5250 = { path = "tn5250" }
 scs = { path = "scs" }
 qsa-print = { path = "qsa-print" }

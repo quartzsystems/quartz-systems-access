@@ -97,7 +97,7 @@ fn session(state: &Shared, keypad: bool, keep: &mut Vec<Rc<SessionWindow>>) -> W
 }
 
 fn certificate() -> Window {
-    let info = tn5250::telnet::x509::CertInfo {
+    let info = qsa_net::x509::CertInfo {
         subject: "CN=sys1.example.net, O=Example Corp".into(),
         issuer: "CN=sys1.example.net, O=Example Corp".into(),
         not_before: "2026-01-01 00:00:00 UTC".into(),

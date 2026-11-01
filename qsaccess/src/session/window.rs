@@ -27,9 +27,9 @@ use qsa_config::qkm::KeymapFile;
 use qsa_config::qsd::{self, SessionFile};
 use qsa_config::qsm::MacroFile;
 use qsa_config::settings::{ColorMap, Geometry, ScreenSize as CfgSize};
-use qsa_config::system::CaCertificate;
 use qsa_config::{AddressLookup, KeyMap, System};
 use qsa_msg::{Message, id};
+use qsa_net::{TlsError, TlsOptions};
 use qsa_ui::console::{Look, Oia, Scheme};
 use qsa_ui::glyph::Glyph;
 use qsa_ui::sampler::{MENU_H, menu_bar};
@@ -41,14 +41,15 @@ use tn5250::negotiate::{Mode, Outcome, Request, ScreenSize};
 use tn5250::record::Record;
 use tn5250::replay::Recorder;
 use tn5250::session::Target;
-use tn5250::telnet::tls::{TlsError, TlsOptions, Trust};
+
+use crate::trust;
 use tn5250::telnet::{CONNECT_TIMEOUT, ConnectError, Security};
 use tn5250::terminal::Terminal;
 
 use super::keys::{Action, Decoder};
 use super::start::StartOptions;
 use super::worker::{Ended, FromNet, ToNet, Worker};
-use super::{cert, keymapdlg, pdf, props};
+use super::{keymapdlg, pdf, props};
 use crate::app::Shared;
 use crate::macros::player::{Act, Player};
 use crate::macros::recorder::Recorder as MacroRecorder;
@@ -1174,7 +1175,7 @@ impl SessionWindow {
             system.ports.telnet
         };
         let tls = opts.tls.then(|| TlsOptions {
-            trust: trust_for(&system),
+            trust: trust::for_system(&system),
             system_roots: true,
             timeout: CONNECT_TIMEOUT,
         });
@@ -1604,53 +1605,20 @@ impl SessionWindow {
                 certificate,
                 info,
             })) => {
-                self.report(
-                    &qsa_msg::message(id::CERT_UNTRUSTED, &[system, &reason]),
-                    false,
-                );
-                if cert::ask(Some(&self.window), system, &reason, &info)
-                    && self.trust(system, &certificate)
-                {
-                    self.report(&qsa_msg::message(id::CERT_TRUSTED, &[system]), false);
+                if trust::ask_and_trust(
+                    Some(&self.window),
+                    &self.state,
+                    system,
+                    &reason,
+                    &info,
+                    &certificate,
+                    |m| self.report(m, false),
+                ) {
                     self.connect(None);
                 }
             }
         }
     }
-
-    /// Adds a certificate to the system's CA list and saves it.
-    fn trust(&self, system: &str, der: &[u8]) -> bool {
-        let mut app = self.state.borrow_mut();
-        let Some(mut sys) = app.systems.get(system).cloned() else {
-            return false;
-        };
-        sys.ca_certificates
-            .push(CaCertificate::Pem(tn5250::telnet::tls::to_pem(der)));
-        app.systems.upsert(sys);
-        match app.save_systems() {
-            Ok(()) => true,
-            Err(e) => {
-                crate::log!("systems not saved: {e}");
-                false
-            }
-        }
-    }
-}
-
-/// What a system's CA list says to trust: PEM text kept in the
-/// configuration, and PEM files read now.
-pub(crate) fn trust_for(system: &System) -> Trust {
-    let mut pems = Vec::new();
-    for ca in &system.ca_certificates {
-        match ca {
-            CaCertificate::Pem(p) => pems.push(p.clone()),
-            CaCertificate::Path(path) => match std::fs::read_to_string(path) {
-                Ok(p) => pems.push(p),
-                Err(e) => crate::log!("CA certificate {}: {e}", path.display()),
-            },
-        }
-    }
-    Trust::from_pem(pems.iter().map(String::as_str))
 }
 
 /// `<title> - 5250 Display`.

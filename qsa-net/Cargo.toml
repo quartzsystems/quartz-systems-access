@@ -1,0 +1,18 @@
+[package]
+name = "qsa-net"
+description = "TCP and TLS transport, timeouts and certificate trust for QS/400 Access for Desktop's protocols"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+rustls.workspace = true
+rustls-pki-types.workspace = true
+rustls-native-certs.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

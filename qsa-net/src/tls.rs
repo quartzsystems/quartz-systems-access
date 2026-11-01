@@ -28,8 +28,8 @@ use rustls::{
     ClientConfig, ClientConnection, DigitallySignedStruct, RootCertStore, SignatureScheme,
 };
 
-use super::transport::{Security, Tcp, Transport};
-use super::x509::{self, CertInfo};
+use crate::transport::{Security, Tcp, Transport};
+use crate::x509::{self, CertInfo};
 
 /// Why a TLS session could not be set up.
 #[derive(Debug, thiserror::Error)]

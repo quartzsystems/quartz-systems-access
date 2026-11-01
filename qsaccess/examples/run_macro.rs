@@ -13,11 +13,11 @@ use std::time::{Duration, Instant};
 
 use qsa_config::qsm::MacroFile;
 use qsa_config::settings::ScreenSize as CfgSize;
+use qsa_net::{TlsOptions, Trust};
 use qsaccess::macros::player::{Act, Player};
 use tn5250::input::Key;
 use tn5250::negotiate::{Event, Request, ScreenSize};
 use tn5250::session::{Session, Target};
-use tn5250::telnet::tls::{TlsOptions, Trust};
 use tn5250::terminal::Terminal;
 
 fn main() {

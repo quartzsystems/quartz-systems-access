@@ -11,12 +11,12 @@ use fltk::enums::{Align, FrameType};
 use fltk::frame::Frame;
 use fltk::prelude::*;
 use fltk::window::Window;
+use qsa_net::x509::CertInfo;
 use qsa_ui::chan::{self, Emit};
 use qsa_ui::controls;
 use qsa_ui::glyph::{self, Glyph, Size};
 use qsa_ui::propdialog::center_on;
 use qsa_ui::theme::{self, colors};
-use tn5250::telnet::x509::CertInfo;
 
 pub const W: i32 = 520;
 pub const H: i32 = 330;

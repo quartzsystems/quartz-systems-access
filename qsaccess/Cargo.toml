@@ -13,6 +13,7 @@ qsa-ui.workspace = true
 qsa-config.workspace = true
 directories.workspace = true
 qsa-msg.workspace = true
+qsa-net.workspace = true
 tn5250.workspace = true
 scs.workspace = true
 qsa-print.workspace = true

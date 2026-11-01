@@ -3,17 +3,24 @@
 # The list is stored ROT13-encoded in ci/cleanroom.rot13 so that the list itself
 # does not put the terms into the tree.
 #
-# One file is exempt: tn5250/src/wire.rs. The 5250 Telnet RFCs make the client
-# send terminal types and NEW-ENVIRON variable names that carry a vendor
-# prefix. Those protocol values live in that module and nowhere else; code
-# elsewhere uses its constants by name.
+# The protocol crates' wire.rs files are exempt, and nothing else. Each
+# protocol requires some exact strings that carry a vendor prefix (the 5250
+# Telnet RFCs' terminal types and NEW-ENVIRON variable names; the host
+# servers' service names). Those values live in the crate's wire.rs and
+# nowhere else; code elsewhere uses their constants by name. A new protocol
+# crate adds its wire.rs to this list.
 set -euo pipefail
-allowed='tn5250/src/wire.rs'
+allowed=(
+  tn5250/src/wire.rs
+  hostsvr-proto/src/wire.rs
+)
 cd "$(dirname "$0")/.."
 patterns="$(mktemp)"
 trap 'rm -f "$patterns"' EXIT
 tr 'A-Za-z' 'N-ZA-Mn-za-m' < ci/cleanroom.rot13 > "$patterns"
-mapfile -t files < <(git ls-files -co --exclude-standard | grep -vxF -e ci/cleanroom.rot13 -e "$allowed")
+exclude=(-e ci/cleanroom.rot13)
+for a in "${allowed[@]}"; do exclude+=(-e "$a"); done
+mapfile -t files < <(git ls-files -co --exclude-standard | grep -vxF "${exclude[@]}")
 hits=0
 for f in "${files[@]}"; do
   [ -f "$f" ] || continue
@@ -23,4 +30,4 @@ if [ "$hits" -ne 0 ]; then
   echo "clean-room check failed: banned names found above" >&2
   exit 1
 fi
-echo "clean-room check passed (${#files[@]} files; $allowed allowlisted)"
+echo "clean-room check passed (${#files[@]} files; allowlisted: ${allowed[*]})"

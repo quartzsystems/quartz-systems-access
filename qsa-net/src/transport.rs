@@ -2,7 +2,8 @@
 // licensed under the terms of the MIT license which can be found in the
 // root directory of this project.
 
-//! The byte pipe under Telnet: plain TCP here, TLS in [`super::tls`].
+//! The byte pipe under every protocol: plain TCP here, TLS in
+//! [`crate::tls`].
 
 use std::io::{self, Read, Write};
 use std::net::{Shutdown, SocketAddr, TcpStream, ToSocketAddrs};
@@ -47,7 +48,7 @@ pub enum ConnectError {
         source: io::Error,
     },
     #[error(transparent)]
-    Tls(#[from] super::tls::TlsError),
+    Tls(#[from] crate::tls::TlsError),
 }
 
 /// Plain TCP.

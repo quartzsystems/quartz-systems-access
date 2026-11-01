@@ -22,6 +22,7 @@ pub mod request;
 pub mod session;
 pub mod shell;
 pub mod sysconfig;
+pub mod trust;
 
 /// Product name, as shown in titles.
 pub const PRODUCT: &str = "QS/400 Access for Desktop";

@@ -9,10 +9,10 @@
 
 use std::time::{Duration, Instant};
 
+use qsa_net::{TlsOptions, Trust};
 use tn5250::negotiate::{Event, Request, ScreenSize};
 use tn5250::screen::Screen;
 use tn5250::session::{Session, Target};
-use tn5250::telnet::tls::{TlsOptions, Trust};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();

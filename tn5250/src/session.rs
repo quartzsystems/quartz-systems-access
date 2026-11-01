@@ -11,9 +11,8 @@ use std::time::{Duration, Instant};
 
 use crate::negotiate::{Event, Mode, Negotiator, Request};
 use crate::record::Record;
-use crate::telnet::tls::{Tls, TlsOptions};
-use crate::telnet::transport::{Tcp, is_timeout};
 use crate::telnet::{CONNECT_TIMEOUT, ConnectError, KEEPALIVE, Security, Transport};
+use qsa_net::{TlsOptions, is_timeout};
 
 /// Where to connect.
 #[derive(Clone, Debug)]
@@ -74,11 +73,12 @@ impl Session {
                 ""
             }
         );
-        let tcp = Tcp::connect(&target.host, target.port, CONNECT_TIMEOUT)?;
-        let transport: Box<dyn Transport> = match &target.tls {
-            Some(opts) => Box::new(Tls::handshake(tcp, &target.host, opts)?),
-            None => Box::new(tcp),
-        };
+        let transport = qsa_net::connect(
+            &target.host,
+            target.port,
+            target.tls.as_ref(),
+            CONNECT_TIMEOUT,
+        )?;
         Ok(Session::over(transport, &target.host, request))
     }
 

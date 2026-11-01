@@ -4,8 +4,9 @@
 
 //! 5250 display and printer support for QS/400 Access for Desktop.
 //!
-//! - [`telnet`]: transports (TCP, TLS), the Telnet codec and option
-//!   negotiation.
+//! - [`telnet`]: the Telnet codec and option negotiation. Transports (TCP,
+//!   TLS) and certificate trust are [`qsa_net`]'s, shared with the host
+//!   servers.
 //! - [`negotiate`]: TN5250E on top of Telnet, without I/O.
 //! - [`printer`]: printer sessions: print records, responses, jobs.
 //! - [`session`]: a connected session for one worker thread.
@@ -15,7 +16,8 @@
 //! - [`input`]: the keyboard; [`terminal`]: screen, records and keys together.
 //! - [`codepage`]: EBCDIC translation behind one trait.
 //! - [`replay`]: recording sessions and replaying them against goldens.
-//! - [`log`]: where the crate's log lines go.
+//! - [`log`]: where the crate's log lines go ([`qsa_net::log`], one sink
+//!   for every protocol).
 //! - [`wire`]: the vendor-prefixed strings the protocol requires.
 //!
 //! The crate is deliberately free of any user-interface dependency: the UI
@@ -25,7 +27,6 @@ pub mod aid;
 pub mod codepage;
 pub mod inbound;
 pub mod input;
-pub mod log;
 pub mod negotiate;
 pub mod printer;
 pub mod record;
@@ -36,3 +37,7 @@ pub mod stream;
 pub mod telnet;
 pub mod terminal;
 pub mod wire;
+
+pub use qsa_net::log;
+#[doc(hidden)]
+pub use qsa_net::{debug, log_at, trace, warn};

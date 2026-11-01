@@ -11,9 +11,9 @@
 
 use std::time::{Duration, Instant};
 
+use qsa_net::{TlsOptions, Trust};
 use tn5250::printer::{Event, Options, PrintEvent, PrinterSession, Response};
 use tn5250::session::Target;
-use tn5250::telnet::tls::{TlsOptions, Trust};
 
 fn arg(args: &[String], name: &str) -> Option<String> {
     args.iter()

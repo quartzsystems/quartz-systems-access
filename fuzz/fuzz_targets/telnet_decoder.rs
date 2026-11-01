@@ -50,5 +50,5 @@ fuzz_target!(|data: &[u8]| {
     }
     let _ = tn5250::screen::Snapshot::decode(rest);
     let _ = tn5250::replay::Recording::parse(rest);
-    let _ = tn5250::telnet::x509::describe(rest);
+    let _ = qsa_net::x509::describe(rest);
 });

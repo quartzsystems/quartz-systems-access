@@ -47,7 +47,7 @@ jobs:
       - name: Build
         run: cargo build --workspace --all-targets --target $TARGET
 
-      - name: tn5250 and scs have no UI dependencies
+      - name: Network, protocol and print crates have no UI dependencies
         run: ci/deps.sh
 
       - name: Clippy
@@ -132,7 +132,7 @@ jobs:
       - name: Build
         run: cargo build --workspace --all-targets --target $TARGET
 
-      - name: tn5250 and scs have no UI dependencies
+      - name: Network, protocol and print crates have no UI dependencies
         run: ci/deps.sh
 
       - name: Clippy

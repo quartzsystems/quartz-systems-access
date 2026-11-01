@@ -1581,6 +1581,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "qsa-net"
+version = "1.0.0"
+dependencies = [
+ "rustls",
+ "rustls-native-certs",
+ "rustls-pki-types",
+ "sha2 0.10.9",
+ "thiserror",
+]
+
+[[package]]
 name = "qsa-print"
 version = "1.0.0"
 dependencies = [
@@ -1613,6 +1624,7 @@ dependencies = [
  "qsa-glyph",
  "qsa-icons",
  "qsa-msg",
+ "qsa-net",
  "qsa-print",
  "qsa-ui",
  "scs",
@@ -2157,10 +2169,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 name = "tn5250"
 version = "1.0.0"
 dependencies = [
- "rustls",
- "rustls-native-certs",
- "rustls-pki-types",
- "sha2 0.10.9",
+ "qsa-net",
  "thiserror",
 ]
 

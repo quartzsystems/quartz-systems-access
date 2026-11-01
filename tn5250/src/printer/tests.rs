@@ -499,11 +499,10 @@ fn a_response_with_nothing_to_answer_is_not_sent() {
     sess.respond(Response::Complete).unwrap();
 }
 
-fn loopback() -> (crate::telnet::transport::Tcp, std::net::TcpStream) {
+fn loopback() -> (qsa_net::Tcp, std::net::TcpStream) {
     let l = TcpListener::bind("127.0.0.1:0").unwrap();
     let port = l.local_addr().unwrap().port();
-    let c =
-        crate::telnet::transport::Tcp::connect("127.0.0.1", port, Duration::from_secs(5)).unwrap();
+    let c = qsa_net::Tcp::connect("127.0.0.1", port, Duration::from_secs(5)).unwrap();
     let (s, _) = l.accept().unwrap();
     (c, s)
 }

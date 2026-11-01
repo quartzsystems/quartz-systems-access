@@ -8,10 +8,7 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
-rustls.workspace = true
-rustls-pki-types.workspace = true
-rustls-native-certs.workspace = true
-sha2.workspace = true
+qsa-net.workspace = true
 thiserror.workspace = true
 
 [lints]

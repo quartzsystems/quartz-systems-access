@@ -2,9 +2,11 @@
 // licensed under the terms of the MIT license which can be found in the
 // root directory of this project.
 
-//! The crate's log lines go to one process-wide sink that the application
-//! installs. Without a sink they are dropped. Negotiation is logged at
-//! [`Level::Debug`]; record bytes at [`Level::Trace`].
+//! The protocol crates' log lines go to one process-wide sink that the
+//! application installs. Without a sink they are dropped. `tn5250` and the
+//! host-server crates log through this module too, so one sink takes them
+//! all. Negotiation is logged at [`Level::Debug`]; record bytes at
+//! [`Level::Trace`].
 
 use std::sync::RwLock;
 

@@ -1,6 +1,6 @@
 # Test certificates
 
-Throwaway certificates for the TLS unit tests in `tn5250/src/telnet/tls.rs`.
+Throwaway certificates for the TLS unit tests in `qsa-net/src/tls.rs`.
 The private keys here protect nothing and must never be used anywhere else.
 
 - `test-ca.pem`: a test CA (its key was discarded after signing).
