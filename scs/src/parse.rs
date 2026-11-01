@@ -113,18 +113,26 @@ struct Parser {
     auto_new_line: bool,
     mpp: u16,
     lm: u16,
+    /// The left margin's position, fixed in 1/1440 inch when it is set.
+    lm_x: f64,
     htabs: Vec<u16>,
     indent: u16,
+    indent_x: f64,
     // Vertical format.
     spacing: u32,
     /// Half lines a new line moves (set line spacing).
     nl_half_lines: u16,
     tm: u16,
     bm: u16,
+    /// The page length set by set vertical format, in lines.
+    page_lines: Option<u16>,
     vtabs: Vec<u16>,
     // Cursor.
     line: u16,
     col: u16,
+    /// The column's position in 1/1440 inch: moves by the pitch in force,
+    /// so a pitch change keeps what is already on the line in place.
+    x: f64,
     /// Top of the current line.
     y: u32,
     /// Superscript (negative) and subscript (positive), in half lines.
@@ -198,15 +206,19 @@ impl Parser {
             auto_new_line: false,
             mpp: 132,
             lm: 1,
+            lm_x: 0.0,
             htabs: Vec::new(),
             indent: 1,
+            indent_x: 0.0,
             spacing: DEFAULT_SPACING,
             nl_half_lines: 2,
             tm: 1,
             bm: DEFAULT_MPL,
+            page_lines: None,
             vtabs: Vec::new(),
             line: 1,
             col: 1,
+            x: 0.0,
             y: 0,
             half: 0,
             page_size: None,
@@ -292,7 +304,7 @@ impl Parser {
                 pos + 1
             }
             codes::RNL | codes::IRT => {
-                self.indent = self.lm;
+                self.reset_indent();
                 self.new_line();
                 pos + 1
             }
@@ -322,19 +334,22 @@ impl Parser {
             }
             codes::FF | codes::RFF => {
                 if b == codes::RFF {
-                    self.indent = self.lm;
+                    self.reset_indent();
                 }
                 self.form_feed();
                 pos + 1
             }
             codes::CR => {
                 self.col = self.lm;
+                self.x = self.lm_x;
                 self.half = 0;
                 self.word_start = self.glyphs.len();
                 pos + 1
             }
             codes::BS | codes::NBS => {
-                self.col = self.col.saturating_sub(1).max(1);
+                if self.col > 1 {
+                    self.move_cols(-1);
+                }
                 self.word_start = self.glyphs.len();
                 pos + 1
             }
@@ -379,7 +394,7 @@ impl Parser {
                 self.space();
                 pos + 1
             }
-            codes::RSP | codes::NSP => {
+            codes::RSP => {
                 self.graphic(' ');
                 pos + 1
             }
@@ -419,7 +434,7 @@ impl Parser {
                 self.place(over, false);
             }
         }
-        self.col = self.col.saturating_add(1);
+        self.move_cols(1);
     }
 
     /// A space: white space, which underscore and overstrike may leave
@@ -440,13 +455,13 @@ impl Parser {
                 self.place(over, false);
             }
         }
-        self.col = self.col.saturating_add(1);
+        self.move_cols(1);
         self.word_start = self.glyphs.len();
     }
 
     /// Puts a character at the cursor.
     fn place(&mut self, ch: char, underline: bool) {
-        let x = self.pitch.column_x(self.col);
+        let x = self.x.round() as u32;
         let shift = self.half * (self.spacing as i32 / 2);
         let y = (i64::from(self.y) + i64::from(shift)).clamp(0, i64::from(u32::MAX)) as u32;
         let key = (x, y);
@@ -489,11 +504,40 @@ impl Parser {
 
     // Moving.
 
+    /// To column `col` at the pitch in force.
+    fn set_col(&mut self, col: u16) {
+        self.col = col;
+        self.x = f64::from(self.pitch.column_x(col));
+    }
+
+    /// `n` columns right (left when negative) at the pitch in force.
+    fn move_cols(&mut self, n: i32) {
+        let col = (i32::from(self.col) + n).clamp(1, i32::from(u16::MAX));
+        self.col = col as u16;
+        self.x = (self.x + f64::from(n) * self.pitch.advance()).max(0.0);
+    }
+
+    /// To the indent, or the left margin when the indent is left of it.
+    fn go_left(&mut self) {
+        if self.indent > self.lm {
+            self.col = self.indent;
+            self.x = self.indent_x;
+        } else {
+            self.col = self.lm;
+            self.x = self.lm_x;
+        }
+    }
+
+    fn reset_indent(&mut self) {
+        self.indent = self.lm;
+        self.indent_x = self.lm_x;
+    }
+
     fn new_line(&mut self) {
         let half = u32::from(self.nl_half_lines);
         self.line = self.line.saturating_add((self.nl_half_lines / 2).max(1));
         self.y = self.y.saturating_add(self.spacing * half / 2);
-        self.col = self.indent.max(self.lm);
+        self.go_left();
         self.half = 0;
         self.word_start = self.glyphs.len();
         self.check_bottom();
@@ -527,16 +571,17 @@ impl Parser {
     fn tab(&mut self, indent: bool) {
         let next = self.htabs.iter().copied().find(|&t| t > self.col);
         match next {
-            Some(t) => self.col = t,
+            Some(t) => self.set_col(t),
             None => {
                 if !self.htabs.is_empty() {
                     self.once("horizontal tab with no tab stop to the right".to_owned());
                 }
-                self.col = self.col.saturating_add(1);
+                self.move_cols(1);
             }
         }
         if indent {
             self.indent = self.col;
+            self.indent_x = self.x;
         }
         self.word_start = self.glyphs.len();
     }
@@ -586,8 +631,8 @@ impl Parser {
     fn presentation_position(&mut self, function: u8, n: u8) {
         let n16 = u16::from(n);
         match function {
-            pp::AHPP => self.col = n16.max(1),
-            pp::RHPP => self.col = self.col.saturating_add(n16),
+            pp::AHPP => self.set_col(n16.max(1)),
+            pp::RHPP => self.move_cols(i32::from(n16)),
             pp::AVPP => {
                 let n16 = n16.max(1);
                 if n16 < self.line || n16 > self.bm {
@@ -619,7 +664,7 @@ impl Parser {
             self.page_start = PageStart::FormFeed;
         }
         self.go_to_line(self.tm);
-        self.col = self.indent.max(self.lm);
+        self.go_left();
     }
 
     /// Ends the page if anything is on it.
@@ -686,7 +731,8 @@ impl Parser {
             .map(|&lm| u16::from(lm))
             .filter(|&lm| lm > 0 && lm <= self.mpp)
             .unwrap_or(1);
-        self.indent = self.lm;
+        self.lm_x = f64::from(self.pitch.column_x(self.lm));
+        self.reset_indent();
         let mut tabs: Vec<u16> = p
             .iter()
             .skip(3)
@@ -704,6 +750,7 @@ impl Parser {
             None | Some(0) => DEFAULT_MPL,
             Some(&n) => u16::from(n),
         };
+        self.page_lines = Some(mpl);
         self.tm = p
             .get(1)
             .map(|&t| u16::from(t))
@@ -798,9 +845,11 @@ impl Parser {
                 let mut tabs: Vec<u16> = p
                     .get(2..)
                     .unwrap_or_default()
-                    .chunks_exact(3)
-                    .filter_map(|t| {
-                        let v = u16::from_be_bytes([t[1], t[2]]);
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .filter_map(|&[_, hi, lo]| {
+                        let v = u16::from_be_bytes([hi, lo]);
                         (v > 0).then(|| {
                             if fixed {
                                 (f64::from(v) / self.pitch.advance()).round() as u16 + 1
@@ -816,17 +865,17 @@ impl Parser {
             }
             d2::SIL => {
                 let il = usize::from(p.get(1).copied().unwrap_or(0));
-                self.indent = if il == 0 {
-                    self.lm
-                } else {
-                    match self.htabs.get(il - 1) {
-                        Some(&t) => t,
-                        None => {
-                            self.once(format!("indent level {il} has no tab stop"));
-                            self.indent
-                        }
+                if il == 0 {
+                    self.reset_indent();
+                    return;
+                }
+                match self.htabs.get(il - 1) {
+                    Some(&t) => {
+                        self.indent = t;
+                        self.indent_x = f64::from(self.pitch.column_x(t));
                     }
-                };
+                    None => self.once(format!("indent level {il} has no tab stop")),
+                }
             }
             d2::SLS => {
                 if let Some(&ls) = p.get(1) {
@@ -836,7 +885,8 @@ impl Parser {
             d2::SHM => {
                 if let Some(lm) = be16(p, 1).filter(|&v| v > 0) {
                     self.lm = (f64::from(lm) / self.pitch.advance()).round() as u16 + 1;
-                    self.indent = self.lm;
+                    self.lm_x = f64::from(lm);
+                    self.reset_indent();
                 }
                 if let Some(rm) = be16(p, 3).filter(|&v| v > 0) {
                     self.mpp = ((f64::from(rm) / self.pitch.advance()) as u16).max(self.lm);
@@ -935,6 +985,8 @@ impl Parser {
         self.word_start = 0;
         let (paper_w, paper_h) = self.options.paper.size();
         let (mut w, mut h) = self.page_size.unwrap_or((paper_w, paper_h));
+        // How far the page's text reaches: what printed, and the page
+        // width and length the data set.
         let text_w = glyphs
             .iter()
             .map(|g| g.x + g.pitch.advance().round() as u32)
@@ -944,6 +996,13 @@ impl Parser {
             )
             .max()
             .unwrap_or(0);
+        let text_h = glyphs
+            .iter()
+            .map(|g| g.y + g.height)
+            .chain(self.page_lines.map(|l| u32::from(l) * self.spacing))
+            .max()
+            .unwrap_or(0);
+        let overflow = |w: u32, h: u32| text_w.saturating_sub(w) + text_h.saturating_sub(h);
         let orientation = match self.orientation {
             Some(o) => o,
             None if self.page_size.is_some() => {
@@ -953,7 +1012,10 @@ impl Parser {
                     Orientation::Portrait
                 }
             }
-            None if text_w > paper_w => Orientation::Landscape,
+            // The way round the text fits better; portrait when equal.
+            None if overflow(paper_h, paper_w) < overflow(paper_w, paper_h) => {
+                Orientation::Landscape
+            }
             None => Orientation::Portrait,
         };
         if (orientation == Orientation::Landscape) == (w < h) {
@@ -962,7 +1024,7 @@ impl Parser {
         let right_edge = self.pitch.column_x(self.mpp.saturating_add(1));
         let bottom_edge = u32::from(self.bm) * self.spacing;
         let margins = Margins {
-            left: self.pitch.column_x(self.lm),
+            left: self.lm_x.round() as u32,
             top: u32::from(self.tm - 1) * self.spacing,
             right: if self.auto_new_line {
                 w.saturating_sub(right_edge)
@@ -987,6 +1049,9 @@ impl Parser {
         Document { pages: self.pages }
     }
 }
+
+/// The widest stretch of blank columns filled in to join two runs.
+const MAX_FILLED_GAP: usize = 255;
 
 /// Glyphs to runs: by line, left to right; neighbours with the same look
 /// join, with blanks between them filled in when they are not underlined.
@@ -1020,11 +1085,17 @@ fn runs(glyphs: Vec<Glyph>) -> Vec<Run> {
         if let Some(r) = out.last_mut()
             && same_look(r, g)
         {
-            let next_col = r.col + r.text.chars().count() as u16;
-            let gap = g.col.saturating_sub(next_col);
-            let lined_up = g.col >= next_col && r.char_x(usize::from(g.col - r.col)) == g.x;
-            if lined_up && r.underline == g.underline && (gap == 0 || !g.underline) {
-                r.text.extend(std::iter::repeat_n(' ', usize::from(gap)));
+            // In usize: columns can be anywhere up to u16::MAX.
+            let next_col = usize::from(r.col) + r.text.chars().count();
+            let col = usize::from(g.col);
+            let lined_up = col >= next_col && r.char_x(col - usize::from(r.col)).abs_diff(g.x) <= 1;
+            let gap = col.saturating_sub(next_col);
+            if lined_up
+                && r.underline == g.underline
+                && (gap == 0 || !g.underline)
+                && gap <= MAX_FILLED_GAP
+            {
+                r.text.extend(std::iter::repeat_n(' ', gap));
                 r.text.push(g.ch);
                 continue;
             }

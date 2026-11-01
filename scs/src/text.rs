@@ -28,11 +28,12 @@ pub fn to_text(doc: &Document) -> String {
 
 /// One page as text, each line ending in a newline.
 pub fn page_text(page: &Page) -> String {
-    let mut lines: BTreeMap<u16, BTreeMap<u16, char>> = BTreeMap::new();
+    // Columns as u32: a run can reach past u16::MAX.
+    let mut lines: BTreeMap<u16, BTreeMap<u32, char>> = BTreeMap::new();
     for run in &page.runs {
         let cells = lines.entry(run.line).or_default();
         for (i, ch) in run.text.chars().enumerate() {
-            let col = run.col.saturating_add(i as u16);
+            let col = u32::from(run.col) + i as u32;
             let cell = cells.entry(col).or_insert(' ');
             if *cell == ' ' {
                 *cell = ch;
@@ -48,12 +49,12 @@ pub fn page_text(page: &Page) -> String {
     for line in 1..=last {
         let mut text = String::new();
         if let Some(cells) = lines.get(&line) {
-            let mut col = 1u16;
+            let mut col = 1u32;
             for (&c, &ch) in cells {
                 if c < col {
                     continue;
                 }
-                text.extend(std::iter::repeat_n(' ', usize::from(c - col)));
+                text.extend(std::iter::repeat_n(' ', (c - col) as usize));
                 text.push(ch);
                 col = c + 1;
             }

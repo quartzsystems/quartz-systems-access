@@ -654,3 +654,83 @@ fn every_short_input_is_safe() {
         let _ = doc(&[codes::CSP, a, 5, 1, 2, 3, 4, 0xC1]);
     }
 }
+
+#[test]
+fn the_left_margin_stays_put_when_the_pitch_changes() {
+    // Left margin at column 6 set at 10 pitch: half an inch.
+    let scd = |cd: u8| csp(class::D2, &[d2::SCD, 0, cd]);
+    let d = doc(&job(&[
+        &csp(class::SHF, &[85, 6, 80]),
+        NL,
+        &e("TEN"),
+        NL,
+        &scd(15),
+        &e("FIFTEEN AB"),
+        &[codes::CR],
+        &e("FIFTEEN"),
+    ]));
+    let ten = run_at(&d, 0, 2, 6);
+    let fifteen = run_at(&d, 0, 3, 6);
+    assert_eq!((ten.x, fifteen.x), (720, 720));
+    assert_eq!(fifteen.pitch, Pitch::P15);
+    // The next character is one 15-pitch column on.
+    assert_eq!(run_at(&d, 0, 3, 7).x, 720 + 96);
+    // Printed again after a carriage return: bold, in the same place.
+    assert!(fifteen.bold);
+    assert_eq!(d.pages[0].margins.left, 720);
+    // Absolute positions count columns of the pitch in force.
+    let d = doc(&job(&[&scd(12), &[codes::PP, pp::AHPP, 13], &e("X")]));
+    assert_eq!(run_at(&d, 0, 1, 13).x, 1440);
+}
+
+#[test]
+fn orientation_is_chosen_by_how_the_text_fits() {
+    // 132 columns at 15 pitch (8.8 inches) and 66 lines at 6 lines per
+    // inch (11 inches): portrait overflows a little, landscape a lot.
+    let scd = csp(class::D2, &[d2::SCD, 0, 15]);
+    let d = doc(&job(&[
+        &scd,
+        &csp(class::SVF, &[66, 1, 66]),
+        &csp(class::SHF, &[132, 1, 132]),
+        &e("X"),
+    ]));
+    assert_eq!(d.pages[0].orientation, Orientation::Portrait);
+    // 80 lines at 8 lines per inch (10 inches) by 132 columns at 10 pitch
+    // (13.2 inches) fits better in landscape.
+    let d = doc(&job(&[
+        &csp(class::SLD, &[9]),
+        &csp(class::SVF, &[80, 1, 80]),
+        &csp(class::SHF, &[132, 1, 132]),
+        &e("X"),
+    ]));
+    assert_eq!(d.pages[0].orientation, Orientation::Landscape);
+}
+
+/// Found by fuzzing: relative moves past column 65535 overflowed when runs
+/// were joined and when the text was laid out.
+#[test]
+fn columns_at_the_far_end_are_safe() {
+    // Columns stop at the last one: everything after prints there.
+    let mut data = Vec::new();
+    for _ in 0..300 {
+        data.extend_from_slice(&[codes::PP, pp::RHPP, 0xFF]);
+    }
+    data.extend(e("AB"));
+    data.extend_from_slice(&[codes::PP, pp::RHPP, 0xFF]);
+    data.extend(e("C"));
+    let d = doc(&data);
+    assert_eq!(d.pages.len(), 1);
+    assert!(to_text(&d).trim_end().ends_with('A'));
+    // A gap too wide to fill splits the run.
+    let d = doc(&job(&[
+        &e("A"),
+        &[codes::PP, pp::AHPP, 255],
+        &e("B"),
+        &[codes::PP, pp::RHPP, 255, codes::PP, pp::RHPP, 255],
+        &e("C"),
+    ]));
+    let runs = &d.pages[0].runs;
+    assert_eq!(runs.len(), 2);
+    assert_eq!(runs[0].text.chars().count(), 255);
+    assert_eq!(runs[1].text, "C");
+}

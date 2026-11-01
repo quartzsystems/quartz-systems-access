@@ -77,7 +77,8 @@ pub const SP: u8 = 0x40;
 pub const RSP: u8 = 0x41;
 /// Syllable hyphen: printed as a hyphen.
 pub const SHY: u8 = 0xCA;
-/// Numeric space: a blank character.
+/// Numeric space. Printed as the code page's character there (a division
+/// sign in CCSID 37), so that no text is lost.
 pub const NSP: u8 = 0xE1;
 
 /// [`PP`] functions.

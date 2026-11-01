@@ -10,6 +10,7 @@
 //!   positioned runs of text, in 1/1440 inch.
 //! - [`text`]: a plain-text rendering, one text page per page.
 //! - [`codes`]: the control codes; [`font`]: font IDs.
+//! - [`sample`]: writing SCS, and the built-in test page.
 //!
 //! Unknown or unsupported controls are skipped by their length and logged
 //! once per job at debug level. No input makes the parser panic or lose its
@@ -21,6 +22,7 @@ pub mod codes;
 pub mod font;
 pub mod model;
 pub mod parse;
+pub mod sample;
 pub mod text;
 
 pub use model::{Document, Margins, Orientation, Page, Paper, Pitch, Run};
