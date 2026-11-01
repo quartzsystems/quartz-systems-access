@@ -1600,6 +1600,7 @@ dependencies = [
  "qsa-glyph",
  "qsa-msg",
  "tn5250",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

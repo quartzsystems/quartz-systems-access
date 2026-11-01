@@ -52,10 +52,11 @@ pub fn settle() {
 /// shown all the same, since Windows antialiases text differently for a
 /// window that was never mapped.
 ///
-/// The window goes beyond the right edge of every monitor, so it is never
-/// seen and the real pointer cannot hover it. On Windows it is shown as a
-/// tool window, which FLTK maps without activating it: the user's focus and
-/// pointer stay where they were while the tests run.
+/// The window is asked for beyond the right edge of every monitor (FLTK
+/// may move it back onto one). On Windows it is shown as a tool window,
+/// which FLTK maps without activating it, and cloaked at once
+/// ([`hide_from_desktop`]): nothing appears on the desktop and the user's
+/// focus and pointer stay where they were while the tests run.
 pub fn render(mut win: Window) -> Rgb {
     let right = (0..app::screen_count())
         .map(|n| {
@@ -69,6 +70,8 @@ pub fn render(mut win: Window) -> Rgb {
         win.set_override();
     }
     win.show();
+    #[cfg(windows)]
+    hide_from_desktop(&win);
     settle();
     // FLTK may move focus to the first field as the window maps; keep parking
     // it on the window until it stays there.
@@ -84,6 +87,42 @@ pub fn render(mut win: Window) -> Rgb {
     win.hide();
     settle();
     img
+}
+
+/// Keeps a shown window off the desktop. FLTK moves every new window onto a
+/// monitor, and a window that is not really shown draws its text
+/// differently, so the window stays shown but is cloaked: the compositor
+/// never draws it. As a fallback it is also made fully transparent and
+/// click-through.
+#[cfg(windows)]
+fn hide_from_desktop(win: &Window) {
+    use windows_sys::Win32::Graphics::Dwm::{DWMWA_CLOAK, DwmSetWindowAttribute};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GWL_EXSTYLE, GetWindowLongPtrW, LWA_ALPHA, SetLayeredWindowAttributes, SetWindowLongPtrW,
+        WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_TRANSPARENT,
+    };
+    let hwnd = win.raw_handle() as windows_sys::Win32::Foundation::HWND;
+    if hwnd.is_null() {
+        return;
+    }
+    let cloak: i32 = 1;
+    // SAFETY: a window this process created and still owns; the attribute
+    // value outlives the call.
+    unsafe {
+        DwmSetWindowAttribute(
+            hwnd,
+            DWMWA_CLOAK as u32,
+            (&raw const cloak).cast(),
+            std::mem::size_of::<i32>() as u32,
+        );
+        let ex = GetWindowLongPtrW(hwnd, GWL_EXSTYLE);
+        SetWindowLongPtrW(
+            hwnd,
+            GWL_EXSTYLE,
+            ex | (WS_EX_LAYERED | WS_EX_TRANSPARENT | WS_EX_NOACTIVATE) as isize,
+        );
+        SetLayeredWindowAttributes(hwnd, 0, 0, LWA_ALPHA);
+    }
 }
 
 /// Pixels that differ by more than `tol` in any channel, and an image that
