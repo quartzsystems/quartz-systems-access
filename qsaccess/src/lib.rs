@@ -7,8 +7,10 @@
 
 pub mod about;
 pub mod app;
+pub mod files;
 pub mod log;
 pub mod mainwin;
+pub mod properties;
 pub mod sysconfig;
 
 /// Product name, as shown in titles.

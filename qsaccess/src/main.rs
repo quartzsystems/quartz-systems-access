@@ -93,6 +93,33 @@ fn main() {
                 a.show();
                 snap(&a, path);
             }
+            Some("sysconfig") => {
+                let mut d = qsaccess::sysconfig::build(&state);
+                qsa_ui::propdialog::center_on(&mut d.window, Some(&win));
+                d.window.show();
+                snap(&d.window, path);
+            }
+            Some(v) if v.starts_with("properties") => {
+                let tab = v
+                    .rsplit(':')
+                    .next()
+                    .and_then(|t| t.parse().ok())
+                    .unwrap_or(0);
+                let sys = state
+                    .borrow()
+                    .systems
+                    .as_slice()
+                    .first()
+                    .cloned()
+                    .unwrap_or_default();
+                let title = format!("System Properties - {}", sys.name);
+                let (mut d, _form) = qsaccess::properties::build(&title, &sys);
+                d.tabs().select(tab);
+                d.place(Some(&win));
+                let mut w = d.window().clone();
+                w.show();
+                snap(&w, path);
+            }
             _ => snap(&win, path),
         }
         return;
