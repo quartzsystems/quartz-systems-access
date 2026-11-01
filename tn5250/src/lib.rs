@@ -13,6 +13,7 @@
 //!   [`inbound`]: what the display sends back; [`aid`]: attention keys.
 //! - [`input`]: the keyboard; [`terminal`]: screen, records and keys together.
 //! - [`codepage`]: EBCDIC translation behind one trait.
+//! - [`replay`]: recording sessions and replaying them against goldens.
 //! - [`log`]: where the crate's log lines go.
 //!
 //! The crate is deliberately free of any user-interface dependency: the UI
@@ -25,6 +26,7 @@ pub mod input;
 pub mod log;
 pub mod negotiate;
 pub mod record;
+pub mod replay;
 pub mod screen;
 pub mod session;
 pub mod stream;

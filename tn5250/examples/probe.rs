@@ -5,7 +5,7 @@
 //! Connects, negotiates, prints the debug log and the first records, and
 //! disconnects without typing anything.
 //!
-//! `cargo run -p tn5250 --example probe -- HOST [PORT] [--tls] [--132] [--device NAME] [--hex] [--enter]`
+//! `cargo run -p tn5250 --example probe -- HOST [PORT] [--tls] [--132] [--device NAME] [--hex] [--enter] [--record FILE]`
 
 use std::time::{Duration, Instant};
 
@@ -54,6 +54,14 @@ fn main() {
     let hex = args.iter().any(|a| a == "--hex");
     let mut enter = args.iter().any(|a| a == "--enter");
     let mut term = tn5250::terminal::Terminal::new(size, 37);
+    let mut recorder = args
+        .iter()
+        .position(|a| a == "--record")
+        .and_then(|i| args.get(i + 1))
+        .map(|p| {
+            tn5250::replay::Recorder::create(std::path::Path::new(p), size, 37)
+                .expect("recording file")
+        });
     let mut screen = Screen::new(size, tn5250::codepage::default_page());
     let start = Instant::now();
     let mut records = 0;
@@ -67,15 +75,28 @@ fn main() {
                             if hex {
                                 println!("hex {}", tn5250::log::hex(&r.encode()));
                             }
+                            if let Some(rec) = recorder.as_mut() {
+                                rec.inbound(&r);
+                            }
                             let applied = term.receive(&r);
                             screen = term.screen.clone();
                             for reply in &applied.replies {
+                                if let Some(rec) = recorder.as_mut() {
+                                    rec.outbound(&term.screen, reply);
+                                }
                                 s.send(reply).ok();
                             }
                             if enter && term.screen.keyboard.is_open() {
                                 enter = false;
+                                let before = term.screen.clone();
+                                if let Some(rec) = recorder.as_mut() {
+                                    rec.key(&before, tn5250::input::Key::Enter);
+                                }
                                 for rec in term.key(tn5250::input::Key::Enter).send {
                                     println!("sent {}", tn5250::log::hex(&rec.data));
+                                    if let Some(r) = recorder.as_mut() {
+                                        r.outbound(&term.screen, &rec);
+                                    }
                                     s.send(&rec).ok();
                                 }
                             }
