@@ -6,6 +6,9 @@
 //!
 //! - [`telnet`]: transports (TCP, TLS), the Telnet codec and option
 //!   negotiation.
+//! - [`negotiate`]: TN5250E on top of Telnet, without I/O.
+//! - [`session`]: a connected session for one worker thread.
+//! - [`record`]: the 5250 record header.
 //! - [`codepage`]: EBCDIC translation behind one trait.
 //! - [`log`]: where the crate's log lines go.
 //!
@@ -14,4 +17,7 @@
 
 pub mod codepage;
 pub mod log;
+pub mod negotiate;
+pub mod record;
+pub mod session;
 pub mod telnet;
