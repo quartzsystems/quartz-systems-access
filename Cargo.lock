@@ -966,6 +966,7 @@ dependencies = [
 name = "qsaccess"
 version = "0.1.0"
 dependencies = [
+ "directories",
  "fltk",
  "qsa-config",
  "qsa-msg",

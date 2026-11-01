@@ -19,6 +19,7 @@ struct Args {
     snapshot: Option<PathBuf>,
     view: Option<String>,
     config_dir: Option<PathBuf>,
+    record: Option<PathBuf>,
     rest: Vec<String>,
 }
 
@@ -28,6 +29,7 @@ fn parse_args() -> Args {
         snapshot: None,
         view: None,
         config_dir: None,
+        record: None,
         rest: Vec::new(),
     };
     let mut it = std::env::args().skip(1).peekable();
@@ -40,6 +42,7 @@ fn parse_args() -> Args {
             "--snapshot" => args.snapshot = it.next().map(PathBuf::from),
             "--view" => args.view = it.next(),
             "--config-dir" => args.config_dir = it.next().map(PathBuf::from),
+            "--record" => args.record = it.next().map(PathBuf::from),
             _ => args.rest.push(a),
         }
     }
@@ -54,6 +57,24 @@ fn main() {
         None => ConfigDir::default_location(),
     };
     log::init(dir.as_ref().map(|d| d.path().to_owned()));
+    // The 5250 crate logs negotiation at debug level; QSACCESS_LOG=trace adds
+    // record bytes, QSACCESS_LOG=info leaves negotiation out.
+    let level = match std::env::var("QSACCESS_LOG").as_deref() {
+        Ok("trace") => tn5250::log::Level::Trace,
+        Ok("info") => tn5250::log::Level::Info,
+        _ => tn5250::log::Level::Debug,
+    };
+    tn5250::log::set_sink(level, |l, text| log::line(&format!("{} {text}", l.name())));
+    let record = args
+        .record
+        .clone()
+        .or_else(|| std::env::var_os("QSACCESS_RECORD").map(PathBuf::from))
+        .map(|p| std::path::absolute(&p).unwrap_or(p));
+    let mut forward = args.rest.clone();
+    if let Some(r) = &record {
+        forward.push("--record".into());
+        forward.push(r.display().to_string());
+    }
 
     // Single instance: a second launch hands its arguments to the first and
     // exits. Tool modes (sampler, snapshot) always run on their own.
@@ -61,7 +82,7 @@ fn main() {
     let mut server = None;
     if !tool_mode {
         let started = ipc::Endpoint::for_user(dir.as_ref().map(|d| d.path()))
-            .and_then(|ep| ipc::start(&ep, &args.rest));
+            .and_then(|ep| ipc::start(&ep, &forward));
         match started {
             Ok(ipc::Startup::Secondary) => {
                 qsaccess::log!("handed arguments to the running instance; exiting");
@@ -95,6 +116,7 @@ fn main() {
     }
 
     let state = AppState::load(dir, Credentials::platform()).shared();
+    state.borrow_mut().record_next = record;
     let (ui, rx) = mainwin::build(state.clone());
     let mut win = ui.window.clone();
     match state.borrow().settings.window {
@@ -159,13 +181,20 @@ fn main() {
         while let Some(action) = rx.recv() {
             ui.handle(action);
         }
+        qsaccess::session::pump();
         while let Ok(received) = args_rx.try_recv() {
             // Opening session files arrives in a later phase; for now the
-            // arguments are logged and the window is raised.
+            // arguments are logged, `--record` is taken, and the window is
+            // raised.
             qsaccess::log!("arguments from another instance: {received:?}");
+            if let Some(i) = received.iter().position(|a| a == "--record")
+                && let Some(p) = received.get(i + 1)
+            {
+                state.borrow_mut().record_next = Some(PathBuf::from(p));
+            }
             win.show();
         }
-        if !win.shown() {
+        if !win.shown() && !qsaccess::session::any_open() {
             break;
         }
     }

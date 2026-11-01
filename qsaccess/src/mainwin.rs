@@ -103,6 +103,13 @@ impl Ui {
     pub fn run(&self, task: Task) {
         match task {
             Task::SystemConfigurations => crate::sysconfig::open(self),
+            Task::Display5250 => {
+                if self.state.borrow().systems.is_empty() {
+                    crate::sysconfig::open(self);
+                }
+                let system = self.selected_system();
+                crate::session::start(&self.window, &self.state, system.as_deref());
+            }
             _ => self.not_available(),
         }
     }

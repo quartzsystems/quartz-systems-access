@@ -19,6 +19,8 @@ pub struct AppState {
     pub credentials: Credentials,
     /// Files that could not be read at start-up, to report as `QAD0030`.
     pub startup_errors: Vec<ReadError>,
+    /// Record the next 5250 session opened to this file (`--record`).
+    pub record_next: Option<std::path::PathBuf>,
 }
 
 /// Shared, mutable application state.
@@ -44,6 +46,7 @@ impl AppState {
             settings,
             credentials,
             startup_errors,
+            record_next: None,
         }
     }
 

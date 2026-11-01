@@ -3,22 +3,23 @@ name: ci
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      bless:
+        description: "Write new screenshot goldens and upload them (QSA_BLESS=1)"
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
+  QSA_BLESS: ${{ inputs.bless && '1' || '' }}
 
 jobs:
-  checks:
-    name: checks (${{ matrix.target }})
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-2022
-            target: x86_64-pc-windows-msvc
-          - os: ubuntu-24.04
-            target: x86_64-unknown-linux-gnu
-    runs-on: ${{ matrix.os }}
+  windows:
+    name: checks (x86_64-pc-windows-msvc)
+    runs-on: windows-2022
+    env:
+      TARGET: x86_64-pc-windows-msvc
     defaults:
       run:
         shell: bash
@@ -27,25 +28,12 @@ jobs:
 
       - uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target }}
+          targets: ${{ env.TARGET }}
           components: clippy, rustfmt
-
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build pkg-config \
-            libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev \
-            libxrender-dev libxfixes-dev libfontconfig1-dev \
-            libpango1.0-dev libcairo2-dev \
-            libwayland-dev wayland-protocols libxkbcommon-dev libdbus-1-dev \
-            libgl1-mesa-dev libglu1-mesa-dev \
-            xvfb xauth weston
 
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
+          key: ${{ env.TARGET }}
 
       - name: Clean-room check
         run: ci/cleanroom.sh
@@ -57,44 +45,130 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Build
-        run: cargo build --workspace --all-targets --target ${{ matrix.target }}
+        run: cargo build --workspace --all-targets --target $TARGET
 
       - name: tn5250 has no UI dependencies
         run: ci/deps.sh
 
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --target ${{ matrix.target }} -- -D warnings
+        run: cargo clippy --workspace --all-targets --target $TARGET -- -D warnings
 
-      # Unit tests and the screenshot tests (X11, under Xvfb).
-      - name: Test (Linux, X11 under Xvfb)
-        if: runner.os == 'Linux'
-        env:
-          FLTK_BACKEND: x11
-        run: xvfb-run -a -s "-screen 0 1280x1024x24 -dpi 96" cargo test --workspace --target ${{ matrix.target }}
-
-      # The screenshots again under Wayland, against the Wayland goldens.
-      # Weston runs on its X11 backend inside Xvfb: its seat then has a
-      # pointer, which FLTK's Wayland driver requires (it crashes on the
-      # pointer-less seat of Weston's headless backend).
-      - name: Screenshots (Linux, Wayland under Weston)
-        if: runner.os == 'Linux'
-        run: ci/wayland-screenshots.sh --target ${{ matrix.target }}
-
-      - name: Test (Windows)
-        if: runner.os == 'Windows'
-        run: cargo test --workspace --target ${{ matrix.target }}
+      # Unit tests, the replay fixtures, the console pixel test and the
+      # screenshot tests.
+      - name: Test
+        run: cargo test --workspace --target $TARGET
 
       - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: screenshots-${{ runner.os }}
+          name: screenshots-Windows
           path: target/screenshots/
           if-no-files-found: warn
 
+      - name: Upload blessed goldens
+        if: inputs.bless
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldens-windows
+          path: qsaccess/tests/goldens/windows/
+
+  linux:
+    name: checks (x86_64-unknown-linux-gnu)
+    runs-on: ubuntu-24.04
+    # The image is pinned by digest, so the libraries that draw the
+    # screenshots (FreeType, Xft, Cairo, Pango) only change when this does.
+    container:
+      image: ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef15ce1127ef852
+    env:
+      TARGET: x86_64-unknown-linux-gnu
+      DEBIAN_FRONTEND: noninteractive
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install build dependencies
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git build-essential \
+            cmake ninja-build pkg-config \
+            libx11-dev libxext-dev libxft-dev libxinerama-dev libxcursor-dev \
+            libxrender-dev libxfixes-dev libfontconfig1-dev \
+            libpango1.0-dev libcairo2-dev \
+            libwayland-dev wayland-protocols libxkbcommon-dev libdbus-1-dev \
+            libgl1-mesa-dev libglu1-mesa-dev \
+            xvfb xauth weston
+          # Only the fonts the application bundles may be used.
+          rm -rf /usr/share/fonts/* /usr/local/share/fonts/*
+          fc-cache -f
+
+      - uses: actions/checkout@v4
+
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ env.TARGET }}
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ env.TARGET }}
+
+      - name: Clean-room check
+        run: ci/cleanroom.sh
+
+      - name: Copyright headers
+        run: ci/headers.sh
+
+      - name: Format
+        run: cargo fmt --all --check
+
+      - name: Build
+        run: cargo build --workspace --all-targets --target $TARGET
+
+      - name: tn5250 has no UI dependencies
+        run: ci/deps.sh
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --target $TARGET -- -D warnings
+
+      # Unit tests, the replay fixtures, the console pixel test and the
+      # screenshot tests (X11, under Xvfb).
+      - name: Test (X11 under Xvfb)
+        env:
+          FLTK_BACKEND: x11
+        run: xvfb-run -a -s "-screen 0 1280x1024x24 -dpi 96" cargo test --workspace --target $TARGET
+
+      # The screenshots again under Wayland, against the Wayland goldens.
+      # Weston runs on its X11 backend inside Xvfb: its seat then has a
+      # pointer, which FLTK's Wayland driver requires (it crashes on the
+      # pointer-less seat of Weston's headless backend).
+      - name: Screenshots (Wayland under Weston)
+        run: ci/wayland-screenshots.sh --target $TARGET
+
+      - name: Upload screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-Linux
+          path: target/screenshots/
+          if-no-files-found: warn
+
+      - name: Upload blessed goldens
+        if: inputs.bless
+        uses: actions/upload-artifact@v4
+        with:
+          name: goldens-linux
+          path: |
+            qsaccess/tests/goldens/linux/
+            qsaccess/tests/goldens/linux-wayland/
+
   screenshot-report:
     name: screenshot report (Windows vs Linux)
-    needs: checks
+    needs: [windows, linux]
     if: always()
     runs-on: ubuntu-24.04
     steps:

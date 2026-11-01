@@ -11,6 +11,7 @@ authors.workspace = true
 fltk.workspace = true
 qsa-ui.workspace = true
 qsa-config.workspace = true
+directories.workspace = true
 qsa-msg.workspace = true
 tn5250.workspace = true
 

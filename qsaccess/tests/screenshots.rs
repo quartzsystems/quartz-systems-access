@@ -24,12 +24,18 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use fltk::{app, prelude::*, window::Window};
+use qsa_config::KeyMap;
 use qsa_config::credentials::Memory;
+use qsa_config::settings::{ColorMap, ScreenSize};
 use qsa_config::system::CaCertificate;
 use qsa_config::{AddressLookup, CredentialMode, Credentials, Settings, System, Systems};
 use qsa_ui::snapshot::{self, Rgb};
 use qsaccess::app::{AppState, Shared};
+use qsaccess::session::start::StartOptions;
+use qsaccess::session::window::{Conn, SessionWindow};
+use qsaccess::session::{cert, keymapdlg, start};
 use qsaccess::{mainwin, properties, sysconfig};
+use std::rc::Rc;
 
 fn platform() -> &'static str {
     if cfg!(windows) { "windows" } else { "linux" }
@@ -75,6 +81,7 @@ fn fixture() -> Shared {
         },
         credentials: Credentials::with(Box::new(Memory::default())),
         startup_errors: Vec::new(),
+        record_next: None,
     }
     .shared()
 }
@@ -110,7 +117,52 @@ fn render(mut win: Window) -> Rgb {
     img
 }
 
-fn views(state: &Shared) -> Vec<(String, Window)> {
+/// The final screen of a recorded session.
+fn replayed(name: &str) -> tn5250::terminal::Terminal {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!("../fixtures/replay/{name}.qsr"));
+    let rec = tn5250::replay::Recording::read(&path).expect("fixture recording");
+    tn5250::replay::replay(&rec).terminal
+}
+
+fn session(state: &Shared, keypad: bool, keep: &mut Vec<Rc<SessionWindow>>) -> Window {
+    let opts = StartOptions {
+        system: "sys1.example.net".into(),
+        size: ScreenSize::S24x80,
+        ccsid: 37,
+        device: String::new(),
+        tls: false,
+        color: ColorMap::Console,
+    };
+    let s = SessionWindow::build(state, opts, Some(1));
+    s.show_terminal(replayed("qs400-signon-24x80"), Conn::Connected);
+    s.set_keypad(keypad);
+    let w = s.window.clone();
+    keep.push(s);
+    w
+}
+
+fn certificate() -> Window {
+    let info = tn5250::telnet::x509::CertInfo {
+        subject: "CN=sys1.example.net, O=Example Corp".into(),
+        issuer: "CN=sys1.example.net, O=Example Corp".into(),
+        not_before: "2026-01-01 00:00:00 UTC".into(),
+        not_after: "2036-01-01 00:00:00 UTC".into(),
+        sha256: (0..32)
+            .map(|i| format!("{:02X}", i * 7 % 256))
+            .collect::<Vec<_>>()
+            .join(":"),
+        serial: "01".into(),
+    };
+    cert::build(
+        "sys1.example.net",
+        "invalid peer certificate: UnknownIssuer",
+        &info,
+    )
+    .0
+}
+
+fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Window)> {
     let mut out = Vec::new();
     let (ui, _rx) = mainwin::build(state.clone());
     out.push(("main".to_owned(), ui.window.clone()));
@@ -132,6 +184,17 @@ fn views(state: &Shared) -> Vec<(String, Window)> {
         d.tabs().select(i);
         out.push((format!("properties-{tab}"), d.window().clone()));
     }
+    out.push((
+        "start-5250".to_owned(),
+        start::build(state, Some("sys1.example.net")).window,
+    ));
+    out.push(("session".to_owned(), session(state, false, keep)));
+    out.push(("session-keypad".to_owned(), session(state, true, keep)));
+    out.push((
+        "keyboard-map".to_owned(),
+        keymapdlg::build("Keyboard Map - sys1.example.net", &KeyMap::defaults()).window,
+    ));
+    out.push(("certificate".to_owned(), certificate()));
     out
 }
 
@@ -199,7 +262,8 @@ fn main() -> ExitCode {
 
     let state = fixture();
     let mut failed = Vec::new();
-    for (name, win) in views(&state) {
+    let mut keep = Vec::new();
+    for (name, win) in views(&state, &mut keep) {
         let img = render(win);
         let file = format!("{name}.png");
         if let Err(e) = snapshot::write_png(&out.join(&file), &img) {

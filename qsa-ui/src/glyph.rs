@@ -62,11 +62,17 @@ pub enum Glyph {
     System,
     Check,
     Cross,
+    Connect,
+    Disconnect,
+    Copy,
+    Paste,
+    Keypad,
+    Keyboard,
 }
 
 impl Glyph {
     /// Every glyph, in a stable order.
-    pub const ALL: [Glyph; 8] = [
+    pub const ALL: [Glyph; 14] = [
         Glyph::Terminal,
         Glyph::Printer,
         Glyph::Table,
@@ -75,6 +81,12 @@ impl Glyph {
         Glyph::System,
         Glyph::Check,
         Glyph::Cross,
+        Glyph::Connect,
+        Glyph::Disconnect,
+        Glyph::Copy,
+        Glyph::Paste,
+        Glyph::Keypad,
+        Glyph::Keyboard,
     ];
 
     /// Short lower-case name, used in file names and tests.
@@ -88,6 +100,12 @@ impl Glyph {
             Glyph::System => "system",
             Glyph::Check => "check",
             Glyph::Cross => "cross",
+            Glyph::Connect => "connect",
+            Glyph::Disconnect => "disconnect",
+            Glyph::Copy => "copy",
+            Glyph::Paste => "paste",
+            Glyph::Keypad => "keypad",
+            Glyph::Keyboard => "keyboard",
         }
     }
 }
@@ -447,6 +465,130 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
             for seg in [[(3.5, 3.5), (12.5, 12.5)], [(12.5, 3.5), (3.5, 12.5)]] {
                 c.stroke(&seg, 1.9, RED);
             }
+        }
+        Glyph::Connect => {
+            // Two plugs pushed together, the cable on either side.
+            c.stroke(&[(0.5, 8.0), (3.0, 8.0)], 1.6, GRAPHITE_EDGE);
+            c.stroke(&[(13.0, 8.0), (15.5, 8.0)], 1.6, GRAPHITE_EDGE);
+            c.boxed(
+                [2.5, 4.5, 5.5, 7.0],
+                1.0,
+                t,
+                STEEL_EDGE,
+                Shade(STEEL_LIGHT, STEEL),
+            );
+            c.boxed(
+                [8.0, 4.5, 5.5, 7.0],
+                1.0,
+                t,
+                STEEL_EDGE,
+                Shade(STEEL_LIGHT, STEEL),
+            );
+            c.dot(8.0, 8.0, 1.3, LED_GREEN);
+        }
+        Glyph::Disconnect => {
+            // The two plugs apart, prongs showing, a red bar between.
+            c.stroke(&[(0.5, 8.0), (2.0, 8.0)], 1.6, GRAPHITE_EDGE);
+            c.stroke(&[(14.0, 8.0), (15.5, 8.0)], 1.6, GRAPHITE_EDGE);
+            c.boxed(
+                [1.5, 4.5, 4.5, 7.0],
+                1.0,
+                t,
+                STEEL_EDGE,
+                Shade(STEEL_LIGHT, STEEL),
+            );
+            c.stroke(&[(6.0, 6.25), (7.0, 6.25)], 1.0, STEEL_EDGE);
+            c.stroke(&[(6.0, 9.75), (7.0, 9.75)], 1.0, STEEL_EDGE);
+            c.boxed(
+                [10.0, 4.5, 4.5, 7.0],
+                1.0,
+                t,
+                STEEL_EDGE,
+                Shade(STEEL_LIGHT, STEEL),
+            );
+            c.stroke(&[(9.25, 2.5), (6.75, 13.5)], 2.2, RED_EDGE);
+            c.stroke(&[(9.25, 2.5), (6.75, 13.5)], 1.2, RED);
+        }
+        Glyph::Copy => {
+            // Two sheets, one over the other.
+            c.boxed(
+                [1.25, 0.75, 8.5, 10.5],
+                0.5,
+                t,
+                PAPER_EDGE,
+                Shade(PAPER, PAPER_SHADE),
+            );
+            c.boxed(
+                [6.25, 4.75, 8.5, 10.5],
+                0.5,
+                t,
+                PAPER_EDGE,
+                Shade(PAPER, PAPER_SHADE),
+            );
+            for y in [7.5, 9.5, 11.5] {
+                c.stroke(&[(8.0, y), (13.0, y)], 0.6, RULE);
+            }
+        }
+        Glyph::Paste => {
+            // A clipboard with a sheet on it.
+            c.boxed(
+                [1.75, 2.0, 12.5, 13.25],
+                1.0,
+                t,
+                AMBER_EDGE,
+                Shade(AMBER, AMBER_BACK),
+            );
+            c.boxed([4.0, 4.75, 8.0, 9.25], 0.25, t, PAPER_EDGE, Flat(PAPER));
+            c.boxed(
+                [5.25, 0.75, 5.5, 3.0],
+                0.75,
+                t,
+                STEEL_EDGE,
+                Shade(STEEL_LIGHT, STEEL),
+            );
+            for y in [7.25, 9.25, 11.25] {
+                c.stroke(&[(5.5, y), (10.5, y)], 0.6, RULE);
+            }
+        }
+        Glyph::Keypad => {
+            // A frame with three rows of three keys.
+            c.boxed(
+                [1.25, 0.75, 13.5, 14.5],
+                1.0,
+                t,
+                STEEL_EDGE,
+                Shade(STEEL_LIGHT, STEEL),
+            );
+            for row in 0..3 {
+                for col in 0..3 {
+                    let (x, y) = (2.75 + col as f32 * 3.75, 2.25 + row as f32 * 3.75);
+                    c.boxed(
+                        [x, y, 3.0, 3.0],
+                        0.5,
+                        t,
+                        STEEL_EDGE,
+                        Shade(PAPER, PAPER_SHADE),
+                    );
+                }
+            }
+            c.boxed([2.75, 13.0, 10.5, 1.0], 0.0, 0.0, BLUE, Flat(BLUE));
+        }
+        Glyph::Keyboard => {
+            // A keyboard: a wide body, two rows of keys and a space bar.
+            c.boxed(
+                [0.5, 3.75, 15.0, 8.75],
+                1.0,
+                t,
+                STEEL_EDGE,
+                Shade(STEEL_LIGHT, STEEL),
+            );
+            for row in 0..2 {
+                for col in 0..5 {
+                    let (x, y) = (2.0 + col as f32 * 2.5, 5.25 + row as f32 * 2.25);
+                    c.rrect(x, y, 1.75, 1.5, 0.25, Flat(PAPER));
+                }
+            }
+            c.rrect(4.5, 9.75, 7.0, 1.5, 0.25, Flat(PAPER));
         }
     }
 }

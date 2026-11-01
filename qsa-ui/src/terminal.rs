@@ -38,6 +38,7 @@ pub struct KeyPress {
 
 type KeyCb = Box<dyn FnMut(&KeyPress) -> bool>;
 type ClickCb = Box<dyn FnMut(usize, usize)>;
+type PasteCb = Box<dyn FnMut(&str)>;
 
 struct Inner {
     rows: usize,
@@ -60,6 +61,7 @@ struct Inner {
     dragged: bool,
     on_key: Option<KeyCb>,
     on_click: Option<ClickCb>,
+    on_paste: Option<PasteCb>,
 }
 
 impl Inner {
@@ -82,6 +84,7 @@ impl Inner {
             dragged: false,
             on_key: None,
             on_click: None,
+            on_paste: None,
         }
     }
 
@@ -206,12 +209,9 @@ impl TerminalView {
                 w.redraw();
                 true
             }
-            Event::KeyDown | Event::KeyUp | Event::Shortcut => {
-                if ev == Event::Shortcut
-                    && app::focus().map(|f| f.as_widget_ptr()) != Some(w.as_widget_ptr())
-                {
-                    return false;
-                }
+            // A key declined here comes back as a shortcut for the menus;
+            // it is not looked at twice.
+            Event::KeyDown | Event::KeyUp => {
                 let press = KeyPress {
                     key: app::event_key(),
                     text: app::event_text(),
@@ -227,6 +227,15 @@ impl TerminalView {
                     }
                     None => false,
                 }
+            }
+            Event::Paste => {
+                let text = app::event_text();
+                let cb = i3.borrow_mut().on_paste.take();
+                if let Some(mut cb) = cb {
+                    cb(&text);
+                    i3.borrow_mut().on_paste = Some(cb);
+                }
+                true
             }
             Event::Push => {
                 let _ = w.take_focus();
@@ -338,6 +347,11 @@ impl TerminalView {
     /// A click on a cell without a drag (0-based row and column).
     pub fn on_click(&self, cb: impl FnMut(usize, usize) + 'static) {
         self.inner.borrow_mut().on_click = Some(Box::new(cb));
+    }
+
+    /// Text pasted into the widget (after `fltk::app::paste_text`).
+    pub fn on_paste(&self, cb: impl FnMut(&str) + 'static) {
+        self.inner.borrow_mut().on_paste = Some(Box::new(cb));
     }
 
     /// The selected rectangle, top-left and bottom-right, 0-based.
