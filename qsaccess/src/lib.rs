@@ -8,6 +8,7 @@
 pub mod about;
 pub mod app;
 pub mod files;
+pub mod ipc;
 pub mod log;
 pub mod mainwin;
 pub mod properties;

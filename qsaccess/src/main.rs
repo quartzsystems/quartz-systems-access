@@ -12,7 +12,7 @@ use fltk::{app, prelude::*};
 use qsa_config::settings::Geometry;
 use qsa_config::{ConfigDir, Credentials};
 use qsaccess::app::AppState;
-use qsaccess::{about, log, mainwin};
+use qsaccess::{about, ipc, log, mainwin};
 
 struct Args {
     ui_sampler: Option<String>,
@@ -53,6 +53,23 @@ fn main() {
         None => ConfigDir::default_location(),
     };
     log::init(dir.as_ref().map(|d| d.path().to_owned()));
+
+    // Single instance: a second launch hands its arguments to the first and
+    // exits. Tool modes (sampler, snapshot) always run on their own.
+    let tool_mode = args.ui_sampler.is_some() || args.snapshot.is_some();
+    let mut server = None;
+    if !tool_mode {
+        let started = ipc::Endpoint::for_user(dir.as_ref().map(|d| d.path()))
+            .and_then(|ep| ipc::start(&ep, &args.rest));
+        match started {
+            Ok(ipc::Startup::Secondary) => {
+                qsaccess::log!("handed arguments to the running instance; exiting");
+                return;
+            }
+            Ok(ipc::Startup::Primary(s)) => server = Some(s),
+            Err(e) => qsaccess::log!("single-instance endpoint not available: {e}"),
+        }
+    }
 
     let app = app::App::default();
     if let Err(e) = qsa_ui::theme::init() {
@@ -125,10 +142,27 @@ fn main() {
         return;
     }
 
+    let (args_tx, args_rx) = std::sync::mpsc::channel::<Vec<String>>();
+    let _server = server.map(|s| {
+        s.spawn(move |received| {
+            let _ = args_tx.send(received);
+            app::awake();
+        })
+    });
+    if !args.rest.is_empty() {
+        qsaccess::log!("arguments: {:?}", args.rest);
+    }
+
     mainwin::report_startup_errors(&ui);
     while app.wait() {
         while let Some(action) = rx.recv() {
             ui.handle(action);
+        }
+        while let Ok(received) = args_rx.try_recv() {
+            // Opening session files arrives in a later phase; for now the
+            // arguments are logged and the window is raised.
+            qsaccess::log!("arguments from another instance: {received:?}");
+            win.show();
         }
         if !win.shown() {
             break;

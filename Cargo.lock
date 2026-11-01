@@ -947,6 +947,7 @@ dependencies = [
  "qsa-config",
  "qsa-msg",
  "qsa-ui",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
