@@ -42,3 +42,15 @@ Sources: the `1.01` release of `microsoft/Selawik` (`selawk.ttf`,
 `selawkb.ttf`, renamed on copy) and the `v2407.24` release of
 `microsoft/cascadia-code` (`ttf/static`). Licence texts:
 `qsa-ui/fonts/OFL-Selawik.txt` and `qsa-ui/fonts/OFL-Cascadia.txt`.
+
+## QS/400 console font
+
+| File | Licence | Use |
+|------|---------|-----|
+| `qsa-ui/assets/console/qs400-9x16.txt` | MIT, Copyright (C) 2026, Quartz Systems (the QS/400 repository's `LICENSE`) | The 5250 display, its status line and Print Screen |
+
+The QS/400 service console's 9×16 bitmap font, drawn by Quartz Systems,
+vendored byte for byte from `github.com/quartzsystems/quartz-systems-400`
+(`lic/console/font/qs400-9x16.txt`, commit `79cbecf8`). Its palette and drawing
+rules are reproduced in `qsa-ui/src/console.rs`. Provenance:
+`qsa-ui/assets/console/SOURCE.md`.

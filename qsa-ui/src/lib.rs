@@ -7,6 +7,7 @@
 //! Call [`theme::init`] once, after creating the FLTK app and before making
 //! any widget.
 
+pub mod console;
 pub mod controls;
 pub mod glyph;
 pub mod groupbox;
@@ -19,6 +20,7 @@ pub mod snapshot;
 pub mod statusbar;
 pub mod tabs;
 pub mod taskpane;
+pub mod terminal;
 pub mod theme;
 pub mod toolbar;
 

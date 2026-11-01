@@ -10,6 +10,7 @@ authors.workspace = true
 [dependencies]
 fltk.workspace = true
 qsa-msg.workspace = true
+tn5250.workspace = true
 
 [lints]
 workspace = true

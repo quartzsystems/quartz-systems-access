@@ -1,0 +1,14 @@
+# Renders recorded 5250 screens with the QS/400 service console's own code,
+# for the terminal widget's pixel test. Not part of the workspace: it builds
+# against a QS/400 checkout in ../qs400 (see ../README.md).
+[package]
+name = "console-reference"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+console = { path = "../qs400/lic/console" }
+tn5250-qs400 = { package = "tn5250", path = "../qs400/ui/tn5250" }
+
+[workspace]

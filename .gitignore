@@ -1,2 +1,5 @@
 /target
 /screenshots-out
+/fixtures/console/qs400
+/fixtures/console/reference/target
+/fixtures/console/reference/Cargo.lock
