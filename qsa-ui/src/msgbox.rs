@@ -22,6 +22,11 @@ use crate::theme::{self, colors};
 /// Widest line of text, in pixels; longer lines wrap.
 const WRAP: i32 = 360;
 
+/// FLTK draws a left- or right-aligned label 3 pixels in from each side of
+/// its widget, and wraps it there: a frame for text measured `w` wide must
+/// be `w + 2 * LABEL_INSET` wide, starting `LABEL_INSET` to the left.
+pub const LABEL_INSET: i32 = 3;
+
 /// `text` with every word wider than `max` pixels broken onto more lines,
 /// since FLTK wraps only at spaces. A word (a long path, say) breaks after
 /// a `\` or `/` where it can, else between any two characters. `width`
@@ -130,7 +135,13 @@ impl MessageBox {
             icon.set_frame(FrameType::NoBox);
             icon.set_image(Some(glyph::image(g, Size::Large)));
         }
-        let mut text = Frame::new(text_x, m, w - text_x - m, body_h, None);
+        let mut text = Frame::new(
+            text_x - LABEL_INSET,
+            m,
+            w - text_x - m + 2 * LABEL_INSET,
+            body_h,
+            None,
+        );
         text.set_label(&body);
         text.set_align(Align::Left | Align::Top | Align::Inside | Align::Wrap);
         text.set_label_size(theme::UI_SIZE);

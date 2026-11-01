@@ -36,9 +36,11 @@ pub fn details_window(m: &Message) -> Window {
     let w = DETAILS_W;
     let margin = 10;
     let inner = w - 2 * margin - 2 * CONTENT_SIDE;
+    // FLTK wraps the body labels this far in from their frames.
+    let wrap = inner - 2 * crate::msgbox::LABEL_INSET;
     draw::set_font(theme::UI_FONT, theme::UI_SIZE);
-    let section_h = |text: &str| draw::wrap_measure(text, inner, false).1.max(14);
-    let fit = |t: &str| crate::msgbox::break_long_words(t, inner, draw::width);
+    let section_h = |text: &str| draw::wrap_measure(text, wrap, false).1.max(14);
+    let fit = |t: &str| crate::msgbox::break_long_words(t, wrap, draw::width);
     let sections = [
         ("Message", fit(&m.text)),
         ("Cause", fit(&m.cause)),

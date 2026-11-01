@@ -530,10 +530,13 @@ pub fn installed_dir(scope: Scope) -> Option<PathBuf> {
 /// second, for up to 20 minutes, until the file is gone. If that cannot
 /// start, the file goes at the next restart (with administrator rights) or
 /// stays in the temporary folder.
+///
+/// `cmd` gets a console without a window, which `ping` inherits. Not
+/// `DETACHED_PROCESS`: with it Windows ignores `CREATE_NO_WINDOW`, and
+/// `ping`, finding no console, opens a visible one.
 pub fn delete_after_exit(path: &Path) {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    const DETACHED_PROCESS: u32 = 0x0000_0008;
     let p = path.display();
     let cmd = format!(
         "for /L %i in (1,1,1200) do @(ping -n 2 127.0.0.1 >nul & del /f /q \"{p}\" 2>nul & if not exist \"{p}\" exit /b 0)"
@@ -541,7 +544,7 @@ pub fn delete_after_exit(path: &Path) {
     let started = std::process::Command::new("cmd.exe")
         .args(["/d", "/c"])
         .raw_arg(&cmd)
-        .creation_flags(CREATE_NO_WINDOW | DETACHED_PROCESS)
+        .creation_flags(CREATE_NO_WINDOW)
         .spawn()
         .is_ok();
     if !started {

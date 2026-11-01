@@ -47,12 +47,27 @@ pub fn settle() {
     }
 }
 
-/// Shows a window beyond the right edge of the screen (so the real pointer
-/// cannot hover anything), lets it draw, captures it and hides it. The
-/// capture draws offscreen, so the window's screen position does not matter.
+/// Shows a window, lets it draw, captures it and hides it. The capture draws
+/// offscreen, so the window's screen position does not matter; it must be
+/// shown all the same, since Windows antialiases text differently for a
+/// window that was never mapped.
+///
+/// The window goes beyond the right edge of every monitor, so it is never
+/// seen and the real pointer cannot hover it. On Windows it is shown as a
+/// tool window, which FLTK maps without activating it: the user's focus and
+/// pointer stay where they were while the tests run.
 pub fn render(mut win: Window) -> Rgb {
-    let (sw, _) = app::screen_size();
-    win.set_pos(sw as i32 + 200, 0);
+    let right = (0..app::screen_count())
+        .map(|n| {
+            let (x, _, w, _) = app::screen_xywh(n);
+            x + w
+        })
+        .max()
+        .unwrap_or_else(|| app::screen_size().0 as i32);
+    win.set_pos(right + 200, 0);
+    if cfg!(windows) {
+        win.set_override();
+    }
     win.show();
     settle();
     // FLTK may move focus to the first field as the window maps; keep parking
