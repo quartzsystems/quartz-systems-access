@@ -117,10 +117,15 @@ fn main() {
     let state = AppState::load(dir, Credentials::platform()).shared();
     let (ui, rx) = mainwin::build(state.clone());
     let mut win = ui.window.clone();
-    match state.borrow().settings.window {
-        Some(g) if args.snapshot.is_none() => win.resize(g.x, g.y, g.w, g.h),
-        _ => qsa_ui::propdialog::center_on(&mut win, None),
+    // The main window keeps the size it last had, and always opens in the
+    // middle of the screen.
+    if let Some(g) = state.borrow().settings.window
+        && args.snapshot.is_none()
+    {
+        let (_, _, sw, sh) = qsa_ui::propdialog::work_area();
+        win.set_size(g.w.clamp(320, sw.max(320)), g.h.clamp(240, sh.max(240)));
     }
+    qsa_ui::propdialog::center_on(&mut win, None);
 
     if let Some(path) = &args.snapshot {
         win.show();
@@ -140,8 +145,16 @@ fn main() {
     // until it is asked for.
     let mut main_shown = false;
     if !request.opens_window() {
-        win.show();
+        qsa_ui::propdialog::show_placed(&mut win);
         main_shown = true;
+        qsaccess::log!(
+            "main window at {},{} {}x{}, in work area {:?}",
+            win.x(),
+            win.y(),
+            win.w(),
+            win.h(),
+            qsa_ui::propdialog::work_area()
+        );
     }
     mainwin::report_startup_errors(&ui);
     serve(&ui, &state, &request, &mut main_shown);
@@ -198,7 +211,7 @@ fn serve(ui: &Ui, state: &Shared, r: &Request, main_shown: &mut bool) {
         ui.run(Task::SessionManager);
     }
     if !r.opens_window() {
-        ui.window.clone().show();
+        qsa_ui::propdialog::show_placed(&mut ui.window.clone());
         *main_shown = true;
     }
 }

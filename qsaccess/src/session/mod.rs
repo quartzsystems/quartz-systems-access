@@ -53,7 +53,7 @@ pub fn start(parent: &fltk::window::Window, state: &Shared, system: Option<&str>
     let s = SessionWindow::build(state, opts, None);
     s.place(Some(parent));
     cascade(&s);
-    s.window.clone().show();
+    qsa_ui::propdialog::show_placed(&mut s.window.clone());
     s.connect(None);
     SESSIONS.with(|v| v.borrow_mut().push(s));
 }
@@ -85,7 +85,7 @@ pub fn open_file(state: &Shared, path: &Path, parent: Option<&dyn WindowExt>) ->
     let s = SessionWindow::build_file(state, doc, Some(path.clone()), None);
     s.place(parent);
     cascade(&s);
-    s.window.clone().show();
+    qsa_ui::propdialog::show_placed(&mut s.window.clone());
     if s.auto_connect() {
         s.connect(None);
     }

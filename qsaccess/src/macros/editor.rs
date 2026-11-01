@@ -197,7 +197,7 @@ pub fn show(m: MacroFile, file: Option<PathBuf>, parent: Option<&dyn WindowExt>)
     let e = build(m, file);
     let mut w = e.window.clone();
     center_on(&mut w, parent);
-    w.show();
+    qsa_ui::propdialog::show_placed(&mut w);
     EDITORS.with(|v| v.borrow_mut().push(e));
 }
 

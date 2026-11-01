@@ -316,7 +316,14 @@ pub fn open(state: &Shared, parent: Option<&dyn WindowExt>) {
             m
         }
     };
-    mgr.window.clone().show();
+    qsa_ui::propdialog::show_placed(&mut mgr.window.clone());
+}
+
+/// Closes Session Manager if it is open.
+pub fn close() {
+    if let Some(m) = MANAGER.with(|m| m.borrow_mut().take()) {
+        m.window.clone().hide();
+    }
 }
 
 /// Whether Session Manager is open.

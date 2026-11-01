@@ -128,7 +128,7 @@ impl PropertyDialog {
         mut validate: impl FnMut() -> Result<(), String>,
     ) -> bool {
         self.place(parent);
-        self.window.show();
+        show_placed(&mut self.window);
         while self.window.shown() {
             app::wait();
             match self.request.take() {
@@ -164,8 +164,29 @@ pub fn center_on(win: &mut Window, parent: Option<&dyn WindowExt>) {
             win.set_pos(x.max(0), y.max(0));
         }
         _ => {
-            let (sw, sh) = app::screen_size();
-            win.set_pos(((sw as i32) - win.w()) / 2, ((sh as i32) - win.h()) / 2);
+            let (sx, sy, sw, sh) = work_area();
+            win.set_pos(
+                sx + ((sw - win.w()) / 2).max(0),
+                sy + ((sh - win.h()) / 2).max(0),
+            );
         }
     }
+}
+
+/// Shows a window where it was placed. On Windows a new window can come up
+/// somewhere else (under the pointer, on another monitor); it is moved
+/// back as soon as it exists.
+pub fn show_placed(win: &mut Window) {
+    let (x, y) = (win.x(), win.y());
+    win.show();
+    if (win.x(), win.y()) != (x, y) {
+        win.set_pos(x, y);
+    }
+}
+
+/// The usable part (without the taskbar or panels) of the main monitor:
+/// x, y, width, height. The main monitor is the one at the origin of the
+/// desktop, wherever the pointer is.
+pub fn work_area() -> (i32, i32, i32, i32) {
+    app::screen_work_area(app::screen_num(0, 0))
 }

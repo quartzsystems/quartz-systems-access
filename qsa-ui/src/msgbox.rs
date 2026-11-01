@@ -161,7 +161,7 @@ impl MessageBox {
     pub fn run(&self, parent: Option<&dyn WindowExt>) -> usize {
         let (mut win, answer) = self.build();
         center_on(&mut win, parent);
-        win.show();
+        crate::propdialog::show_placed(&mut win);
         while win.shown() {
             app::wait();
             if let Some(i) = answer.take() {

@@ -93,7 +93,7 @@ pub fn details_window(m: &Message) -> Window {
 pub fn show_details(parent: Option<&dyn WindowExt>, m: &Message) {
     let mut win = details_window(m);
     center_on(&mut win, parent);
-    win.show();
+    crate::propdialog::show_placed(&mut win);
     while win.shown() {
         app::wait();
     }

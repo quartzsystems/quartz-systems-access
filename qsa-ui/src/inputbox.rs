@@ -115,7 +115,7 @@ impl InputBox {
     pub fn run(&self, parent: Option<&dyn WindowExt>) -> Option<String> {
         let (mut win, field, answer) = self.build();
         center_on(&mut win, parent);
-        win.show();
+        crate::propdialog::show_placed(&mut win);
         match &field {
             Field::Plain(i) => {
                 let _ = i.clone().take_focus();
