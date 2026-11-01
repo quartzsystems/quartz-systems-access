@@ -8,6 +8,8 @@
 //!   `.qkm` or `.qsm` runs this);
 //! - `qsaccess --session-manager`: show Session Manager;
 //! - `--record <file>`: record the next 5250 session;
+//! - `--quit`: close every window and exit (the installer sends this before
+//!   an upgrade, once the user has agreed);
 //! - nothing: show the main window.
 //!
 //! A second launch hands its request to the running instance over
@@ -22,6 +24,7 @@ pub struct Request {
     pub open: Vec<PathBuf>,
     pub session_manager: bool,
     pub record: Option<PathBuf>,
+    pub quit: bool,
     /// Arguments not understood; logged.
     pub unknown: Vec<String>,
 }
@@ -41,6 +44,7 @@ impl Request {
             match a.as_str() {
                 "open" if r.open.is_empty() && !opening => opening = true,
                 "--session-manager" => r.session_manager = true,
+                "--quit" => r.quit = true,
                 "--record" => {
                     if let Some(p) = it.next() {
                         r.record = Some(absolute(PathBuf::from(p)));
@@ -70,13 +74,16 @@ impl Request {
             out.push("--record".to_owned());
             out.push(p.display().to_string());
         }
+        if self.quit {
+            out.push("--quit".to_owned());
+        }
         out
     }
 
     /// Whether the request opens a window of its own, so the main window
     /// need not be shown for it.
     pub fn opens_window(&self) -> bool {
-        !self.open.is_empty() || self.session_manager
+        !self.open.is_empty() || self.session_manager || self.quit
     }
 }
 
@@ -97,6 +104,7 @@ mod tests {
         assert!(r.opens_window());
         let r = Request::parse(&s(&["--session-manager"]));
         assert!(r.session_manager && r.open.is_empty() && r.opens_window());
+        assert!(Request::parse(&s(&["--quit"])).quit);
         let r = Request::parse(&s(&["--record", "x.qsr", "--bogus"]));
         assert!(r.record.as_ref().unwrap().is_absolute());
         assert_eq!(r.unknown, ["--bogus"]);

@@ -200,6 +200,14 @@ fn main() {
 /// Does what a launch asked for. A request that opens nothing raises the
 /// main window.
 fn serve(ui: &Ui, state: &Shared, r: &Request, main_shown: &mut bool) {
+    if r.quit {
+        qsaccess::log!("asked to quit");
+        qsaccess::session::close_all();
+        qsaccess::manager::close();
+        qsaccess::macros::editor::close_all();
+        ui.window.clone().hide();
+        return;
+    }
     if let Some(p) = &r.record {
         state.borrow_mut().record_next = Some(p.clone());
     }

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "tn5250", "xtask"]
+members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "tn5250", "xtask"]
 
 [workspace.package]
 version = "1.0.0"
@@ -25,6 +25,9 @@ sha2 = "0.10"
 
 png = "0.17"
 ico = "0.4"
+zstd = "0.13"
+tar = "0.4"
+windows = "0.61"
 
 qsa-ui = { path = "qsa-ui" }
 qsa-glyph = { path = "qsa-glyph" }

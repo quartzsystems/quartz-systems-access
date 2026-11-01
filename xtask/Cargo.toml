@@ -11,6 +11,7 @@ publish = false
 [dependencies]
 qsa-glyph.workspace = true
 qsa-icons.workspace = true
+qsa-install = { path = "../qsa-install" }
 
 [lints]
 workspace = true

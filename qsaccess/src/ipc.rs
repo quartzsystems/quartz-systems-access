@@ -149,6 +149,12 @@ mod unix {
             &self.path
         }
 
+        /// Whether an instance is listening here. Nothing is sent: the
+        /// instance sees an empty connection and ignores it.
+        pub fn is_running(&self) -> bool {
+            UnixStream::connect(&self.path).is_ok()
+        }
+
         /// Sends `args` to the instance listening here. False if none is.
         pub fn send(&self, args: &[String]) -> io::Result<bool> {
             match UnixStream::connect(&self.path) {
@@ -320,6 +326,23 @@ mod windows {
         /// The full pipe name.
         pub fn name(&self) -> &str {
             &self.name
+        }
+
+        /// Whether an instance is listening here. Nothing is sent: the
+        /// instance sees an empty connection and ignores it.
+        pub fn is_running(&self) -> bool {
+            for _ in 0..10 {
+                match OpenOptions::new().write(true).open(&self.name) {
+                    Ok(_) => return true,
+                    Err(e) if e.raw_os_error() == Some(ERROR_PIPE_BUSY as i32) => {
+                        let name = wide(&self.name);
+                        // SAFETY: `name` is a NUL-terminated UTF-16 string.
+                        unsafe { WaitNamedPipeW(name.as_ptr(), 200) };
+                    }
+                    Err(_) => return false,
+                }
+            }
+            true
         }
 
         /// Sends `args` to the instance listening here. False if none is.
@@ -517,6 +540,27 @@ mod tests {
             assert!(matches!(start(&ep, &a).unwrap(), Startup::Secondary));
             assert_eq!(rx.recv_timeout(Duration::from_secs(5)).unwrap(), a);
         }
+    }
+
+    #[test]
+    fn is_running_sends_nothing() {
+        let ep = endpoint("ping");
+        assert!(!ep.is_running());
+        let Startup::Primary(server) = start(&ep, &[]).unwrap() else {
+            panic!("first start should be primary");
+        };
+        let (tx, rx) = mpsc::channel();
+        let _server = server.spawn(move |a| tx.send(a).unwrap());
+        assert!(ep.is_running());
+        assert!(ep.send(&args(&["--quit"])).unwrap());
+        assert_eq!(
+            rx.recv_timeout(Duration::from_secs(5)).unwrap(),
+            args(&["--quit"])
+        );
+        assert!(
+            rx.recv_timeout(Duration::from_millis(300)).is_err(),
+            "the check is not a request"
+        );
     }
 
     #[test]

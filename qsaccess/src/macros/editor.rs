@@ -213,6 +213,13 @@ pub fn pump() {
     EDITORS.with(|v| v.borrow_mut().retain(|e| e.window.shown()));
 }
 
+/// Closes every editor. Unsaved changes are lost.
+pub fn close_all() {
+    for e in EDITORS.with(|v| v.borrow_mut().drain(..).collect::<Vec<_>>()) {
+        e.window.clone().hide();
+    }
+}
+
 /// Whether any editor is open.
 pub fn any_open() -> bool {
     EDITORS.with(|v| v.borrow().iter().any(|e| e.window.shown()))

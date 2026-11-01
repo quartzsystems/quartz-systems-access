@@ -161,6 +161,14 @@ fn cascade(s: &SessionWindow) {
     }
 }
 
+/// Disconnects and closes every session window.
+pub fn close_all() {
+    for s in windows() {
+        s.disconnect();
+        s.window.clone().hide();
+    }
+}
+
 /// The open session windows, in the order they were opened.
 pub fn windows() -> Vec<Rc<SessionWindow>> {
     SESSIONS.with(|v| {
