@@ -79,7 +79,7 @@ pub fn open_file(state: &Shared, path: &Path, parent: Option<&dyn WindowExt>) ->
         }
     };
     let configured = state.borrow().systems.contains(&doc.system.name);
-    if !configured && !create_system(state, &mut doc, parent) {
+    if !configured && !create_system(state, &mut doc.system, parent) {
         return false;
     }
     let s = SessionWindow::build_file(state, doc, Some(path.clone()), None);
@@ -100,8 +100,12 @@ pub fn open_file(state: &Shared, path: &Path, parent: Option<&dyn WindowExt>) ->
 
 /// `QAD2003`: offers to create the system a session file names, filled in
 /// from the file's host, Telnet port and TLS setting. True once it exists.
-fn create_system(state: &Shared, doc: &mut SessionFile, parent: Option<&dyn WindowExt>) -> bool {
-    let m = qsa_msg::message(id::SYSTEM_NOT_CONFIGURED, &[&doc.system.name]);
+pub(crate) fn create_system(
+    state: &Shared,
+    system: &mut qsa_config::qsd::SystemRef,
+    parent: Option<&dyn WindowExt>,
+) -> bool {
+    let m = qsa_msg::message(id::SYSTEM_NOT_CONFIGURED, &[&system.name]);
     crate::log!("{m}");
     loop {
         let mut mb = MessageBox::new(
@@ -124,7 +128,7 @@ fn create_system(state: &Shared, doc: &mut SessionFile, parent: Option<&dyn Wind
             _ => return false,
         }
     }
-    let template = doc.system.to_system();
+    let template = system.to_system();
     let created = {
         let st = state.borrow();
         crate::properties::create(parent, &st.systems, &template)
@@ -140,7 +144,7 @@ fn create_system(state: &Shared, doc: &mut SessionFile, parent: Option<&dyn Wind
         crate::log!("systems not saved: {e}");
     }
     crate::log!("{}", qsa_msg::message(id::SYSTEM_ADDED, &[&name]));
-    doc.system.name = name;
+    system.name = name;
     true
 }
 

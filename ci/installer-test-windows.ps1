@@ -143,6 +143,14 @@ if ($Scope -eq 'user') {
     Start-Sleep 4
     $p = Get-CimInstance Win32_Process -Filter "Name = 'qsaccess.exe'" | Where-Object { $_.CommandLine -like "*open*qsa-test-$PID.qsd*" }
     Check ($p -ne $null) "double-clicking a .qsd runs qsaccess open"
+    # A printer session file opens in the same running instance.
+    $qsp = Join-Path $env:TEMP "qsa-test-$PID.qsp"
+    "[qsaccess]`nkind = `"printer`"`nversion = 1`n`n[system]`nname = `"$system`"`nhost = `"10.42.70.150`"`n`n[printer]`ndevice_name = `"QSATSTPRT`"`n`n[session]`nauto_connect = false`n" | Set-Content -Encoding utf8 $qsp
+    Start-Process $qsp
+    Start-Sleep 4
+    $p = Get-CimInstance Win32_Process -Filter "Name = 'qsaccess.exe'" | Where-Object { $_.CommandLine -like "*open*qsa-test-$PID.qsp*" }
+    Check ($p -ne $null) "double-clicking a .qsp runs qsaccess open"
+    Remove-Item $qsp
     Start-Process "$dir\qsaccess.exe" -ArgumentList '--quit' -Wait
     Start-Sleep 2
     Check ((Get-Process qsaccess -ErrorAction SilentlyContinue) -eq $null) "qsaccess --quit closes it"

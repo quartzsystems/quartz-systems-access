@@ -39,6 +39,7 @@ pub const PANE_W: i32 = 268;
 pub enum Task {
     DataTransfer,
     Display5250,
+    Printer5250,
     IntegratedFileSystem,
     PrinterOutput,
     RunCommand,
@@ -57,6 +58,7 @@ impl Task {
         match self {
             Task::DataTransfer => "Data Transfer",
             Task::Display5250 => "5250 Display",
+            Task::Printer5250 => "5250 Printer",
             Task::IntegratedFileSystem => "Integrated File System",
             Task::PrinterOutput => "Printer Output",
             Task::RunCommand => "Run Command",
@@ -78,6 +80,7 @@ pub const TASK_GROUPS: &[(Option<&str>, &[Task])] = &[
         &[
             Task::DataTransfer,
             Task::Display5250,
+            Task::Printer5250,
             Task::IntegratedFileSystem,
             Task::PrinterOutput,
             Task::RunCommand,
@@ -121,6 +124,13 @@ impl Ui {
                 }
                 let system = self.selected_system();
                 crate::session::start(&self.window, &self.state, system.as_deref());
+            }
+            Task::Printer5250 => {
+                if self.state.borrow().systems.is_empty() {
+                    crate::sysconfig::open(self);
+                }
+                let system = self.selected_system();
+                crate::printer::start(&self.window, &self.state, system.as_deref());
             }
             _ => self.not_available(),
         }
@@ -348,6 +358,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
     );
     for task in [
         Task::Display5250,
+        Task::Printer5250,
         Task::DataTransfer,
         Task::IntegratedFileSystem,
         Task::PrinterOutput,

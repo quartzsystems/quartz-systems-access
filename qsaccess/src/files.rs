@@ -8,14 +8,18 @@ use std::path::{Path, PathBuf};
 
 use fltk::dialog::{NativeFileChooser, NativeFileChooserOptions, NativeFileChooserType};
 
-/// Session files, for choosers.
-pub const SESSION_PATTERN: &str = "Session Files (*.qsd)\tAll Files (*)";
+/// Session files, display and printer, for choosers.
+pub const SESSION_PATTERN: &str = "Session Files (*.{qsd,qsp})\tDisplay Session Files (*.qsd)\tPrinter Session Files (*.qsp)\tAll Files (*)";
+/// Display session files, for saving one.
+pub const DISPLAY_PATTERN: &str = "Display Session Files (*.qsd)\tAll Files (*)";
+/// Printer session files, for saving one.
+pub const PRINTER_PATTERN: &str = "Printer Session Files (*.qsp)\tAll Files (*)";
 /// Keyboard map files, for choosers.
 pub const KEYMAP_PATTERN: &str = "Keyboard Map Files (*.qkm)\tAll Files (*)";
 /// Macro files, for choosers.
 pub const MACRO_PATTERN: &str = "Macro Files (*.qsm)\tAll Files (*)";
 /// Every file QS/400 Access for Desktop opens, for File > Open.
-pub const ANY_PATTERN: &str = "QS/400 Access Files (*.{qsd,qkm,qsm})\tSession Files (*.qsd)\tKeyboard Map Files (*.qkm)\tMacro Files (*.qsm)\tAll Files (*)";
+pub const ANY_PATTERN: &str = "QS/400 Access Files (*.{qsd,qsp,qkm,qsm})\tSession Files (*.{qsd,qsp})\tKeyboard Map Files (*.qkm)\tMacro Files (*.qsm)\tAll Files (*)";
 
 /// The directory a chooser opens in: the user's home, else the current one.
 fn start_dir() -> PathBuf {
@@ -143,7 +147,11 @@ mod tests {
     fn filters_in_native_form() {
         assert_eq!(
             native_filter(SESSION_PATTERN),
-            "Session Files\t*.qsd\nAll Files\t*"
+            "Session Files\t*.{qsd,qsp}\nDisplay Session Files\t*.qsd\nPrinter Session Files\t*.qsp\nAll Files\t*"
+        );
+        assert_eq!(
+            native_filter(DISPLAY_PATTERN),
+            "Display Session Files\t*.qsd\nAll Files\t*"
         );
         assert_eq!(
             native_filter("Certificates (*.{pem,crt,cer})\tAll Files (*)"),

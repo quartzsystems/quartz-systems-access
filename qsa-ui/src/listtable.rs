@@ -65,6 +65,7 @@ struct Model {
     sort: Option<(usize, bool)>,
     on_select: Option<Callback>,
     on_activate: Option<Callback>,
+    on_context: Option<Callback>,
     on_header: Option<Box<dyn FnMut(usize)>>,
 }
 
@@ -131,6 +132,7 @@ impl ListTable {
             sort: None,
             on_select: None,
             on_activate: None,
+            on_context: None,
             on_header: None,
         }));
 
@@ -223,6 +225,16 @@ impl ListTable {
                     }
                     if double {
                         fire(&m, true);
+                    }
+                }
+                // The right button asks for the row's context menu, once the
+                // row under the pointer is selected.
+                if app::event_mouse_button() == app::MouseButton::Right {
+                    let cb = m.borrow_mut().on_context.take();
+                    if let Some(mut cb) = cb {
+                        let sel = m.borrow().selected.filter(|_| in_rows);
+                        cb(sel);
+                        m.borrow_mut().on_context = Some(cb);
                     }
                 }
                 true
@@ -380,6 +392,12 @@ impl ListTable {
     /// Called on double-click or Enter on a row.
     pub fn on_activate(&mut self, cb: impl FnMut(Option<usize>) + 'static) {
         self.model.borrow_mut().on_activate = Some(Box::new(cb));
+    }
+
+    /// Calls `cb` with the row under the pointer (selected first), or
+    /// `None` outside the rows, when the right mouse button is pressed.
+    pub fn on_context(&mut self, cb: impl FnMut(Option<usize>) + 'static) {
+        self.model.borrow_mut().on_context = Some(Box::new(cb));
     }
 
     /// The underlying table.

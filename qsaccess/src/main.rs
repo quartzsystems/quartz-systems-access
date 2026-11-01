@@ -163,6 +163,7 @@ fn main() {
             ui.handle(action);
         }
         qsaccess::session::pump();
+        qsaccess::printer::pump();
         qsaccess::manager::pump();
         qsaccess::macros::editor::pump();
         ui.refresh_recent();
@@ -173,6 +174,7 @@ fn main() {
         }
         if !win.shown()
             && !qsaccess::session::any_open()
+            && !qsaccess::printer::any_open()
             && !qsaccess::manager::shown()
             && !qsaccess::macros::editor::any_open()
         {
@@ -203,6 +205,7 @@ fn serve(ui: &Ui, state: &Shared, r: &Request, main_shown: &mut bool) {
     if r.quit {
         qsaccess::log!("asked to quit");
         qsaccess::session::close_all();
+        qsaccess::printer::close_all();
         qsaccess::manager::close();
         qsaccess::macros::editor::close_all();
         ui.window.clone().hide();

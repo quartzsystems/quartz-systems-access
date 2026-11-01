@@ -897,7 +897,7 @@ impl SessionWindow {
             (dir, name)
         };
         let Some(path) =
-            files::choose_save_in(&dir, "Save Session As", files::SESSION_PATTERN, &name)
+            files::choose_save_in(&dir, "Save Session As", files::DISPLAY_PATTERN, &name)
         else {
             return;
         };
@@ -1639,7 +1639,7 @@ impl SessionWindow {
 
 /// What a system's CA list says to trust: PEM text kept in the
 /// configuration, and PEM files read now.
-fn trust_for(system: &System) -> Trust {
+pub(crate) fn trust_for(system: &System) -> Trust {
     let mut pems = Vec::new();
     for ca in &system.ca_certificates {
         match ca {

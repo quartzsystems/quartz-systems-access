@@ -15,10 +15,12 @@ pub mod macros;
 pub mod mainwin;
 pub mod manager;
 pub mod open;
+pub mod printer;
 pub mod properties;
 pub mod recent;
 pub mod request;
 pub mod session;
+pub mod shell;
 pub mod sysconfig;
 
 /// Product name, as shown in titles.

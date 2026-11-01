@@ -1612,7 +1612,9 @@ dependencies = [
  "qsa-glyph",
  "qsa-icons",
  "qsa-msg",
+ "qsa-print",
  "qsa-ui",
+ "scs",
  "tn5250",
  "windows-sys 0.61.2",
 ]

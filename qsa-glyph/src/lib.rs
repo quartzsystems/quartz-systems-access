@@ -70,11 +70,13 @@ pub enum Glyph {
     Paste,
     Keypad,
     Keyboard,
+    /// A padlock: the connection is encrypted.
+    Lock,
 }
 
 impl Glyph {
     /// Every glyph, in a stable order.
-    pub const ALL: [Glyph; 14] = [
+    pub const ALL: [Glyph; 15] = [
         Glyph::Terminal,
         Glyph::Printer,
         Glyph::Table,
@@ -89,6 +91,7 @@ impl Glyph {
         Glyph::Paste,
         Glyph::Keypad,
         Glyph::Keyboard,
+        Glyph::Lock,
     ];
 
     /// Short lower-case name, used in file names and tests.
@@ -108,6 +111,7 @@ impl Glyph {
             Glyph::Paste => "paste",
             Glyph::Keypad => "keypad",
             Glyph::Keyboard => "keyboard",
+            Glyph::Lock => "lock",
         }
     }
 }
@@ -492,6 +496,29 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
                 Shade(STEEL_LIGHT, STEEL),
             );
             c.dot(8.0, 8.0, 1.3, LED_GREEN);
+        }
+        Glyph::Lock => {
+            // A steel shackle over an amber body with a keyhole.
+            let shackle: Vec<(f32, f32)> = (0..=12)
+                .map(|i| {
+                    let a = std::f32::consts::PI * (1.0 + i as f32 / 12.0);
+                    (8.0 + 3.2 * a.cos(), 6.5 + 3.2 * a.sin())
+                })
+                .collect();
+            let mut path = vec![(4.8, 8.0)];
+            path.extend(shackle);
+            path.push((11.2, 8.0));
+            c.stroke(&path, 2.2, STEEL_EDGE);
+            c.stroke(&path, 1.0, STEEL);
+            c.boxed(
+                [2.5, 7.5, 11.0, 7.5],
+                1.0,
+                t,
+                AMBER_EDGE,
+                Shade(AMBER_LIGHT, AMBER),
+            );
+            c.dot(8.0, 10.4, 1.1, AMBER_EDGE);
+            c.stroke(&[(8.0, 10.4), (8.0, 12.6)], 1.0, AMBER_EDGE);
         }
         Glyph::Disconnect => {
             // The two plugs apart, prongs showing, a red bar between.

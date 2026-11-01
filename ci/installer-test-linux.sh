@@ -112,6 +112,26 @@ if [ "$scope" = user ] && command -v gio >/dev/null; then
     [ -z "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] && display=(xvfb-run -a)
     "${display[@]}" bash -c "gio open '$qsd' & sleep 6; pgrep -af 'qsaccess open' >/tmp/qsa-open.$$; '$dir/qsaccess' --quit; sleep 2" >/dev/null 2>&1
     check 'grep -q "qsaccess.* open .*\.qsd" /tmp/qsa-open.$$' "opening a .qsd with gio open runs qsaccess open"
+    qsp="$(mktemp --suffix=.qsp)"
+    cat >"$qsp" <<QSP
+[qsaccess]
+kind = "printer"
+version = 1
+
+[system]
+name = "10.42.70.150"
+host = "10.42.70.150"
+
+[printer]
+device_name = "QSATSTPRT"
+
+[session]
+auto_connect = false
+QSP
+    check 'gio info -a standard::content-type "$qsp" | grep -q application/x-qsaccess-printer' "a .qsp is application/x-qsaccess-printer"
+    "${display[@]}" bash -c "gio open '$qsp' & sleep 6; pgrep -af 'qsaccess open' >/tmp/qsa-open.$$; '$dir/qsaccess' --quit; sleep 2" >/dev/null 2>&1
+    check 'grep -q "qsaccess.* open .*\.qsp" /tmp/qsa-open.$$' "opening a .qsp with gio open runs qsaccess open"
+    rm -f "$qsp"
     check '! pgrep -x qsaccess >/dev/null' "qsaccess --quit closes it"
     rm -f /tmp/qsa-open.$$
     [ "$made_settings" = 1 ] && rm -rf "$settings"

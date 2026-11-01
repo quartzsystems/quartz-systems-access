@@ -209,6 +209,72 @@ fn long_path_message() -> Window {
     qsa_ui::msgdetails::message_box(&m).build().0
 }
 
+/// A printer session on sys1.example.net, device QSAPRT01.
+fn printer_file(state: &Shared) -> qsa_config::qsp::PrinterFile {
+    let st = state.borrow();
+    let sys = st.systems.get("sys1.example.net").expect("fixture system");
+    let mut f = qsa_config::qsp::PrinterFile::new(sys, "QSAPRT01");
+    f.printer.title = "Office output".into();
+    f.output.pdf_folder = "/home/user/Documents/Quartz Access/Printer Output/QSAPRT01".into();
+    f.output.also_save_text = true;
+    f
+}
+
+/// The printer window, connected over TLS, with three jobs received.
+fn printer_session(state: &Shared) -> Window {
+    use qsaccess::printer::spool::{JobRecord, JobStatus, Problem};
+    use qsaccess::printer::window::{PrinterWindow, State};
+    let p = PrinterWindow::build(state, printer_file(state), None);
+    let dir =
+        std::path::PathBuf::from("/home/user/Documents/Quartz Access/Printer Output/QSAPRT01");
+    let job = |time: i64, pages: usize, bytes: u64, name: &str, status: JobStatus| JobRecord {
+        time,
+        title: "QSAPRT01".into(),
+        pages,
+        bytes,
+        target: qsa_config::qsp::Target::Pdf,
+        pdf: Some(dir.join(name)),
+        text: None,
+        printer: None,
+        status,
+        spool: None,
+        problems: Vec::new(),
+    };
+    let mut failed = job(
+        1_793_570_400,
+        3,
+        9_412,
+        "QSAPRT01-20261101-140000-0003.pdf",
+        JobStatus::Failed,
+    );
+    failed.pdf = None;
+    failed.problems = vec![Problem::Folder(dir.clone(), "access denied".into())];
+    p.show_as(
+        State::Ready,
+        true,
+        vec![
+            job(
+                1_793_563_200,
+                2,
+                3_210,
+                "QSAPRT01-20261101-120000-0001.pdf",
+                JobStatus::Done,
+            ),
+            job(
+                1_793_566_800,
+                14,
+                48_660,
+                "QSAPRT01-20261101-130000-0002.pdf",
+                JobStatus::Done,
+            ),
+            failed,
+        ],
+    );
+    let w = p.window.clone();
+    std::mem::forget(p);
+    w
+}
+
 fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Window)> {
     let mut out = Vec::new();
     let (ui, _rx) = mainwin::build(state.clone());
@@ -266,6 +332,15 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
             ],
         )
         .window,
+    ));
+    out.push((
+        "start-5250-printer".to_owned(),
+        qsaccess::printer::start::build(state, Some("sys1.example.net")).window,
+    ));
+    out.push(("printer-session".to_owned(), printer_session(state)));
+    out.push((
+        "printer-settings".to_owned(),
+        qsaccess::printer::settings::build(&printer_file(state)).window,
     ));
     out.push(("macro-editor".to_owned(), macro_editor()));
     out.push(("macro-step".to_owned(), macro_step()));

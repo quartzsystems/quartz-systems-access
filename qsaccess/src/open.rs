@@ -7,6 +7,7 @@
 //! second instance hands to the running one.
 //!
 //! - `.qsd`: a session window, connected if the file says so.
+//! - `.qsp`: a printer window, likewise.
 //! - `.qkm`: Load Keyboard Map, into an open session or new sessions.
 //! - `.qsm`: the Macro editor.
 //!
@@ -16,7 +17,7 @@ use std::path::Path;
 
 use fltk::prelude::*;
 use qsa_config::doc::{self, FileError};
-use qsa_config::{qkm, qsd, qsm};
+use qsa_config::{qkm, qsd, qsm, qsp};
 
 use crate::app::Shared;
 
@@ -24,6 +25,7 @@ use crate::app::Shared;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
     Session,
+    Printer,
     Keymap,
     Macro,
 }
@@ -35,6 +37,7 @@ pub fn kind_of(path: &Path) -> Result<Kind, FileError> {
         .map(|e| e.to_string_lossy().to_ascii_lowercase());
     match ext.as_deref() {
         Some(qsd::EXTENSION) => return Ok(Kind::Session),
+        Some(qsp::EXTENSION) => return Ok(Kind::Printer),
         Some(qkm::EXTENSION) => return Ok(Kind::Keymap),
         Some(qsm::EXTENSION) => return Ok(Kind::Macro),
         _ => {}
@@ -42,6 +45,7 @@ pub fn kind_of(path: &Path) -> Result<Kind, FileError> {
     let text = doc::read(path)?;
     for (kind, k) in [
         (doc::DISPLAY, Kind::Session),
+        (doc::PRINTER, Kind::Printer),
         (doc::KEYMAP, Kind::Keymap),
         (doc::MACRO, Kind::Macro),
     ] {
@@ -64,6 +68,9 @@ pub fn open_path(state: &Shared, path: &Path, parent: Option<&dyn WindowExt>) {
         Ok(Kind::Session) => {
             crate::session::open_file(state, &path, parent);
         }
+        Ok(Kind::Printer) => {
+            crate::printer::open_file(state, &path, parent);
+        }
         Ok(Kind::Keymap) => crate::session::loadmap::run(state, &path, parent),
         Ok(Kind::Macro) => crate::macros::open_file(state, &path, parent),
         Err(e) => {
@@ -85,9 +92,12 @@ mod tests {
         assert_eq!(kind_of(Path::new("a.QSD")).unwrap(), Kind::Session);
         assert_eq!(kind_of(Path::new("a.qkm")).unwrap(), Kind::Keymap);
         assert_eq!(kind_of(Path::new("a.qsm")).unwrap(), Kind::Macro);
+        assert_eq!(kind_of(Path::new("a.QSP")).unwrap(), Kind::Printer);
         let p = dir.join("mail-attachment.txt");
         std::fs::write(&p, "[qsaccess]\nkind = \"macro\"\nversion = 1\n").unwrap();
         assert_eq!(kind_of(&p).unwrap(), Kind::Macro);
+        std::fs::write(&p, "[qsaccess]\nkind = \"printer\"\nversion = 1\n").unwrap();
+        assert_eq!(kind_of(&p).unwrap(), Kind::Printer);
         std::fs::write(&p, "[qsaccess]\nkind = \"display\"\nversion = 7\n").unwrap();
         assert!(matches!(kind_of(&p), Err(FileError::Newer(7))));
         std::fs::write(&p, "[qsaccess]\nkind = \"systems\"\nversion = 1\n").unwrap();
