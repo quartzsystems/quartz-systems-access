@@ -1,0 +1,16 @@
+[package]
+name = "xtask"
+description = "Build tasks for QS/400 Access for Desktop: icons and the installer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+qsa-glyph.workspace = true
+qsa-icons.workspace = true
+
+[lints]
+workspace = true

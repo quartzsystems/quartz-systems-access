@@ -3,3 +3,6 @@ rustflags = ["-C", "target-feature=+crt-static"]
 
 [env]
 CMAKE_TOOLCHAIN_FILE = { value = "cmake/static-crt.cmake", relative = true }
+
+[alias]
+xtask = "run --package xtask --"

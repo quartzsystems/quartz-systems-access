@@ -1,9 +1,9 @@
 [workspace]
 resolver = "3"
-members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "tn5250"]
+members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "tn5250", "xtask"]
 
 [workspace.package]
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT"
@@ -23,7 +23,12 @@ rustls-pki-types = { version = "1.12", features = ["std"] }
 rustls-native-certs = "0.8"
 sha2 = "0.10"
 
+png = "0.17"
+ico = "0.4"
+
 qsa-ui = { path = "qsa-ui" }
+qsa-glyph = { path = "qsa-glyph" }
+qsa-icons = { path = "qsa-icons" }
 qsa-config = { path = "qsa-config" }
 qsa-msg = { path = "qsa-msg" }
 tn5250 = { path = "tn5250" }

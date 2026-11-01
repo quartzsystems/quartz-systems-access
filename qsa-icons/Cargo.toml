@@ -1,0 +1,16 @@
+[package]
+name = "qsa-icons"
+description = "Icon files and Windows resources for QS/400 Access for Desktop, made at build time"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+qsa-glyph.workspace = true
+png.workspace = true
+ico.workspace = true
+
+[lints]
+workspace = true
