@@ -13,8 +13,8 @@
 //! - [`qsc`]: `.qsc` export and import.
 //! - [`doc`]: what session, keyboard map and macro files share: header,
 //!   version check, unknown keys, relative paths.
-//! - [`qsd`], [`qkm`], [`qsm`]: display session, keyboard map and macro
-//!   files.
+//! - [`qsd`], [`qsp`], [`qkm`], [`qsm`]: display session, printer session,
+//!   keyboard map and macro files.
 //! - [`migrate`]: moving the earlier per-system keyboard maps into session
 //!   files.
 //! - [`credentials`]: saved passwords, in the platform credential store only.
@@ -27,6 +27,7 @@ pub mod qkm;
 pub mod qsc;
 pub mod qsd;
 pub mod qsm;
+pub mod qsp;
 pub mod settings;
 pub mod store;
 pub mod system;

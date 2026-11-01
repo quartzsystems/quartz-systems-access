@@ -11,6 +11,7 @@
 //! | Start menu | the user's Programs | All Users' Programs |
 //!
 //! - File types: ProgIDs `QuartzSystems.Access.Session.1`,
+//!   `QuartzSystems.Access.PrinterSession.1`,
 //!   `QuartzSystems.Access.KeyMap.1` and `QuartzSystems.Access.Macro.1`
 //!   under `Software\Classes`, each with `DefaultIcon` and
 //!   `shell\open\command` = `"<dir>\qsaccess.exe" open "%1"`; then
@@ -50,12 +51,18 @@ use crate::manifest::{Hive, Item, Manifest, Scope};
 use crate::plan::Options;
 
 /// The file types registered: (extension, ProgID, description, icon).
-pub const FILE_TYPES: [(&str, &str, &str, &str); 3] = [
+pub const FILE_TYPES: [(&str, &str, &str, &str); 4] = [
     (
         ".qsd",
         "QuartzSystems.Access.Session.1",
         "QS/400 Display Session",
         "application-x-qsaccess-session",
+    ),
+    (
+        ".qsp",
+        "QuartzSystems.Access.PrinterSession.1",
+        "QS/400 Printer Session",
+        "application-x-qsaccess-printer",
     ),
     (
         ".qkm",

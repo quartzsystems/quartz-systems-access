@@ -22,12 +22,18 @@ use crate::manifest::{Item, Manifest, Scope};
 use crate::plan::{Options, home};
 
 /// The MIME types registered: (type, glob, comment, `[qsaccess]` kind).
-pub const MIME_TYPES: [(&str, &str, &str, &str); 3] = [
+pub const MIME_TYPES: [(&str, &str, &str, &str); 4] = [
     (
         "application/x-qsaccess-session",
         "*.qsd",
         "QS/400 display session",
         "display",
+    ),
+    (
+        "application/x-qsaccess-printer",
+        "*.qsp",
+        "QS/400 printer session",
+        "printer",
     ),
     (
         "application/x-qsaccess-keymap",
@@ -477,6 +483,8 @@ mod tests {
         for want in [
             "type=\"application/x-qsaccess-session\"",
             "<glob pattern=\"*.qsd\"/>",
+            "<glob pattern=\"*.qsp\"/>",
+            "kind = &quot;printer&quot;",
             "<glob pattern=\"*.qkm\"/>",
             "<glob pattern=\"*.qsm\"/>",
             "value=\"[qsaccess]\" offset=\"0:256\"",
@@ -494,7 +502,7 @@ mod tests {
             "{d}"
         );
         assert!(d.contains(
-            "MimeType=application/x-qsaccess-session;application/x-qsaccess-keymap;application/x-qsaccess-macro;\n"
+            "MimeType=application/x-qsaccess-session;application/x-qsaccess-printer;application/x-qsaccess-keymap;application/x-qsaccess-macro;\n"
         ));
         assert!(!desktop_entry(Path::new("/x"), false).contains("MimeType"));
         assert!(

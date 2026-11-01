@@ -75,8 +75,12 @@ check 'grep -q "^Exec=\"$dir/qsaccess\" --session-manager$" "$share/applications
 check 'grep -q "application/x-qsaccess-session" "$share/mime/packages/quartz-access.xml"' "MIME package"
 check '[ -f "$share/icons/hicolor/256x256/apps/quartz-access.png" ]' "application icon"
 check '[ -f "$share/icons/hicolor/48x48/mimetypes/application-x-qsaccess-session.png" ]' "file-type icon"
+check 'grep -q "application/x-qsaccess-printer" "$share/mime/packages/quartz-access.xml"' "MIME package has printer sessions"
+check '[ -f "$share/icons/hicolor/48x48/mimetypes/application-x-qsaccess-printer.png" ]' "printer session icon"
+check 'grep -q "application/x-qsaccess-printer" "$share/applications/quartz-access.desktop"' "desktop entry opens printer sessions"
 if command -v update-mime-database >/dev/null; then
     check 'grep -q "application/x-qsaccess-session" "$share/mime/globs2"' "MIME database knows *.qsd"
+    check 'grep -q "application/x-qsaccess-printer:\*\.qsp" "$share/mime/globs2"' "MIME database knows *.qsp"
 fi
 
 # Open a session file the way a file manager does.

@@ -22,7 +22,7 @@ pub struct Options {
     /// Start menu folder (Windows) or applications menu entries (Linux).
     pub start_menu: bool,
     pub desktop_shortcut: bool,
-    /// Register `.qsd`, `.qkm` and `.qsm`.
+    /// Register `.qsd`, `.qsp`, `.qkm` and `.qsm`.
     pub associations: bool,
 }
 

@@ -2,14 +2,14 @@
 // licensed under the terms of the MIT license which can be found in the
 // root directory of this project.
 
-//! What session (`.qsd`), keyboard map (`.qkm`) and macro (`.qsm`) files
-//! have in common.
+//! What session (`.qsd`, `.qsp`), keyboard map (`.qkm`) and macro (`.qsm`)
+//! files have in common.
 //!
 //! Each is TOML whose first table is the header:
 //!
 //! ```toml
 //! [qsaccess]
-//! kind = "display"   # or "keymap", "macro"
+//! kind = "display"   # or "printer", "keymap", "macro"
 //! version = 1
 //! ```
 //!
@@ -35,6 +35,8 @@ pub type Extra = toml::Table;
 
 /// `kind` of a display session file.
 pub const DISPLAY: &str = "display";
+/// `kind` of a printer session file.
+pub const PRINTER: &str = "printer";
 /// `kind` of a keyboard map file.
 pub const KEYMAP: &str = "keymap";
 /// `kind` of a macro file.
@@ -104,6 +106,7 @@ impl FileError {
 fn kind_name(kind: &str) -> &'static str {
     match kind {
         DISPLAY => "a display session",
+        PRINTER => "a printer session",
         KEYMAP => "a keyboard map",
         MACRO => "a macro",
         _ => "this kind of file",

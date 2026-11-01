@@ -30,8 +30,9 @@ $settingsDir = "$env:APPDATA\Quartz Systems\Access"
 
 # What an install can touch: these keys and folders, listed in full.
 $keys = @(
-    "$hive\Software\Classes\.qsd", "$hive\Software\Classes\.qkm", "$hive\Software\Classes\.qsm",
+    "$hive\Software\Classes\.qsd", "$hive\Software\Classes\.qsp", "$hive\Software\Classes\.qkm", "$hive\Software\Classes\.qsm",
     "$hive\Software\Classes\QuartzSystems.Access.Session.1",
+    "$hive\Software\Classes\QuartzSystems.Access.PrinterSession.1",
     "$hive\Software\Classes\QuartzSystems.Access.KeyMap.1",
     "$hive\Software\Classes\QuartzSystems.Access.Macro.1",
     "$hive\Software\Microsoft\Windows\CurrentVersion\Uninstall\QuartzSystemsAccess"
@@ -100,6 +101,10 @@ Check ($v.ProductName -eq 'QS/400 Access for Desktop' -and $v.CompanyName -eq 'Q
 $cmd = (Get-ItemProperty "$hive\Software\Classes\QuartzSystems.Access.Session.1\shell\open\command").'(default)'
 Check ($cmd -eq "`"$dir\qsaccess.exe`" open `"%1`"") "open command for .qsd"
 Check ((Get-ItemProperty "$hive\Software\Classes\.qsd").'(default)' -eq 'QuartzSystems.Access.Session.1') ".qsd names its ProgID"
+$cmd = (Get-ItemProperty "$hive\Software\Classes\QuartzSystems.Access.PrinterSession.1\shell\open\command").'(default)'
+Check ($cmd -eq "`"$dir\qsaccess.exe`" open `"%1`"") "open command for .qsp"
+Check ((Get-ItemProperty "$hive\Software\Classes\.qsp").'(default)' -eq 'QuartzSystems.Access.PrinterSession.1') ".qsp names its ProgID"
+Check ((Get-ItemProperty "$hive\Software\Classes\QuartzSystems.Access.PrinterSession.1\DefaultIcon").'(default)' -like '*application-x-qsaccess-printer*') ".qsp has its own icon"
 Check (Test-Path "$programs\Quartz Systems\QS400 Access for Desktop.lnk") "Start menu shortcut"
 Check (Test-Path "$programs\Quartz Systems\Session Manager.lnk") "Session Manager shortcut"
 Check (Test-Path "$desktop\QS400 Access for Desktop.lnk") "desktop shortcut"

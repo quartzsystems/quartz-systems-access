@@ -131,7 +131,7 @@ It snapshots the registry keys and folders an install can touch, then:
 
 1. a damaged copy of the installer exits 2 and changes nothing;
 2. silent install exits 0: program, uninstaller, manifest, version information,
-   `.qsd`/`.qkm`/`.qsm` ProgIDs and open commands, Start menu and desktop
+   `.qsd`/`.qsp`/`.qkm`/`.qsm` ProgIDs and open commands, Start menu and desktop
    shortcuts, the Apps entry;
 3. (just me) a `.qsd` opened through the shell starts `qsaccess open <file>`,
    and `qsaccess --quit` closes it;
