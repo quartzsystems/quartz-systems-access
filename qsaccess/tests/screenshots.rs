@@ -120,7 +120,7 @@ fn certificate() -> Window {
 /// time zone does not matter).
 fn session_manager(state: &Shared) -> Window {
     use qsa_config::qsd::SessionFile;
-    use qsaccess::manager::{self, Entry};
+    use qsaccess::manager::{self, Doc, Entry};
     let dir = std::path::PathBuf::from("/home/user/Documents/Quartz Access/Sessions");
     let mut entries = Vec::new();
     for (title, sys, wide, dev) in [
@@ -137,10 +137,18 @@ fn session_manager(state: &Shared) -> Window {
         entries.push(Entry {
             path: dir.join(format!("{title}.qsd")),
             folder: dir.clone(),
-            file: Ok(f),
+            file: Ok(Doc::Display(f)),
             last_used: None,
         });
     }
+    let mut p = qsa_config::qsp::PrinterFile::new(&System::new("sys1.example.net"), "QSAPRT01");
+    p.printer.title = "Office output".into();
+    entries.push(Entry {
+        path: dir.join("Office output.qsp"),
+        folder: dir.clone(),
+        file: Ok(Doc::Printer(p)),
+        last_used: None,
+    });
     entries.push(Entry {
         path: dir.join("old.qsd"),
         folder: dir.clone(),
@@ -148,7 +156,7 @@ fn session_manager(state: &Shared) -> Window {
         last_used: None,
     });
     let m = manager::build(state);
-    let pick = [dir.join("Payroll.qsd"), dir.join("Development.qsd")];
+    let pick = [dir.join("Payroll.qsd"), dir.join("Office output.qsp")];
     m.show(entries, &pick, 1);
     m.window.clone()
 }

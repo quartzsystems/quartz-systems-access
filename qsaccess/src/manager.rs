@@ -2,14 +2,16 @@
 // licensed under the terms of the MIT license which can be found in the
 // root directory of this project.
 
-//! Session Manager: the session files in the Sessions folder and any other
-//! folders the user adds, with New, Start, Edit, Copy, Rename, Delete, Add
-//! folder, Remove folder and Refresh.
+//! Session Manager: the session files (display, `.qsd`, and printer,
+//! `.qsp`) in the Sessions folder and any other folders the user adds, with
+//! New, Start, Edit, Copy, Rename, Delete, Add folder, Remove folder and
+//! Refresh. A Type column and icon tell the kinds apart, and the list can
+//! show one kind only.
 //!
 //! - It is a window of the one `qsaccess` process; each session it starts
 //!   opens in a window of its own.
-//! - Several rows can be selected; Start opens them all. A double-click
-//!   starts one.
+//! - Several rows can be selected, of either kind; Start opens them all,
+//!   each in its own window. A double-click starts one.
 //! - A click on a column header sorts by it; another click reverses.
 //! - The folders are looked at every five seconds, and the list follows
 //!   files added, changed or removed by anything else.
@@ -25,6 +27,7 @@ use fltk::button::Button;
 use fltk::prelude::*;
 use fltk::window::Window;
 use qsa_config::qsd::{self, SessionFile};
+use qsa_config::qsp::{self, PrinterFile};
 use qsa_config::settings::same_path;
 use qsa_msg::{Message, id};
 use qsa_ui::controls::{self, Switch};
@@ -46,14 +49,95 @@ pub const H: i32 = 440;
 pub const POLL: Duration = Duration::from_secs(5);
 
 /// Column titles and widths.
-pub const COLUMNS: [(&str, i32); 6] = [
-    ("Title", 170),
-    ("System", 130),
+pub const COLUMNS: [(&str, i32); 7] = [
+    ("Title", 160),
+    ("Type", 64),
+    ("System", 120),
     ("Screen size", 78),
     ("Device name", 86),
     ("Last used", 112),
-    ("Location", 140),
+    ("Location", 120),
 ];
+
+/// The Last used column, which sorts by time.
+const LAST_USED: usize = 5;
+
+/// A session file of either kind.
+#[derive(Clone, Debug)]
+pub enum Doc {
+    Display(SessionFile),
+    Printer(PrinterFile),
+}
+
+impl Doc {
+    /// Reads a display or printer session file, by its extension.
+    pub fn load(path: &Path) -> Result<Doc, String> {
+        if is_printer(path) {
+            PrinterFile::load(path).map(Doc::Printer)
+        } else {
+            SessionFile::load(path).map(Doc::Display)
+        }
+        .map_err(|e| e.to_string())
+    }
+
+    pub fn display_title(&self, path: Option<&Path>) -> String {
+        match self {
+            Doc::Display(f) => f.display_title(path),
+            Doc::Printer(f) => f.display_title(path),
+        }
+    }
+
+    pub fn set_title(&mut self, title: String) {
+        match self {
+            Doc::Display(f) => f.session.title = title,
+            Doc::Printer(f) => f.printer.title = title,
+        }
+    }
+
+    pub fn title_field(&self) -> &str {
+        match self {
+            Doc::Display(f) => &f.session.title,
+            Doc::Printer(f) => &f.printer.title,
+        }
+    }
+
+    pub fn save(&self, path: &Path) -> std::io::Result<()> {
+        match self {
+            Doc::Display(f) => f.save(path),
+            Doc::Printer(f) => f.save(path),
+        }
+    }
+}
+
+/// Whether `path` names a printer session file.
+fn is_printer(path: &Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case(qsp::EXTENSION))
+}
+
+/// What the list shows.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Filter {
+    All,
+    Display,
+    Printer,
+}
+
+impl Filter {
+    pub const CHOICES: [(Filter, &str); 3] = [
+        (Filter::All, "All sessions"),
+        (Filter::Display, "Display sessions"),
+        (Filter::Printer, "Printer sessions"),
+    ];
+
+    fn admits(self, e: &Entry) -> bool {
+        match self {
+            Filter::All => true,
+            Filter::Display => !e.printer(),
+            Filter::Printer => e.printer(),
+        }
+    }
+}
 
 /// One session file in a listed folder.
 #[derive(Clone, Debug)]
@@ -61,7 +145,7 @@ pub struct Entry {
     pub path: PathBuf,
     pub folder: PathBuf,
     /// The file, or why it could not be read.
-    pub file: Result<SessionFile, String>,
+    pub file: Result<Doc, String>,
     pub last_used: Option<i64>,
 }
 
@@ -78,18 +162,29 @@ impl Entry {
         }
     }
 
+    /// Whether it is a printer session.
+    pub fn printer(&self) -> bool {
+        is_printer(&self.path)
+    }
+
     /// The text of each column.
-    pub fn columns(&self) -> [String; 6] {
+    pub fn columns(&self) -> [String; 7] {
         let (system, size, device) = match &self.file {
-            Ok(f) => (
+            Ok(Doc::Display(f)) => (
                 f.system.name.clone(),
                 f.session.screen_size.label().to_owned(),
                 f.session.device_name.clone(),
+            ),
+            Ok(Doc::Printer(f)) => (
+                f.system.name.clone(),
+                String::new(),
+                f.printer.device_name.clone(),
             ),
             Err(_) => ("(cannot be read)".to_owned(), String::new(), String::new()),
         };
         [
             self.title(),
+            if self.printer() { "Printer" } else { "Display" }.to_owned(),
             system,
             size,
             device,
@@ -101,9 +196,18 @@ impl Entry {
     fn cells(&self) -> Vec<LCell> {
         let mut out: Vec<LCell> = self.columns().into_iter().map(LCell::from).collect();
         if self.file.is_err() {
-            out[1].status = Status::Error;
+            out[2].status = Status::Error;
         }
         out
+    }
+
+    /// The row's icon.
+    fn glyph(&self) -> Glyph {
+        if self.printer() {
+            Glyph::Printer
+        } else {
+            Glyph::Terminal
+        }
     }
 }
 
@@ -120,14 +224,22 @@ pub fn folders(state: &Shared) -> Vec<PathBuf> {
     out
 }
 
+/// The session files of both kinds directly in `dir`, sorted.
+fn session_files(dir: &Path) -> Vec<PathBuf> {
+    let mut v = qsd::files_in(dir);
+    v.extend(qsp::files_in(dir));
+    v.sort();
+    v
+}
+
 /// Reads every session file in `folders`.
 pub fn scan(folders: &[PathBuf], state: &Shared) -> Vec<Entry> {
     let st = state.borrow();
     let mut out = Vec::new();
     for folder in folders {
-        for path in qsd::files_in(folder) {
+        for path in session_files(folder) {
             out.push(Entry {
-                file: SessionFile::load(&path).map_err(|e| e.to_string()),
+                file: Doc::load(&path),
                 last_used: st.settings.last_used(&path),
                 folder: folder.clone(),
                 path,
@@ -144,7 +256,7 @@ type Signature = Vec<(PathBuf, u64, Option<SystemTime>)>;
 fn signature(folders: &[PathBuf]) -> Signature {
     folders
         .iter()
-        .flat_map(|d| qsd::files_in(d))
+        .flat_map(|d| session_files(d))
         .map(|p| {
             let meta = std::fs::metadata(&p).ok();
             let len = meta.as_ref().map_or(0, |m| m.len());
@@ -160,7 +272,7 @@ pub fn sort(entries: &mut [Entry], col: usize, ascending: bool) {
     use std::cmp::Ordering;
     let order = |o: Ordering| if ascending { o } else { o.reverse() };
     entries.sort_by(|a, b| {
-        let o = if col == 4 {
+        let o = if col == LAST_USED {
             match (a.last_used, b.last_used) {
                 (Some(x), Some(y)) => order(x.cmp(&y)),
                 (Some(_), None) => Ordering::Less,
@@ -187,6 +299,7 @@ enum Req {
     RemoveFolder,
     Refresh,
     Sort(usize),
+    Filter,
     Close,
 }
 
@@ -194,6 +307,7 @@ enum Req {
 pub struct Manager {
     pub window: Window,
     pub list: ListTable,
+    filter: fltk::menu::Choice,
     status: StatusLine,
     state: Shared,
     rx: chan::Receiver<Req>,
@@ -224,8 +338,17 @@ pub fn build(state: &Shared) -> Rc<Manager> {
     window.size_range(560, 320, 0, 0);
 
     let lw = W - 3 * m - bw;
-    let lh = H - 2 * m - bh - 8;
-    let mut list = ListTable::new(m, m, lw, lh, &COLUMNS);
+    let fh = theme::FIELD_H;
+    controls::label(m, m, 44, fh, "Show:");
+    let mut filter = controls::combo(m + 44, m, 170, fh);
+    for (_, name) in Filter::CHOICES {
+        filter.add_choice(name);
+    }
+    filter.set_value(0);
+    filter.emit_to(tx, Req::Filter);
+    let top = m + fh + 6;
+    let lh = H - top - m - bh - 8;
+    let mut list = ListTable::new(m, top, lw, lh, &COLUMNS);
     list.set_multi(true);
     let bx = m + lw + m;
     let mut buttons = fltk::group::Group::new(bx, m, bw, lh, None);
@@ -273,6 +396,7 @@ pub fn build(state: &Shared) -> Rc<Manager> {
     let mgr = Rc::new(Manager {
         window,
         list,
+        filter,
         status,
         state: state.clone(),
         rx,
@@ -394,9 +518,14 @@ impl Manager {
 
     /// Shows `entries` (sorted here), selecting those in `keep`.
     pub fn show(&self, mut entries: Vec<Entry>, keep: &[PathBuf], folder_count: usize) {
+        let filter = Filter::CHOICES
+            .get(self.filter.value().max(0) as usize)
+            .map_or(Filter::All, |(f, _)| *f);
+        entries.retain(|e| filter.admits(e));
         let (col, asc) = self.sort.get();
         sort(&mut entries, col, asc);
         let rows: Vec<Vec<LCell>> = entries.iter().map(Entry::cells).collect();
+        let icons: Vec<Option<Glyph>> = entries.iter().map(|e| Some(e.glyph())).collect();
         let picks: Vec<usize> = entries
             .iter()
             .enumerate()
@@ -407,6 +536,7 @@ impl Manager {
         *self.entries.borrow_mut() = entries;
         let mut list = self.list.clone();
         list.set_rows(rows);
+        list.set_icons(icons);
         list.set_sort(Some((col, asc)));
         list.select_rows(&picks);
         self.update_buttons();
@@ -467,21 +597,66 @@ impl Manager {
                 self.sort.set((c, if col == c { !asc } else { true }));
                 self.reload(&[]);
             }
+            Req::Filter => self.reload(&[]),
             Req::Close => self.window.clone().hide(),
         }
     }
 
+    /// Opens every selected session, each in the window for its kind.
     fn start(&self) {
         let sel = self.selected();
         for e in &sel {
-            crate::session::open_file(&self.state, &e.path, Some(&self.window));
+            if e.printer() {
+                crate::printer::open_file(&self.state, &e.path, Some(&self.window));
+            } else {
+                crate::session::open_file(&self.state, &e.path, Some(&self.window));
+            }
         }
         if !sel.is_empty() {
             self.reload(&[]);
         }
     }
 
+    /// Asks which kind of session to make, then makes it.
     fn new_session(&self) {
+        let kind = MessageBox::new("New Session", "Which kind of session do you want to make?")
+            .buttons(&["Display...", "Printer...", "Cancel"], 0, 2)
+            .run(Some(&self.window));
+        match kind {
+            0 => self.new_display(),
+            1 => self.new_printer(),
+            _ => {}
+        }
+    }
+
+    fn new_printer(&self) {
+        if self.state.borrow().systems.is_empty() {
+            self.error("Add a system in System Configurations before making a session.");
+            return;
+        }
+        let system = self.state.borrow().settings.last_system.clone();
+        let Some(f) = crate::printer::start::run(Some(&self.window), &self.state, Some(&system))
+        else {
+            return;
+        };
+        let name = files::file_name_for(&f.display_title(None), qsp::EXTENSION);
+        let Some(path) = files::choose_save_in(
+            &files::sessions_dir(),
+            "Save New Printer Session",
+            files::PRINTER_PATTERN,
+            &name,
+        ) else {
+            return;
+        };
+        let path = files::with_extension(path, qsp::EXTENSION);
+        if path.exists() && !self.confirm_replace(&path) {
+            return;
+        }
+        self.write(&Doc::Printer(f), &path);
+        self.reload(std::slice::from_ref(&path));
+    }
+
+    fn new_display(&self) {
         let (system, keymap, systems) = {
             let st = self.state.borrow();
             let sys = st
@@ -514,7 +689,7 @@ impl Manager {
         let Some(path) = files::choose_save_in(
             &files::sessions_dir(),
             "Save New Session",
-            files::SESSION_PATTERN,
+            files::DISPLAY_PATTERN,
             &name,
         ) else {
             return;
@@ -523,7 +698,7 @@ impl Manager {
         if path.exists() && !self.confirm_replace(&path) {
             return;
         }
-        self.write(&f, &path);
+        self.write(&Doc::Display(f), &path);
         self.reload(std::slice::from_ref(&path));
     }
 
@@ -538,7 +713,7 @@ impl Manager {
     }
 
     /// Writes a session file and reports `QAD2004`.
-    fn write(&self, f: &SessionFile, path: &Path) -> bool {
+    fn write(&self, f: &Doc, path: &Path) -> bool {
         match f.save(path) {
             Ok(()) => {
                 self.report(&qsa_msg::message(
@@ -558,7 +733,14 @@ impl Manager {
         let sel = self.selected();
         let [e] = sel.as_slice() else { return };
         let mut f = match &e.file {
-            Ok(f) => f.clone(),
+            Ok(Doc::Display(f)) => f.clone(),
+            Ok(Doc::Printer(f)) => {
+                if let Some(changed) = crate::printer::settings::run(Some(&self.window), f) {
+                    self.write(&Doc::Printer(changed), &e.path);
+                    self.reload(&[]);
+                }
+                return;
+            }
             Err(why) => {
                 self.error(why);
                 return;
@@ -575,14 +757,19 @@ impl Manager {
             return;
         };
         p.apply(&mut f, &systems);
-        self.write(&f, &e.path);
+        self.write(&Doc::Display(f), &e.path);
         self.reload(&[]);
     }
 
     /// A free path for a copy of `path`: `name (copy).qsd`, then
-    /// `name (copy 2).qsd` ...
+    /// `name (copy 2).qsd` ... (`.qsp` for a printer session).
     fn copy_path(path: &Path) -> PathBuf {
         let dir = path.parent().unwrap_or(Path::new("."));
+        let ext = if is_printer(path) {
+            qsp::EXTENSION
+        } else {
+            qsd::EXTENSION
+        };
         let stem = path
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
@@ -594,7 +781,7 @@ impl Manager {
             } else {
                 format!(" (copy {n})")
             };
-            let p = dir.join(format!("{stem}{suffix}.{}", qsd::EXTENSION));
+            let p = dir.join(format!("{stem}{suffix}.{ext}"));
             if !p.exists() {
                 return p;
             }
@@ -612,8 +799,9 @@ impl Manager {
                 ));
                 continue;
             };
-            if !f.session.title.trim().is_empty() {
-                f.session.title = format!("{} (copy)", f.session.title.trim());
+            let title = f.title_field().trim().to_owned();
+            if !title.is_empty() {
+                f.set_title(format!("{title} (copy)"));
             }
             let to = Manager::copy_path(&e.path);
             if self.write(&f, &to) {
@@ -637,7 +825,12 @@ impl Manager {
         if title.is_empty() {
             return;
         }
-        let to = e.folder.join(files::file_name_for(&title, qsd::EXTENSION));
+        let ext = if e.printer() {
+            qsp::EXTENSION
+        } else {
+            qsd::EXTENSION
+        };
+        let to = e.folder.join(files::file_name_for(&title, ext));
         if to.exists() && !same_path(&to, &e.path) {
             self.error(&format!(
                 "{} already exists. Choose another title.",
@@ -645,7 +838,7 @@ impl Manager {
             ));
             return;
         }
-        f.session.title = title;
+        f.set_title(title);
         if !self.write(&f, &e.path) {
             return;
         }
@@ -762,7 +955,7 @@ mod tests {
         Entry {
             path: PathBuf::from(format!("/s/{title}.qsd")),
             folder: PathBuf::from("/s"),
-            file: Ok(f),
+            file: Ok(Doc::Display(f)),
             last_used: used,
         }
     }
@@ -779,12 +972,12 @@ mod tests {
         assert_eq!(titles, ["A", "b", "c"]);
         sort(&mut v, 0, false);
         assert_eq!(v[0].title(), "c");
-        sort(&mut v, 1, true);
+        sort(&mut v, 2, true);
         assert_eq!(v[0].title(), "c");
-        sort(&mut v, 4, true);
+        sort(&mut v, LAST_USED, true);
         let titles: Vec<String> = v.iter().map(Entry::title).collect();
         assert_eq!(titles, ["b", "c", "A"]);
-        sort(&mut v, 4, false);
+        sort(&mut v, LAST_USED, false);
         let titles: Vec<String> = v.iter().map(Entry::title).collect();
         assert_eq!(
             titles,
@@ -801,6 +994,10 @@ mod tests {
         assert_eq!(Manager::copy_path(&p), dir.join("Pay (copy).qsd"));
         std::fs::write(dir.join("Pay (copy).qsd"), "").unwrap();
         assert_eq!(Manager::copy_path(&p), dir.join("Pay (copy 2).qsd"));
+        assert_eq!(
+            Manager::copy_path(&dir.join("Laser.qsp")),
+            dir.join("Laser (copy).qsp")
+        );
         let _ = std::fs::remove_dir_all(dir);
     }
 
@@ -814,6 +1011,47 @@ mod tests {
         };
         let c = e.columns();
         assert_eq!(c[0], "broken");
-        assert_eq!(c[1], "(cannot be read)");
+        assert_eq!(c[1], "Display");
+        assert_eq!(c[2], "(cannot be read)");
+    }
+
+    #[test]
+    fn printer_sessions_are_listed_with_display_sessions() {
+        let dir = std::env::temp_dir().join(format!("qsa-mgr-kinds-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let sys = System::new("qs400");
+        let mut d = SessionFile::new(&sys);
+        d.session.title = "Payroll".into();
+        d.save(&dir.join("Payroll.qsd")).unwrap();
+        let mut p = PrinterFile::new(&sys, "PRT01");
+        p.printer.title = "Laser".into();
+        p.save(&dir.join("Laser.qsp")).unwrap();
+        std::fs::write(dir.join("notes.txt"), "not a session").unwrap();
+        let state = crate::app::AppState::new(
+            None,
+            qsa_config::Systems::new(),
+            qsa_config::Settings::default(),
+            qsa_config::Credentials::with(Box::new(qsa_config::credentials::Memory::default())),
+        )
+        .shared();
+        let entries = scan(std::slice::from_ref(&dir), &state);
+        let rows: Vec<[String; 7]> = entries.iter().map(Entry::columns).collect();
+        assert_eq!(rows.len(), 2);
+        let laser = rows.iter().find(|r| r[0] == "Laser").unwrap();
+        assert_eq!((laser[1].as_str(), laser[4].as_str()), ("Printer", "PRT01"));
+        let payroll = rows.iter().find(|r| r[0] == "Payroll").unwrap();
+        assert_eq!(payroll[1], "Display");
+        let printers: Vec<&Entry> = entries
+            .iter()
+            .filter(|e| Filter::Printer.admits(e))
+            .collect();
+        assert_eq!(printers.len(), 1);
+        assert_eq!(
+            entries.iter().filter(|e| Filter::Display.admits(e)).count(),
+            1
+        );
+        assert_eq!(entries.iter().filter(|e| Filter::All.admits(e)).count(), 2);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }

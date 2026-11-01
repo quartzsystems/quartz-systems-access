@@ -10,6 +10,8 @@
 //!   Shift+arrow select a range, and Ctrl+A selects every row.
 //! - A click on a column header calls [`ListTable::on_header_click`]; the
 //!   caller sorts and shows which way with [`ListTable::set_sort`].
+//! - [`ListTable::set_icons`] puts a 16-pixel glyph at the start of each
+//!   row.
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
@@ -54,6 +56,8 @@ type Callback = Box<dyn FnMut(Option<usize>)>;
 struct Model {
     headers: Vec<String>,
     rows: Vec<Vec<Cell>>,
+    /// A glyph before each row's first cell.
+    icons: Vec<Option<crate::glyph::Glyph>>,
     /// The row with the focus: the one selected, or the last one clicked.
     selected: Option<usize>,
     /// Multiple selection: allowed, every selected row, and where a Shift
@@ -124,6 +128,7 @@ impl ListTable {
 
         let model = Rc::new(RefCell::new(Model {
             headers: columns.iter().map(|(t, _)| (*t).to_owned()).collect(),
+            icons: Vec::new(),
             rows: Vec::new(),
             selected: None,
             multi: false,
@@ -176,14 +181,22 @@ impl ListTable {
                     )
                 };
                 draw::draw_rect_fill(x, y, w, h, bg);
+                let mut tx = x + theme::CELL_PAD;
+                if col == 0
+                    && let Some(Some(g)) = m.icons.get(row as usize)
+                {
+                    let mut img = crate::glyph::image(*g, crate::glyph::Size::Small);
+                    img.draw(tx, y + (h - 16) / 2, 16, 16);
+                    tx += 20;
+                }
                 if let Some(c) = cell {
                     draw::set_font(theme::UI_FONT, theme::UI_SIZE);
                     draw::set_draw_color(fg);
                     draw::draw_text2(
                         &c.text,
-                        x + theme::CELL_PAD,
+                        tx,
                         y,
-                        w - 2 * theme::CELL_PAD,
+                        w - (tx - x) - theme::CELL_PAD,
                         h,
                         Align::Left,
                     );
@@ -345,6 +358,12 @@ impl ListTable {
         }
         self.table.redraw();
         fire(&self.model, false);
+    }
+
+    /// Sets the glyph shown at the start of each row (by row, as set).
+    pub fn set_icons(&mut self, icons: Vec<Option<crate::glyph::Glyph>>) {
+        self.model.borrow_mut().icons = icons;
+        self.table.redraw();
     }
 
     /// Replaces every row. The selection is cleared.
