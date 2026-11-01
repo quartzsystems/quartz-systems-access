@@ -40,6 +40,7 @@ pub mod id {
     pub const HOST_NOT_FOUND: &str = "QAD1003";
     pub const CONNECT_TIMED_OUT: &str = "QAD1004";
     pub const SESSION_ENDED: &str = "QAD1005";
+    pub const DISCONNECTED: &str = "QAD1006";
     pub const TLS_FAILED: &str = "QAD1010";
     pub const CERT_UNTRUSTED: &str = "QAD1011";
     pub const CERT_TRUSTED: &str = "QAD1012";
@@ -217,7 +218,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 21] = [
+    const SEEDS: [&str; 22] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -231,6 +232,7 @@ mod tests {
         id::HOST_NOT_FOUND,
         id::CONNECT_TIMED_OUT,
         id::SESSION_ENDED,
+        id::DISCONNECTED,
         id::TLS_FAILED,
         id::CERT_UNTRUSTED,
         id::CERT_TRUSTED,

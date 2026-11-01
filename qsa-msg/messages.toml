@@ -89,6 +89,12 @@ text = "Session to &1 ended by the system."
 cause = "System &1 closed the connection. This happens when the job ends after sign-off, when the device is varied off, or when the connection is lost."
 recovery = "Select Reconnect to start a new session. The last screen stays visible until then."
 
+[QAD1006]
+severity = 0
+text = "Session to &1 disconnected."
+cause = "The session to system &1 was disconnected at your request. What the job does now depends on the device recovery action of the system: it may end, or wait for you to sign on again."
+recovery = "Select Reconnect to start a new session. The last screen stays visible until then."
+
 [QAD1010]
 severity = 30
 text = "TLS handshake with &1 failed: &2."

@@ -545,6 +545,18 @@ impl SessionWindow {
         self.refresh();
     }
 
+    /// Disconnects at the user's request, and says so.
+    fn user_disconnect(&self) {
+        let (was, system) = {
+            let st = self.st.borrow();
+            (st.worker.is_some(), st.opts.system.clone())
+        };
+        self.disconnect();
+        if was {
+            self.report(&qsa_msg::message(id::DISCONNECTED, &[&system]), false);
+        }
+    }
+
     fn send(&self, st: &mut State, rec: &Record) {
         if let Some(r) = st.recorder.as_mut() {
             r.outbound(&st.terminal.screen, rec);
@@ -687,7 +699,7 @@ impl SessionWindow {
         while let Some(c) = self.rx.recv() {
             match c {
                 Cmd::Connect => self.connect(None),
-                Cmd::Disconnect => self.disconnect(),
+                Cmd::Disconnect => self.user_disconnect(),
                 Cmd::Copy => self.copy(),
                 Cmd::Paste => app::paste_text(self.term.widget()),
                 Cmd::Print => self.print(),
