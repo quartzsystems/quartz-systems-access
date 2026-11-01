@@ -5,11 +5,12 @@
 //! Connects, negotiates, prints the debug log and the first records, and
 //! disconnects without typing anything.
 //!
-//! `cargo run -p tn5250 --example probe -- HOST [PORT] [--tls] [--132] [--device NAME]`
+//! `cargo run -p tn5250 --example probe -- HOST [PORT] [--tls] [--132] [--device NAME] [--hex]`
 
 use std::time::{Duration, Instant};
 
 use tn5250::negotiate::{Event, Request, ScreenSize};
+use tn5250::screen::Screen;
 use tn5250::session::{Session, Target};
 use tn5250::telnet::tls::{TlsOptions, Trust};
 
@@ -50,6 +51,8 @@ fn main() {
             std::process::exit(1);
         }
     };
+    let hex = args.iter().any(|a| a == "--hex");
+    let mut screen = Screen::new(size, tn5250::codepage::default_page());
     let start = Instant::now();
     let mut records = 0;
     while start.elapsed() < Duration::from_secs(8) && records < 3 {
@@ -59,6 +62,20 @@ fn main() {
                     match ev {
                         Event::Record(r) => {
                             records += 1;
+                            if hex {
+                                println!("hex {}", tn5250::log::hex(&r.encode()));
+                            }
+                            let applied = tn5250::stream::apply(&mut screen, &r);
+                            for e in &applied.errors {
+                                println!("stream error: {e}");
+                            }
+                            for reply in &applied.replies {
+                                println!(
+                                    "reply opcode {} {}",
+                                    reply.opcode,
+                                    tn5250::log::hex(&reply.data[..reply.data.len().min(16)])
+                                );
+                            }
                             println!(
                                 "record opcode {} flags {:04X}, {} bytes: {}",
                                 r.opcode,
@@ -77,6 +94,16 @@ fn main() {
             }
         }
     }
+    for (i, line) in screen.text_rows().iter().enumerate() {
+        println!("{:2} |{line}|", i + 1);
+    }
+    println!(
+        "cursor {:?} keyboard {:?} read {:?} fields {}",
+        screen.rc(screen.cursor),
+        screen.keyboard,
+        screen.pending_read,
+        screen.fields.len()
+    );
     println!("security: {:?}", s.security());
     s.close();
 }

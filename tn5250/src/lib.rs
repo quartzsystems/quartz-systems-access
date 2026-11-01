@@ -9,15 +9,21 @@
 //! - [`negotiate`]: TN5250E on top of Telnet, without I/O.
 //! - [`session`]: a connected session for one worker thread.
 //! - [`record`]: the 5250 record header.
+//! - [`stream`]: the data stream from the host, applied to a [`screen::Screen`];
+//!   [`inbound`]: what the display sends back; [`aid`]: attention keys.
 //! - [`codepage`]: EBCDIC translation behind one trait.
 //! - [`log`]: where the crate's log lines go.
 //!
 //! The crate is deliberately free of any user-interface dependency: the UI
 //! crates depend on it, never the other way round.
 
+pub mod aid;
 pub mod codepage;
+pub mod inbound;
 pub mod log;
 pub mod negotiate;
 pub mod record;
+pub mod screen;
 pub mod session;
+pub mod stream;
 pub mod telnet;
