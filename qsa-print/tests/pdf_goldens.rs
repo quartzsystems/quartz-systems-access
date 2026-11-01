@@ -4,7 +4,16 @@
 
 //! SCS fixtures through the page model to PDF, checked against goldens.
 //!
-//! - Every fixture's text rendering against `goldens/<name>.txt`.
+//! The fixtures are made here, and every job of every printer session
+//! recording in `fixtures/replay/` (named `<recording>-job<N>`), replayed
+//! through the printer protocol first.
+//!
+//! - Every fixture's text rendering against `goldens/<name>.txt`, and its
+//!   page model against `goldens/<name>.pages`.
+//! - A recorded job with the system's own text of the spooled file beside
+//!   it (`fixtures/replay/<name>.system.txt`) must match it line for line,
+//!   blank lines and trailing blanks aside (the system's copy keeps printed
+//!   lines only).
 //! - Every PDF embeds the print font subset, not whole.
 //! - With `pdftoppm` (from `QSA_PDFTOPPM`, else the `PATH`), every page is
 //!   rasterised at 50 dpi in grey and compared, pixel for pixel, with
@@ -32,9 +41,113 @@ const TOLERANCE: u8 = 40;
 const MAX_PIXELS: usize = 16;
 
 struct Fixture {
-    name: &'static str,
+    name: String,
     data: Vec<u8>,
     options: Options,
+}
+
+/// The jobs of the printer session recordings in `fixtures/replay/`.
+fn recorded() -> Vec<Fixture> {
+    let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../fixtures/replay");
+    let mut paths: Vec<PathBuf> = std::fs::read_dir(&dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.extension().is_some_and(|e| e == "qsr"))
+        .collect();
+    paths.sort();
+    let mut out = Vec::new();
+    for p in &paths {
+        let rec = tn5250::replay::Recording::read(p).expect("recording");
+        if rec.printer.is_none() {
+            continue;
+        }
+        let stem = p.file_stem().unwrap().to_string_lossy().into_owned();
+        let replayed = tn5250::replay::replay_printer(&rec);
+        assert!(
+            replayed.divergences.is_empty(),
+            "{stem}: the client's answers differ: {:?}",
+            replayed.divergences
+        );
+        for (i, job) in replayed.jobs.into_iter().enumerate() {
+            out.push(Fixture {
+                name: format!("{stem}-job{}", i + 1),
+                data: job,
+                options: Options {
+                    ccsid: rec.ccsid,
+                    ..Options::default()
+                },
+            });
+        }
+    }
+    out
+}
+
+/// The non-blank lines of a text rendering, trailing blanks trimmed.
+fn printed_lines(text: &str) -> Vec<String> {
+    text.replace('\u{000C}', "\n")
+        .lines()
+        .map(|l| l.trim_end().to_owned())
+        .filter(|l| !l.is_empty())
+        .collect()
+}
+
+/// The page model as text: each page's size, orientation and margins, then
+/// each run's position, height, pitch, font, emphasis, line and column.
+fn page_model(doc: &scs::Document) -> String {
+    use std::fmt::Write as _;
+    let mut out = String::new();
+    for (i, p) in doc.pages.iter().enumerate() {
+        let m = &p.margins;
+        let _ = writeln!(
+            out,
+            "page {} {}x{} {:?} margins {} {} {} {}",
+            i + 1,
+            p.width,
+            p.height,
+            p.orientation,
+            m.left,
+            m.top,
+            m.right,
+            m.bottom
+        );
+        for r in &p.runs {
+            let _ = writeln!(
+                out,
+                "  {},{} h{} p{} f{}{}{}{} L{} C{} |{}|",
+                r.x,
+                r.y,
+                r.height,
+                r.pitch.0,
+                r.font_id,
+                if r.bold { " bold" } else { "" },
+                if r.italic { " italic" } else { "" },
+                if r.underline { " underline" } else { "" },
+                r.line,
+                r.col,
+                r.text
+            );
+        }
+    }
+    out
+}
+
+/// Compares `got` with the golden at `path` (or writes it when blessing).
+fn check_text(path: &Path, got: &str, out: &Path, bless: bool, failed: &mut Vec<String>) {
+    if bless {
+        std::fs::write(path, got).expect("golden");
+        return;
+    }
+    match std::fs::read_to_string(path) {
+        Ok(want) if want.replace("\r\n", "\n") == got => {}
+        Ok(_) => {
+            let name = path.file_name().unwrap();
+            std::fs::write(out.join(name), got).ok();
+            failed.push(format!("{} differs", path.display()));
+        }
+        Err(e) => failed.push(format!("{}: {e}", path.display())),
+    }
 }
 
 fn hex(s: &str) -> Vec<u8> {
@@ -47,7 +160,7 @@ fn hex(s: &str) -> Vec<u8> {
 
 fn fixtures() -> Vec<Fixture> {
     let mut out = vec![Fixture {
-        name: "test-page",
+        name: "test-page".into(),
         data: scs::sample::test_page(),
         options: Options::default(),
     }];
@@ -69,7 +182,7 @@ fn fixtures() -> Vec<Fixture> {
     b.text("User . . . . . . . . . :   QSECOFR").ff();
     rfc.extend(b.bytes());
     out.push(Fixture {
-        name: "rfc4777-print-record",
+        name: "rfc4777-print-record".into(),
         data: rfc,
         options: Options::default(),
     });
@@ -97,7 +210,7 @@ fn fixtures() -> Vec<Fixture> {
         b.ff();
     }
     out.push(Fixture {
-        name: "listing-132",
+        name: "listing-132".into(),
         data: b.bytes(),
         options: Options::default(),
     });
@@ -116,7 +229,7 @@ fn fixtures() -> Vec<Fixture> {
         .nl();
     b.text("Mixed: X").bs().text("O").nl();
     out.push(Fixture {
-        name: "a4-overstrike",
+        name: "a4-overstrike".into(),
         data: b.bytes(),
         options: Options {
             paper: Paper::A4,
@@ -124,6 +237,7 @@ fn fixtures() -> Vec<Fixture> {
             ..Options::default()
         },
     });
+    out.extend(recorded());
     out
 }
 
@@ -229,21 +343,25 @@ fn main() -> ExitCode {
 
     for f in fixtures() {
         let doc = scs::parse(&f.data, &f.options);
-        // Text.
+        // Text and page model.
         let text = scs::to_text(&doc);
         let txt = goldens.join(format!("{}.txt", f.name));
-        if bless {
-            std::fs::write(&txt, &text).expect("text golden");
-        } else {
-            match std::fs::read_to_string(&txt) {
-                Ok(want) if want.replace("\r\n", "\n") == text => {}
-                Ok(_) => {
-                    std::fs::write(out.join(format!("{}.txt", f.name)), &text).ok();
-                    failed.push(format!("{}: text differs from {}", f.name, txt.display()));
-                }
-                Err(e) => failed.push(format!("{}: {}: {e}", f.name, txt.display())),
+        check_text(&txt, &text, &out, bless, &mut failed);
+        let system = root.join(format!("../fixtures/replay/{}.system.txt", f.name));
+        if let Ok(want) = std::fs::read_to_string(&system) {
+            let (want, got) = (printed_lines(&want), printed_lines(&text));
+            if let Some(i) = (0..want.len().max(got.len())).find(|&i| want.get(i) != got.get(i)) {
+                failed.push(format!(
+                    "{}: line {} differs from the system's text: want {:?}, got {:?}",
+                    f.name,
+                    i + 1,
+                    want.get(i),
+                    got.get(i)
+                ));
             }
         }
+        let pages = goldens.join(format!("{}.pages", f.name));
+        check_text(&pages, &page_model(&doc), &out, bless, &mut failed);
 
         // PDF.
         let bytes = pdf::render(

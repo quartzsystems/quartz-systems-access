@@ -1,0 +1,9 @@
+page 1 11906x16838 Portrait margins 0 720 0 998
+  480,720 h240 p120 f85 L4 C5 |Total|
+  1200,720 h240 p120 f85 underline L4 C11 |1,234.56|
+  0,960 h240 p120 f85 bold L5 C1 |Bold by repeat|
+  0,1200 h240 p120 f85 L6 C1 |Underscore by backspace: AB|
+  0,1440 h240 p120 f85 L7 C1 |Mixed: X|
+  3000,1200 h240 p120 f85 L6 C26 |_|
+  3120,1200 h240 p120 f85 L6 C27 |_|
+  840,1440 h240 p120 f85 L7 C8 |O|

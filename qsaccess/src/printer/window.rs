@@ -537,6 +537,8 @@ impl PrinterWindow {
             system_roots: true,
             timeout: CONNECT_TIMEOUT,
         });
+        // --record applies to the next session opened, of either kind.
+        let record = self.state.borrow_mut().record_next.take();
         st.worker = Some(PrinterWorker::spawn(
             Target {
                 host,
@@ -545,6 +547,7 @@ impl PrinterWindow {
             },
             printer_options(&doc),
             spool::Output::from_file(&doc),
+            record,
         ));
         st.state = State::Connecting;
         st.security = Security::Plain;

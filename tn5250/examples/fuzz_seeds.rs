@@ -30,6 +30,10 @@ fn main() {
     for path in names {
         let name = path.file_stem().unwrap().to_string_lossy().into_owned();
         let rec = Recording::read(&path).expect("recording");
+        if rec.printer.is_some() {
+            // Printer sessions seed nothing here: their data is SCS.
+            continue;
+        }
         let ccsid_index = tn5250::codepage::supported()
             .position(|c| c == rec.ccsid)
             .unwrap_or(0) as u8;

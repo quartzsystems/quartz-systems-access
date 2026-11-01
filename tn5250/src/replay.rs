@@ -18,6 +18,16 @@
 //! `in` and `out` are records (header and data, before Telnet framing) in
 //! hex; `key` is a 5250 key as [`key_name`] writes it.
 //!
+//! A printer session's recording has `"kind":"printer"` and the device in
+//! its first line, and only `in` and `out` records:
+//!
+//! ```text
+//! {"v":1,"kind":"printer","device":"QSAPRT01","ccsid":37}
+//! ```
+//!
+//! [`replay_printer`] feeds its records to a [`Printer`], checks the answers
+//! the client sent, and gives back each job's print data.
+//!
 //! Nothing typed into a nondisplay (password) field reaches the file: such
 //! keys are written as `X` (blanks stay blanks), and the same field's bytes
 //! in outbound records are rewritten to match, so a scrubbed recording
@@ -36,8 +46,10 @@ use std::time::Instant;
 
 use crate::input::{Key, Outcome};
 use crate::negotiate::ScreenSize;
+use crate::printer::{Handled, PrintEvent, Printer, Response};
 use crate::record::Record;
 use crate::screen::{Read, Screen, attr, byte};
+use crate::session::Direction;
 use crate::stream::order;
 use crate::terminal::Terminal;
 
@@ -54,6 +66,8 @@ pub enum Event {
 pub struct Recording {
     pub size: ScreenSize,
     pub ccsid: u16,
+    /// A printer session's device; `None` for a display session.
+    pub printer: Option<String>,
     pub events: Vec<(u64, Event)>,
 }
 
@@ -83,6 +97,34 @@ impl Recorder {
             out,
             start: Instant::now(),
         })
+    }
+
+    /// Creates `path` for a printer session's recording.
+    pub fn create_printer(path: &Path, device: &str, ccsid: u16) -> io::Result<Recorder> {
+        let mut out = BufWriter::new(File::create(path)?);
+        let device: String = device
+            .chars()
+            .filter(|c| c.is_ascii_alphanumeric() || "#$@_".contains(*c))
+            .collect();
+        writeln!(
+            out,
+            "{{\"v\":1,\"kind\":\"printer\",\"device\":\"{device}\",\"ccsid\":{ccsid}}}"
+        )?;
+        out.flush()?;
+        Ok(Recorder {
+            out,
+            start: Instant::now(),
+        })
+    }
+
+    /// A record either way, as [`crate::session::Session`]'s recorder hook
+    /// gives it (a printer session has no screen, so nothing to scrub).
+    pub fn record(&mut self, direction: Direction, bytes: &[u8]) {
+        let d = match direction {
+            Direction::In => "in",
+            Direction::Out => "out",
+        };
+        self.line(d, "x", &hex(bytes));
     }
 
     fn line(&mut self, d: &str, field: &str, value: &str) {
@@ -285,9 +327,12 @@ impl Recording {
         if value(&head, "v") != Some("1") {
             return Err(ReadError::Bad(1, "not a version 1 recording"));
         }
+        let printer = (value(&head, "kind") == Some("printer"))
+            .then(|| value(&head, "device").unwrap_or("").to_owned());
         let size = match value(&head, "size") {
             Some("24x80") => ScreenSize::S24x80,
             Some("27x132") => ScreenSize::S27x132,
+            None if printer.is_some() => ScreenSize::S24x80,
             _ => return Err(ReadError::Bad(1, "size must be 24x80 or 27x132")),
         };
         let ccsid = value(&head, "ccsid")
@@ -326,9 +371,78 @@ impl Recording {
         Ok(Recording {
             size,
             ccsid,
+            printer,
             events,
         })
     }
+}
+
+/// The result of replaying a printer session.
+#[derive(Debug, Default)]
+pub struct PrinterReplay {
+    /// Each job's print data, in the order the jobs ended. A job still open
+    /// at the end of the recording comes last.
+    pub jobs: Vec<Vec<u8>>,
+    /// Jobs that were host print transform output.
+    pub transformed: usize,
+    /// Answers the client sent that are not what this client sends for a
+    /// stored record (print complete): (event index, recorded, expected).
+    pub divergences: Vec<(usize, Vec<u8>, Vec<u8>)>,
+}
+
+/// Replays a printer session's records through a [`Printer`].
+pub fn replay_printer(rec: &Recording) -> PrinterReplay {
+    let mut p = Printer::new();
+    let mut out = PrinterReplay::default();
+    let mut job: Option<(Vec<u8>, bool)> = None;
+    let mut expected: std::collections::VecDeque<Vec<u8>> = Default::default();
+    let start = Instant::now();
+    for (i, (_, ev)) in rec.events.iter().enumerate() {
+        match ev {
+            Event::In(bytes) => {
+                let Ok(r) = Record::parse(bytes) else {
+                    continue;
+                };
+                match p.record(&r, start) {
+                    Handled::Caller { events, opcode } => {
+                        for e in events {
+                            match e {
+                                PrintEvent::JobStarted { transformed, .. } => {
+                                    job = Some((Vec::new(), transformed));
+                                }
+                                PrintEvent::Data { bytes, .. } => {
+                                    job.get_or_insert_with(|| (Vec::new(), false))
+                                        .0
+                                        .extend_from_slice(&bytes);
+                                }
+                                PrintEvent::JobEnded { .. } => match job.take() {
+                                    Some((_, true)) => out.transformed += 1,
+                                    Some((data, false)) => out.jobs.push(data),
+                                    None => {}
+                                },
+                                PrintEvent::Cleared { .. } => job = None,
+                            }
+                        }
+                        expected.push_back(Response::Complete.encode(opcode));
+                    }
+                    Handled::Now { response, opcode } => {
+                        expected.push_back(response.encode(opcode));
+                    }
+                }
+            }
+            Event::Out(bytes) => {
+                let want = expected.pop_front().unwrap_or_default();
+                if *bytes != want {
+                    out.divergences.push((i, bytes.clone(), want));
+                }
+            }
+            Event::Key(_) => {}
+        }
+    }
+    if let Some((data, false)) = job {
+        out.jobs.push(data);
+    }
+    out
 }
 
 /// The result of a replay.
@@ -675,6 +789,61 @@ impl Golden {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A print record from the server.
+    fn print_record(flags: u16, data: &[u8]) -> Vec<u8> {
+        let mut r = vec![0, 0, 0x12, 0xA0, 0x01, 0x01, 10];
+        r.extend_from_slice(&flags.to_be_bytes());
+        r.push(crate::printer::op::PRINT);
+        r.extend_from_slice(&[0; 6]);
+        r.extend_from_slice(data);
+        let len = r.len() as u16;
+        r[..2].copy_from_slice(&len.to_be_bytes());
+        r
+    }
+
+    #[test]
+    fn printer_recordings_round_trip_and_replay_to_jobs() {
+        use crate::printer::{Condition, flag, op};
+        let path = std::env::temp_dir().join(format!("qsa-prec-{}.qsr", std::process::id()));
+        let complete = Response::Complete.encode(op::PRINT);
+        {
+            let mut r = Recorder::create_printer(&path, "prt01", 37).unwrap();
+            r.record(
+                Direction::In,
+                &print_record(flag::FIRST_OF_CHAIN, &[0xC1, 0xC2]),
+            );
+            r.record(Direction::Out, &complete);
+            r.record(Direction::In, &print_record(flag::LAST_OF_CHAIN, &[0]));
+            r.record(Direction::Out, &complete);
+            // A second job, then a cleared one, then one left open.
+            r.record(Direction::In, &print_record(0, &[0xC3]));
+            r.record(
+                Direction::Out,
+                &Response::Intervention(Condition::NotReady).encode(op::PRINT),
+            );
+            r.record(Direction::In, &print_record(0, &[0]));
+            r.record(Direction::Out, &complete);
+            r.record(Direction::In, &print_record(0, &[0xC4]));
+        }
+        let rec = Recording::read(&path).unwrap();
+        let _ = std::fs::remove_file(&path);
+        assert_eq!(rec.printer.as_deref(), Some("prt01"));
+        assert_eq!(rec.ccsid, 37);
+        let out = replay_printer(&rec);
+        assert_eq!(out.jobs, vec![vec![0xC1, 0xC2], vec![0xC3], vec![0xC4]]);
+        // The client said not ready once: that is where it differs from
+        // print complete.
+        assert_eq!(out.divergences.len(), 1);
+        assert_eq!(out.divergences[0].0, 5);
+        // A display recording is not a printer's.
+        let disp = Recording::parse(io::Cursor::new(
+            "{\"v\":1,\"size\":\"24x80\",\"ccsid\":37}
+",
+        ))
+        .unwrap();
+        assert_eq!(disp.printer, None);
+    }
     use crate::screen::{Ffw, Field, Keyboard};
     use crate::stream::{ESC, cmd};
 
@@ -771,6 +940,7 @@ mod tests {
         let mut rec = Recording {
             size: ScreenSize::S24x80,
             ccsid: 37,
+            printer: None,
             events: vec![(0, Event::In(signon_record().encode()))],
         };
         rec.events.push((1, Event::Key(Key::Enter)));

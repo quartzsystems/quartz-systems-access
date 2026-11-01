@@ -1,0 +1,48 @@
+
+
+     QS/400 Access for Desktop: printer test page
+
+     Pitch
+     10 characters per inch   ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789
+     12 characters per inch   ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789
+     15 characters per inch   ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789
+     16.7 characters per inch ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789
+     20 characters per inch   ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789
+
+     Lines per inch
+     3 lines per inch, first line
+     3 lines per inch, second line
+     4 lines per inch, first line
+     4 lines per inch, second line
+     6 lines per inch, first line
+     6 lines per inch, second line
+     8 lines per inch, first line
+     8 lines per inch, second line
+     9 lines per inch, first line
+     9 lines per inch, second line
+
+     Tabs at columns 21, 36, 51 and 66
+     one            two            three          four           five
+
+     Underline: begin and end underscore, and a single word underscored
+     Overstrike: bold by printing twice, O and 0 overlaid, struck through
+
+     Latin-1 characters
+     20    ! " # $ % & ' ( ) * + , - . /
+     30  0 1 2 3 4 5 6 7 8 9 : ; < = > ?
+     40  @ A B C D E F G H I J K L M N O
+     50  P Q R S T U V W X Y Z [ \ ] ^ _
+     60  ` a b c d e f g h i j k l m n o
+     70  p q r s t u v w x y z { | } ~
+     A0    ¡ ¢ £ ¤ ¥ ¦ § ¨ © ª « ¬ - ® ¯
+     B0  ° ± ² ³ ´ µ ¶ · ¸ ¹ º » ¼ ½ ¾ ¿
+     C0  À Á Â Ã Ä Å Æ Ç È É Ê Ë Ì Í Î Ï
+     D0  Ð Ñ Ò Ó Ô Õ Ö × Ø Ù Ú Û Ü Ý Þ ß
+     E0  à á â ã ä å æ ç è é ê ë ì í î ï
+     F0  ð ñ ò ó ô õ ö ÷ ø ù ú û ü ý þ ÿ
+
+
+Landscape page: 132 columns at 15 characters per inch
+
+....+....1....+....2....+....3....+....4....+....5....+....6....+....7....+....8....+....9....+....0....+....1....+....2....+....3..
+123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012

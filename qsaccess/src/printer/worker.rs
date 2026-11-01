@@ -64,12 +64,19 @@ pub struct PrinterWorker {
 }
 
 impl PrinterWorker {
-    pub fn spawn(target: Target, options: Options, output: spool::Output) -> PrinterWorker {
+    /// Starts a worker connecting to `target`; with `record`, every record
+    /// either way goes to that recording file.
+    pub fn spawn(
+        target: Target,
+        options: Options,
+        output: spool::Output,
+        record: Option<std::path::PathBuf>,
+    ) -> PrinterWorker {
         let (to_tx, to_rx) = mpsc::channel();
         let (from_tx, from_rx) = mpsc::channel();
         let thread = std::thread::Builder::new()
             .name(format!("5250 printer {}", options.device_name))
-            .spawn(move || run(&target, &options, output, &to_rx, &from_tx))
+            .spawn(move || run(&target, &options, output, record, &to_rx, &from_tx))
             .ok();
         PrinterWorker {
             tx: to_tx,
@@ -94,6 +101,7 @@ fn run(
     target: &Target,
     options: &Options,
     output: spool::Output,
+    record: Option<std::path::PathBuf>,
     rx: &Receiver<ToNet>,
     tx: &Sender<FromNet>,
 ) {
@@ -105,6 +113,15 @@ fn run(
         }
     };
     send(tx, FromNet::Connected(session.security()));
+    if let Some(path) = record {
+        match tn5250::replay::Recorder::create_printer(&path, &options.device_name, options.ccsid) {
+            Ok(mut r) => {
+                crate::log!("recording this printer session to {}", path.display());
+                session.set_recorder(Box::new(move |d, b| r.record(d, b)));
+            }
+            Err(e) => crate::log!("recording not started: {}: {e}", path.display()),
+        }
+    }
     let mut spooler = Spooler::new(output);
     let result = serve(&mut session, &mut spooler, rx, tx);
     session.close();
@@ -241,6 +258,7 @@ mod tests {
     fn a_job_from_the_server_becomes_a_pdf() {
         let dir = std::env::temp_dir().join(format!("qsa-pworker-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
         let l = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = l.local_addr().unwrap().port();
         let mut b = scs::sample::Builder::new();
@@ -316,6 +334,7 @@ mod tests {
             },
             Options::new("qsaprt01", 37),
             output,
+            Some(dir.join("session.qsr")),
         );
         let end = Instant::now() + Duration::from_secs(20);
         let mut events = Vec::new();
@@ -349,6 +368,16 @@ mod tests {
             .find(|p| p.extension().is_some_and(|e| e == "pdf"))
             .unwrap();
         assert!(std::fs::read(pdf).unwrap().starts_with(b"%PDF-"));
+        // The recording replays to the same job.
+        let recording = tn5250::replay::Recording::read(&dir.join("session.qsr")).unwrap();
+        assert_eq!(recording.printer.as_deref(), Some("QSAPRT01"));
+        let replayed = tn5250::replay::replay_printer(&recording);
+        assert!(
+            replayed.divergences.is_empty(),
+            "{:?}",
+            replayed.divergences
+        );
+        assert_eq!(replayed.jobs.len(), 1);
         let txt = pdf.with_extension("txt");
         assert_eq!(
             std::fs::read_to_string(txt).unwrap(),

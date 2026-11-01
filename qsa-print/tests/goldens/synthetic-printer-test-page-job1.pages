@@ -1,0 +1,61 @@
+page 1 12240x15840 Portrait margins 720 480 0 720
+  720,480 h240 p100 f11 bold L3 C6 |QS/400 Access for Desktop: printer test page|
+  720,960 h240 p100 f11 L5 C6 |Pitch|
+  720,1200 h240 p100 f11 L6 C6 |10 characters per inch   ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789|
+  720,1440 h240 p120 f11 L7 C6 |12 characters per inch   ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789|
+  720,1680 h240 p150 f11 L8 C6 |15 characters per inch   ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789|
+  720,1920 h240 p167 f11 L9 C6 |16.7 characters per inch ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789|
+  720,2160 h240 p200 f11 L10 C6 |20 characters per inch   ABCDEFGHIJKLMNOPQRSTUVWXYZ 0123456789|
+  720,2640 h240 p100 f11 L12 C6 |Lines per inch|
+  720,2880 h480 p100 f11 L13 C6 |3 lines per inch, first line|
+  720,3360 h480 p100 f11 L14 C6 |3 lines per inch, second line|
+  720,3840 h360 p100 f11 L15 C6 |4 lines per inch, first line|
+  720,4200 h360 p100 f11 L16 C6 |4 lines per inch, second line|
+  720,4560 h240 p100 f11 L17 C6 |6 lines per inch, first line|
+  720,4800 h240 p100 f11 L18 C6 |6 lines per inch, second line|
+  720,5040 h180 p100 f11 L19 C6 |8 lines per inch, first line|
+  720,5220 h180 p100 f11 L20 C6 |8 lines per inch, second line|
+  720,5400 h160 p100 f11 L21 C6 |9 lines per inch, first line|
+  720,5560 h160 p100 f11 L22 C6 |9 lines per inch, second line|
+  720,5960 h240 p100 f11 L24 C6 |Tabs at columns 21, 36, 51 and 66|
+  720,6200 h240 p100 f11 L25 C6 |one            two            three          four           five|
+  720,6680 h240 p100 f11 L27 C6 |Underline:|
+  2304,6680 h240 p100 f11 underline L27 C17 |begin and end underscore|
+  5760,6680 h240 p100 f11 L27 C41 |, and a single|
+  7920,6680 h240 p100 f11 underline L27 C56 |word|
+  8640,6680 h240 p100 f11 L27 C61 |underscored|
+  720,6920 h240 p100 f11 L28 C6 |Overstrike:|
+  2448,6920 h240 p100 f11 bold L28 C18 |bold by printing twice|
+  5616,6920 h240 p100 f11 L28 C40 |, O and 0 overlaid, struck through|
+  720,7400 h240 p100 f11 L30 C6 |Latin-1 characters|
+  720,7640 h240 p100 f11 L31 C6 |20    ! " # $ % & ' ( ) * + , - . /|
+  720,7880 h240 p100 f11 L32 C6 |30  0 1 2 3 4 5 6 7 8 9 : ; < = > ?|
+  720,8120 h240 p100 f11 L33 C6 |40  @ A B C D E F G H I J K L M N O|
+  720,8360 h240 p100 f11 L34 C6 |50  P Q R S T U V W X Y Z [ \ ] ^ _|
+  720,8600 h240 p100 f11 L35 C6 |60  ` a b c d e f g h i j k l m n o|
+  720,8840 h240 p100 f11 L36 C6 |70  p q r s t u v w x y z { | } ~|
+  720,9080 h240 p100 f11 L37 C6 |A0    ¡ ¢ £ ¤ ¥ ¦ § ¨ © ª « ¬ - ® ¯|
+  720,9320 h240 p100 f11 L38 C6 |B0  ° ± ² ³ ´ µ ¶ · ¸ ¹ º » ¼ ½ ¾ ¿|
+  720,9560 h240 p100 f11 L39 C6 |C0  À Á Â Ã Ä Å Æ Ç È É Ê Ë Ì Í Î Ï|
+  720,9800 h240 p100 f11 L40 C6 |D0  Ð Ñ Ò Ó Ô Õ Ö × Ø Ù Ú Û Ü Ý Þ ß|
+  720,10040 h240 p100 f11 L41 C6 |E0  à á â ã ä å æ ç è é ê ë ì í î ï|
+  720,10280 h240 p100 f11 L42 C6 |F0  ð ñ ò ó ô õ ö ÷ ø ù ú û ü ý þ ÿ|
+  5904,6920 h240 p100 f11 L28 C42 |/|
+  6768,6920 h240 p100 f11 L28 C48 |-|
+  8496,6920 h240 p100 f11 L28 C60 |-|
+  8640,6920 h240 p100 f11 L28 C61 |-|
+  8784,6920 h240 p100 f11 L28 C62 |-|
+  8928,6920 h240 p100 f11 L28 C63 |-|
+  9072,6920 h240 p100 f11 L28 C64 |-|
+  9216,6920 h240 p100 f11 L28 C65 |-|
+  9504,6920 h240 p100 f11 L28 C67 |-|
+  9648,6920 h240 p100 f11 L28 C68 |-|
+  9792,6920 h240 p100 f11 L28 C69 |-|
+  9936,6920 h240 p100 f11 L28 C70 |-|
+  10080,6920 h240 p100 f11 L28 C71 |-|
+  10224,6920 h240 p100 f11 L28 C72 |-|
+  10368,6920 h240 p100 f11 L28 C73 |-|
+page 2 15840x12240 Landscape margins 0 480 3168 720
+  0,480 h240 p150 f11 L3 C1 |Landscape page: 132 columns at 15 characters per inch|
+  0,960 h240 p150 f11 L5 C1 |....+....1....+....2....+....3....+....4....+....5....+....6....+....7....+....8....+....9....+....0....+....1....+....2....+....3..|
+  0,1200 h240 p150 f11 L6 C1 |123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012|

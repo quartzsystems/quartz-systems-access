@@ -87,3 +87,95 @@ length of the password is still visible, so use a test profile's password.
 `cargo run -p tn5250 --example probe -- HOST 23 [--132] --record FILE`
 records the sign-on display alone (`--enter` presses Enter on it once). It
 cannot sign on. It is how the two `qs400-signon-*` fixtures were made.
+
+## Printer sessions
+
+A printer session's recording (`"kind":"printer"` in its first line) holds the
+print records the system sent and the client's answers. `cargo test -p
+qsa-print --test pdf_goldens` replays every printer recording in `replay/`
+through the printer protocol, checks that the answers match, and checks each
+job (`NAME-jobN`) against its goldens in `qsa-print/tests/goldens/`: the text
+(`.txt`), the page model (`.pages`) and every page of the PDF (`-N.png`, with
+the pinned `pdftoppm`; see `TESTING.md`). Nothing is scrubbed: print data holds
+no password. Look at what a spooled file shows before committing it.
+
+`synthetic-printer-test-page.qsr` is synthetic: the built-in test page as a
+system would send it, written by
+`cargo run -p qsa-print --example synthetic_printer_recording`. It stands in
+until recordings from a real system are added.
+
+### Printer fixtures still to record
+
+| Name | Spooled file |
+|---|---|
+| `printer-joblog` | A job log (`DSPJOBLOG OUTPUT(*PRINT)`), several pages. |
+| `printer-wrkactjob` | `WRKACTJOB OUTPUT(*PRINT)`: 132 columns. |
+| `printer-qs400-joblog` | The same job log from QS/400, when its Telnet server takes printer sessions. |
+
+### Recording a printer session
+
+On the system (a test profile with authority to the device and the output
+queue is enough):
+
+1. Create the printer device, or let the Telnet server create it: virtual
+   devices are created on first use when automatic configuration of virtual
+   devices is on. To create it yourself:
+
+   ```
+   CRTDEVPRT DEVD(QSAPRT01) DEVCLS(*VRT) TYPE(3812) MODEL(1) +
+             FONT(011) TRANSFORM(*NO) MSGQ(QSYSOPR) +
+             TEXT('QS/400 Access for Desktop test printer')
+   ```
+
+   Host print transform must stay off: the client prints SCS only, and
+   discards transformed data (`QAD3020`).
+2. On the desktop, start the session with recording on, then connect it:
+
+   ```
+   qsaccess --record fixtures/replay/printer-joblog.qsr
+   ```
+
+   then 5250 Printer for the system, device `QSAPRT01`, and Start. Wait for
+   *Ready* (`QAD3001`). Without the UI, the same is
+   `cargo run -p tn5250 --example printer_probe -- HOST 23 --device QSAPRT01
+   --seconds 120 --jobs target/jobs --record fixtures/replay/printer-joblog.qsr`.
+3. Start the writer for the device, if the system did not start it:
+
+   ```
+   STRPRTWTR DEV(QSAPRT01)
+   ```
+
+4. Print the spooled file to that device's output queue, for example:
+
+   ```
+   DSPJOBLOG OUTPUT(*PRINT)
+   CHGSPLFA FILE(QPJOBLOG) SPLNBR(*LAST) OUTQ(QSAPRT01)
+   ```
+
+   or `WRKACTJOB OUTPUT(*PRINT)` with `OVRPRTF FILE(QPDSPAJB) OUTQ(QSAPRT01)`
+   first. Wait until the job appears in Received output, then close the
+   session window: the recording is complete.
+5. For the line-for-line check, save the system's own text of the same
+   spooled file beside the recording as `printer-joblog-job1.system.txt`:
+
+   ```
+   CPYSPLF FILE(QPJOBLOG) TOFILE(QTEMP/SPLTXT) SPLNBR(*LAST) CTLCHAR(*NONE)
+   CPYTOSTMF FROMMBR('/QSYS.LIB/QTEMP.LIB/SPLTXT.FILE/SPLTXT.MBR') +
+             TOSTMF('/home/QSATEST/printer-joblog-job1.system.txt') +
+             STMFCCSID(1208)
+   ```
+
+   and copy it down (FTP or the integrated file system share).
+6. Write the goldens with the pinned poppler (the CI Linux image), and look
+   at every page image before committing:
+
+   ```
+   docker build -t qsa-ci -f ci/linux-ci.Dockerfile ci
+   docker run --rm -v "$PWD:/src" -w /src -e QSA_BLESS=1 qsa-ci \
+     cargo test -p qsa-print --test pdf_goldens
+   git status qsa-print/tests/goldens fixtures/replay
+   ```
+
+If a system's Telnet server refuses printer sessions, keep the probe's
+output (the debug log shows every negotiation step) with the fixture notes
+instead of a recording.

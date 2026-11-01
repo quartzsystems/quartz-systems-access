@@ -120,6 +120,7 @@ fn switching_screen_sizes() {
     let mut rec = Recording {
         size: ScreenSize::S27x132,
         ccsid: 37,
+        printer: None,
         events: Vec::new(),
     };
     for (i, (data, (rows, cols))) in steps.iter().enumerate() {
