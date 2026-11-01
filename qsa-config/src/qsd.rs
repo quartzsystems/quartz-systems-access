@@ -61,6 +61,24 @@ pub const HOTSPOT_FUNCTION_KEYS: &str = "function-keys";
 /// Hotspot kind: `More...` and `Bottom` page labels.
 pub const HOTSPOT_PAGING: &str = "paging";
 
+/// The `.qsd` files directly in `dir` (not in folders below it), sorted.
+pub fn files_in(dir: &Path) -> Vec<PathBuf> {
+    let Ok(rd) = std::fs::read_dir(dir) else {
+        return Vec::new();
+    };
+    let mut out: Vec<PathBuf> = rd
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_file()
+                && p.extension()
+                    .is_some_and(|e| e.eq_ignore_ascii_case(EXTENSION))
+        })
+        .collect();
+    out.sort();
+    out
+}
+
 /// `[system]`: the System Configuration the session uses, and what to
 /// create one from if it is missing.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]

@@ -11,6 +11,7 @@ pub mod console;
 pub mod controls;
 pub mod glyph;
 pub mod groupbox;
+pub mod inputbox;
 pub mod listtable;
 pub mod msgbox;
 pub mod msgdetails;
@@ -25,6 +26,7 @@ pub mod theme;
 pub mod toolbar;
 
 pub use glyph::Glyph;
+pub use inputbox::InputBox;
 pub use listtable::ListTable;
 pub use msgbox::MessageBox;
 pub use propdialog::PropertyDialog;

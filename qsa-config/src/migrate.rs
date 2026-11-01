@@ -99,24 +99,6 @@ pub fn pending(settings: &Settings) -> bool {
     settings.display.values().any(|d| d.legacy_keymap.is_some())
 }
 
-/// The `.qsd` files directly in `dir` (not in subfolders), sorted.
-pub fn session_files_in(dir: &Path) -> Vec<PathBuf> {
-    let Ok(rd) = std::fs::read_dir(dir) else {
-        return Vec::new();
-    };
-    let mut out: Vec<PathBuf> = rd
-        .filter_map(Result::ok)
-        .map(|e| e.path())
-        .filter(|p| {
-            p.is_file()
-                && p.extension()
-                    .is_some_and(|e| e.eq_ignore_ascii_case(qsd::EXTENSION))
-        })
-        .collect();
-    out.sort();
-    out
-}
-
 /// A file name for a session of `system` in `dir` that is not taken.
 fn free_name(dir: &Path, system: &str) -> PathBuf {
     let stem: String = system
@@ -153,7 +135,7 @@ pub fn migrate_keymaps(
     }
     let mut sessions: Vec<(PathBuf, SessionFile)> = Vec::new();
     for dir in folders {
-        for path in session_files_in(dir) {
+        for path in qsd::files_in(dir) {
             match SessionFile::load(&path) {
                 Ok(f) => sessions.push((path, f)),
                 Err(e) => report.skipped.push((path, e.to_string())),

@@ -113,6 +113,7 @@ impl Ui {
     pub fn run(&self, task: Task) {
         match task {
             Task::SystemConfigurations => crate::sysconfig::open(self),
+            Task::SessionManager => crate::manager::open(&self.state, self.parent()),
             Task::Display5250 => {
                 if self.state.borrow().systems.is_empty() {
                     crate::sysconfig::open(self);

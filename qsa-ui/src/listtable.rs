@@ -2,15 +2,22 @@
 // licensed under the terms of the MIT license which can be found in the
 // root directory of this project.
 
-//! A single-selection list with column headers: 18-pixel rows, white
-//! background, selection in the palette blue.
+//! A list with column headers: 18-pixel rows, white background, selection
+//! in the palette blue.
+//!
+//! - One row is selected at a time, unless [`ListTable::set_multi`] allows
+//!   more: then Ctrl+click adds or removes a row, Shift+click and
+//!   Shift+arrow select a range, and Ctrl+A selects every row.
+//! - A click on a column header calls [`ListTable::on_header_click`]; the
+//!   caller sorts and shows which way with [`ListTable::set_sort`].
 
 use std::cell::RefCell;
+use std::collections::BTreeSet;
 use std::rc::Rc;
 
 use fltk::app;
 use fltk::draw;
-use fltk::enums::{Align, Color, Event, FrameType, Key};
+use fltk::enums::{Align, Color, Event, FrameType, Key, Shortcut};
 use fltk::prelude::*;
 use fltk::table::{TableContext, TableRow, TableRowSelectMode};
 
@@ -47,9 +54,40 @@ type Callback = Box<dyn FnMut(Option<usize>)>;
 struct Model {
     headers: Vec<String>,
     rows: Vec<Vec<Cell>>,
+    /// The row with the focus: the one selected, or the last one clicked.
     selected: Option<usize>,
+    /// Multiple selection: allowed, every selected row, and where a Shift
+    /// range starts.
+    multi: bool,
+    marked: BTreeSet<usize>,
+    anchor: Option<usize>,
+    /// Sorted column and whether ascending, for the header arrow.
+    sort: Option<(usize, bool)>,
     on_select: Option<Callback>,
     on_activate: Option<Callback>,
+    on_header: Option<Box<dyn FnMut(usize)>>,
+}
+
+impl Model {
+    fn is_selected(&self, row: usize) -> bool {
+        if self.multi {
+            self.marked.contains(&row)
+        } else {
+            self.selected == Some(row)
+        }
+    }
+}
+
+/// A small triangle, up for ascending, for a sorted column's header.
+fn sort_arrow(x: i32, cy: i32, ascending: bool) {
+    for i in 0..4 {
+        let (w, y) = if ascending {
+            (1 + 2 * i, cy - 2 + i)
+        } else {
+            (7 - 2 * i, cy - 2 + i)
+        };
+        draw::draw_rect_fill(x + 3 - w / 2, y, w, 1, colors::DISABLED_TEXT);
+    }
 }
 
 /// The list.
@@ -87,8 +125,13 @@ impl ListTable {
             headers: columns.iter().map(|(t, _)| (*t).to_owned()).collect(),
             rows: Vec::new(),
             selected: None,
+            multi: false,
+            marked: BTreeSet::new(),
+            anchor: None,
+            sort: None,
             on_select: None,
             on_activate: None,
+            on_header: None,
         }));
 
         let m = model.clone();
@@ -110,11 +153,16 @@ impl ListTable {
                     h,
                     Align::Left,
                 );
+                if let Some((c, asc)) = m.sort
+                    && c == col as usize
+                {
+                    sort_arrow(x + w - 14, y + h / 2, asc);
+                }
                 draw::pop_clip();
             }
             TableContext::Cell => {
                 let m = m.borrow();
-                let selected = m.selected == Some(row as usize);
+                let selected = m.is_selected(row as usize);
                 let cell = m.rows.get(row as usize).and_then(|r| r.get(col as usize));
                 draw::push_clip(x, y, w, h);
                 let (bg, fg): (Color, Color) = if selected {
@@ -138,7 +186,7 @@ impl ListTable {
                         Align::Left,
                     );
                 }
-                if selected && col == 0 && t.has_focus() {
+                if m.selected == Some(row as usize) && col == 0 && t.has_focus() {
                     draw::set_draw_color(colors::SELECTION_TEXT);
                     draw::draw_focus_rect(x + 1, y + 1, t.w() - 6, h - 2);
                 }
@@ -150,12 +198,29 @@ impl ListTable {
         let m = model.clone();
         table.handle(move |t, ev| match ev {
             Event::Push => {
+                if let Some((TableContext::ColHeader, _, col, resize)) = t.cursor2rowcol() {
+                    // Near a column edge the table resizes the column.
+                    if resize != fltk::table::TableResizeFlag::None {
+                        return false;
+                    }
+                    fire_header(&m, col as usize);
+                    return true;
+                }
                 let row = t.callback_row();
                 let in_rows = t.callback_context() == TableContext::Cell;
                 let double = app::event_clicks();
                 let _ = t.take_focus();
                 if in_rows {
-                    set_selection(t, &m, Some(row as usize));
+                    let state = app::event_state();
+                    let multi = m.borrow().multi;
+                    let row = row as usize;
+                    if multi && state.contains(Shortcut::Ctrl) {
+                        toggle(t, &m, row);
+                    } else if multi && state.contains(Shortcut::Shift) {
+                        extend(t, &m, row);
+                    } else {
+                        set_selection(t, &m, Some(row));
+                    }
                     if double {
                         fire(&m, true);
                     }
@@ -165,6 +230,21 @@ impl ListTable {
             Event::KeyDown => {
                 let n = m.borrow().rows.len();
                 let cur = m.borrow().selected;
+                let multi = m.borrow().multi;
+                let state = app::event_state();
+                if multi
+                    && state.contains(Shortcut::Ctrl)
+                    && app::event_key() == Key::from_char('a')
+                {
+                    {
+                        let mut mm = m.borrow_mut();
+                        mm.marked = (0..n).collect();
+                        mm.anchor = Some(0);
+                    }
+                    t.redraw();
+                    fire(&m, false);
+                    return true;
+                }
                 let next = match app::event_key() {
                     Key::Up => Some(cur.map_or(0, |c| c.saturating_sub(1))),
                     Key::Down => Some(cur.map_or(0, |c| (c + 1).min(n.saturating_sub(1)))),
@@ -181,7 +261,11 @@ impl ListTable {
                 };
                 match next {
                     Some(i) if n > 0 => {
-                        set_selection(t, &m, Some(i));
+                        if multi && state.contains(Shortcut::Shift) {
+                            extend(t, &m, i);
+                        } else {
+                            set_selection(t, &m, Some(i));
+                        }
                         t.set_top_row(t.top_row().min(i as i32));
                         let visible = (t.h() - Self::HEADER_H - 4) / theme::ROW_H;
                         if i as i32 >= t.top_row() + visible {
@@ -203,6 +287,54 @@ impl ListTable {
         ListTable { table, model }
     }
 
+    /// Allows more than one row to be selected.
+    pub fn set_multi(&mut self, on: bool) {
+        let mut m = self.model.borrow_mut();
+        m.multi = on;
+        m.marked = m.selected.into_iter().collect();
+    }
+
+    /// Shows an arrow in a column's header: the list is sorted by it,
+    /// ascending or not. `None` shows none.
+    pub fn set_sort(&mut self, sort: Option<(usize, bool)>) {
+        self.model.borrow_mut().sort = sort;
+        self.table.redraw();
+    }
+
+    /// Called with the column when a column header is clicked.
+    pub fn on_header_click(&mut self, cb: impl FnMut(usize) + 'static) {
+        self.model.borrow_mut().on_header = Some(Box::new(cb));
+    }
+
+    /// Every selected row, in order.
+    pub fn selected_rows(&self) -> Vec<usize> {
+        let m = self.model.borrow();
+        if m.multi {
+            m.marked.iter().copied().collect()
+        } else {
+            m.selected.into_iter().collect()
+        }
+    }
+
+    /// Selects exactly `rows` (the first gets the focus). With single
+    /// selection only the first is kept.
+    pub fn select_rows(&mut self, rows: &[usize]) {
+        let n = self.len();
+        let rows: Vec<usize> = rows.iter().copied().filter(|r| *r < n).collect();
+        if !self.model.borrow().multi {
+            self.select(rows.first().copied());
+            return;
+        }
+        {
+            let mut m = self.model.borrow_mut();
+            m.marked = rows.iter().copied().collect();
+            m.selected = rows.first().copied();
+            m.anchor = m.selected;
+        }
+        self.table.redraw();
+        fire(&self.model, false);
+    }
+
     /// Replaces every row. The selection is cleared.
     pub fn set_rows(&mut self, rows: Vec<Vec<Cell>>) {
         let n = rows.len() as i32;
@@ -210,6 +342,8 @@ impl ListTable {
             let mut m = self.model.borrow_mut();
             m.rows = rows;
             m.selected = None;
+            m.marked.clear();
+            m.anchor = None;
         }
         self.table.set_rows(n);
         self.table.set_row_height_all(theme::ROW_H);
@@ -257,13 +391,56 @@ impl ListTable {
 fn set_selection(t: &mut TableRow, m: &Rc<RefCell<Model>>, row: Option<usize>) {
     let changed = {
         let mut m = m.borrow_mut();
-        let changed = m.selected != row;
+        let marked: BTreeSet<usize> = row.into_iter().collect();
+        let changed = m.selected != row || (m.multi && m.marked != marked);
         m.selected = row;
+        m.anchor = row;
+        if m.multi {
+            m.marked = marked;
+        }
         changed
     };
     t.redraw();
     if changed {
         fire(m, false);
+    }
+}
+
+/// Ctrl+click: adds or removes one row.
+fn toggle(t: &mut TableRow, m: &Rc<RefCell<Model>>, row: usize) {
+    {
+        let mut mm = m.borrow_mut();
+        if !mm.marked.remove(&row) {
+            mm.marked.insert(row);
+        }
+        mm.selected = Some(row);
+        mm.anchor = Some(row);
+    }
+    t.redraw();
+    fire(m, false);
+}
+
+/// Shift+click or Shift+arrow: selects from the anchor to `row`.
+fn extend(t: &mut TableRow, m: &Rc<RefCell<Model>>, row: usize) {
+    {
+        let mut mm = m.borrow_mut();
+        let a = mm.anchor.unwrap_or(row);
+        mm.marked = (a.min(row)..=a.max(row)).collect();
+        mm.selected = Some(row);
+    }
+    t.redraw();
+    fire(m, false);
+}
+
+/// Runs the header callback without holding the model borrowed.
+fn fire_header(m: &Rc<RefCell<Model>>, col: usize) {
+    let cb = m.borrow_mut().on_header.take();
+    if let Some(mut cb) = cb {
+        cb(col);
+        let mut mm = m.borrow_mut();
+        if mm.on_header.is_none() {
+            mm.on_header = Some(cb);
+        }
     }
 }
 

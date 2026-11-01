@@ -87,7 +87,11 @@ pub fn open_file(state: &Shared, path: &Path, parent: Option<&dyn WindowExt>) ->
     if s.auto_connect() {
         s.connect(None);
     }
-    state.borrow_mut().note_recent(&path);
+    {
+        let mut st = state.borrow_mut();
+        st.settings.mark_used(&path, crate::localtime::now());
+        st.note_recent(&path);
+    }
     SESSIONS.with(|v| v.borrow_mut().push(s));
     true
 }

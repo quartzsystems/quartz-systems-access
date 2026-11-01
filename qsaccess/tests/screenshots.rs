@@ -160,6 +160,60 @@ fn certificate() -> Window {
     .0
 }
 
+/// Session Manager showing a fixed set of files (none ever used, so the
+/// time zone does not matter).
+fn session_manager(state: &Shared) -> Window {
+    use qsa_config::qsd::SessionFile;
+    use qsaccess::manager::{self, Entry};
+    let dir = std::path::PathBuf::from("/home/user/Documents/Quartz Access/Sessions");
+    let mut entries = Vec::new();
+    for (title, sys, wide, dev) in [
+        ("Payroll", "sys1.example.net", false, ""),
+        ("Operations console", "sys1.example.net", true, "QSAOPS01"),
+        ("Development", "dev.example.net", false, "DEVDSP01"),
+    ] {
+        let mut f = SessionFile::new(&System::new(sys));
+        f.session.title = title.into();
+        if wide {
+            f.session.screen_size = ScreenSize::S27x132;
+        }
+        f.session.device_name = dev.into();
+        entries.push(Entry {
+            path: dir.join(format!("{title}.qsd")),
+            folder: dir.clone(),
+            file: Ok(f),
+            last_used: None,
+        });
+    }
+    entries.push(Entry {
+        path: dir.join("old.qsd"),
+        folder: dir.clone(),
+        file: Err("not valid".into()),
+        last_used: None,
+    });
+    let m = manager::build(state);
+    let pick = [dir.join("Payroll.qsd"), dir.join("Development.qsd")];
+    m.show(entries, &pick, 1);
+    m.window.clone()
+}
+
+/// Session Properties for a session of sys1.
+fn session_properties(state: &Shared, tab: usize) -> Window {
+    use qsa_config::qsd::SessionFile;
+    use qsaccess::session::props;
+    let st = state.borrow();
+    let sys = st.systems.get("sys1.example.net").expect("fixture system");
+    let mut f = SessionFile::new(sys);
+    f.session.title = "Payroll".into();
+    let (mut d, _form) = props::build(
+        "Session Properties - Payroll",
+        &props::Props::from_file(&f),
+        &st.systems,
+    );
+    d.tabs().select(tab);
+    d.window().clone()
+}
+
 /// QAD0030 for a settings file with a long path, which must wrap.
 fn long_path_message() -> Window {
     let p = r"C:\Users\someone\AppData\Local\Temp\claude\c--Users-someone-Documents-GitHub-example\e77d43e6-eac0-4c01-9379-4ad509a246ef\scratchpad\e2e\cfg\settings.toml";
@@ -201,6 +255,15 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     ));
     out.push(("certificate".to_owned(), certificate()));
     out.push(("message-long-path".to_owned(), long_path_message()));
+    out.push(("session-manager".to_owned(), session_manager(state)));
+    out.push((
+        "session-properties-general".to_owned(),
+        session_properties(state, 0),
+    ));
+    out.push((
+        "session-properties-hotspots".to_owned(),
+        session_properties(state, 1),
+    ));
     out
 }
 

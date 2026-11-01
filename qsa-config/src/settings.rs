@@ -127,6 +127,11 @@ pub struct Settings {
     pub display: std::collections::BTreeMap<String, Display>,
     /// Session files opened or saved most recently, newest first.
     pub recent_sessions: Vec<PathBuf>,
+    /// Folders Session Manager lists besides the Sessions folder.
+    pub session_folders: Vec<PathBuf>,
+    /// When each session file was last started, as Unix seconds, by path
+    /// (see [`path_key`]).
+    pub last_used: std::collections::BTreeMap<String, i64>,
     /// The keyboard map new sessions start from, as changes from the
     /// built-in defaults. `None`: the defaults.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -141,9 +146,18 @@ impl Default for Settings {
             window: None,
             display: Default::default(),
             recent_sessions: Vec::new(),
+            session_folders: Vec::new(),
+            last_used: Default::default(),
             new_session_keymap: None,
         }
     }
+}
+
+/// A path as a key of [`Settings::last_used`]: lower case on Windows, where
+/// case does not matter.
+pub fn path_key(p: &Path) -> String {
+    let s = p.display().to_string();
+    if cfg!(windows) { s.to_lowercase() } else { s }
 }
 
 /// Whether two paths name the same file, ignoring case on Windows.
@@ -163,6 +177,44 @@ impl Settings {
         self.recent_sessions.retain(|p| !same_path(p, path));
         self.recent_sessions.insert(0, path.to_owned());
         self.recent_sessions.truncate(RECENT_MAX);
+    }
+
+    /// Notes that a session file was started at `when` (Unix seconds).
+    pub fn mark_used(&mut self, path: &Path, when: i64) {
+        self.last_used.insert(path_key(path), when);
+    }
+
+    /// When a session file was last started.
+    pub fn last_used(&self, path: &Path) -> Option<i64> {
+        self.last_used.get(&path_key(path)).copied()
+    }
+
+    /// Moves what is kept about a session file to its new path (after a
+    /// rename), or forgets it (`to` is `None`, after a delete).
+    pub fn moved(&mut self, from: &Path, to: Option<&Path>) {
+        let used = self.last_used.remove(&path_key(from));
+        if let (Some(t), Some(to)) = (used, to) {
+            self.last_used.insert(path_key(to), t);
+        }
+        for p in self.recent_sessions.iter_mut() {
+            if same_path(p, from)
+                && let Some(to) = to
+            {
+                *p = to.to_owned();
+            }
+        }
+        if to.is_none() {
+            self.recent_sessions.retain(|p| !same_path(p, from));
+        }
+    }
+
+    /// Adds a folder to Session Manager. False if it is already listed.
+    pub fn add_session_folder(&mut self, dir: &Path) -> bool {
+        if self.session_folders.iter().any(|d| same_path(d, dir)) {
+            return false;
+        }
+        self.session_folders.push(dir.to_owned());
+        true
     }
 
     /// The keyboard map a new session starts from.
@@ -261,6 +313,25 @@ mod tests {
         let text = toml::to_string(&s).unwrap();
         let back: Settings = toml::from_str(&text).unwrap();
         assert_eq!(back.recent_sessions, s.recent_sessions);
+    }
+
+    #[test]
+    fn last_used_follows_renames_and_deletes() {
+        let mut s = Settings::default();
+        let (a, b) = (Path::new("/s/A.qsd"), Path::new("/s/B.qsd"));
+        s.mark_used(a, 100);
+        s.add_recent(a);
+        s.moved(a, Some(b));
+        assert_eq!(s.last_used(a), None);
+        assert_eq!(s.last_used(b), Some(100));
+        assert_eq!(s.recent_sessions, [b]);
+        s.moved(b, None);
+        assert_eq!(s.last_used(b), None);
+        assert!(s.recent_sessions.is_empty());
+        assert!(s.add_session_folder(Path::new("/x")));
+        assert!(!s.add_session_folder(Path::new("/x")));
+        let back: Settings = toml::from_str(&toml::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back.session_folders, [Path::new("/x")]);
     }
 
     #[test]
