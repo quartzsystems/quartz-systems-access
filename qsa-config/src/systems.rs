@@ -15,6 +15,10 @@ pub struct Systems {
     list: Vec<System>,
 }
 
+/// The `systems.toml` version written. 2 added `port-lookup`; version 1
+/// files read with it at its default.
+pub(crate) const VERSION: u32 = 2;
+
 /// On-disk form of `systems.toml`.
 #[derive(Serialize, Deserialize)]
 pub(crate) struct SystemsFile {
@@ -137,7 +141,7 @@ impl Systems {
 
     pub(crate) fn to_file(&self) -> SystemsFile {
         SystemsFile {
-            version: 1,
+            version: VERSION,
             systems: self.list.clone(),
         }
     }
@@ -186,6 +190,28 @@ mod tests {
         assert!(s.check(None, &sys("c")).is_ok());
         assert!(s.check(Some("b"), &sys("B")).is_ok());
         assert!(s.check(None, &sys("b")).is_err());
+    }
+
+    #[test]
+    fn version_1_files_get_the_default_port_lookup() {
+        let old = "version = 1
+
+[[system]]
+name = \"old.example\"
+use_tls = true
+";
+        let f: SystemsFile = toml::from_str(old).unwrap();
+        assert_eq!(f.version, 1);
+        let s = Systems::from_vec(f.systems);
+        let sys = s.get("old.example").unwrap();
+        assert_eq!(sys.port_lookup, crate::PortLookup::MapperThenStandard);
+        assert!(sys.use_tls);
+        let written = toml::to_string(&s.to_file()).unwrap();
+        assert!(written.starts_with("version = 2"), "{written}");
+        assert!(
+            written.contains("port_lookup = \"mapper-then-standard\""),
+            "{written}"
+        );
     }
 
     #[test]

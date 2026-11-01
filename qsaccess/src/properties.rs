@@ -14,7 +14,7 @@ use fltk::menu::Choice;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay};
 use fltk::window::Window;
-use qsa_config::system::{PORT_FIELDS, Ports};
+use qsa_config::system::{PORT_FIELDS, PortLookup, Ports};
 use qsa_config::{AddressLookup, CaCertificate, CredentialMode, Invalid, System, Systems};
 use qsa_ui::controls::{self, Switch};
 use qsa_ui::groupbox::{self, CONTENT_SIDE, CONTENT_TOP};
@@ -45,6 +45,7 @@ pub struct SystemForm {
     default_user: Input,
     lookup: Choice,
     fixed_ip: Input,
+    port_lookup: Choice,
     ports: Vec<(usize, IntInput)>,
     cas: Rc<RefCell<Vec<CaCertificate>>>,
 }
@@ -56,6 +57,15 @@ const MODES: [(CredentialMode, &str); 3] = [
         "Prompt for user ID and password once",
     ),
     (CredentialMode::PromptEveryTime, "Prompt every time"),
+];
+
+const PORT_LOOKUPS: [(PortLookup, &str); 3] = [
+    (
+        PortLookup::MapperThenStandard,
+        "Server mapper, then standard ports",
+    ),
+    (PortLookup::StandardOnly, "Standard ports only"),
+    (PortLookup::Fixed, "Fixed ports as listed"),
 ];
 
 const LOOKUPS: [(AddressLookup, &str); 3] = [
@@ -162,7 +172,23 @@ pub fn build(title: &str, system: &System) -> (PropertyDialog, SystemForm) {
 
     // Ports.
     let mut ports = Vec::new();
+    let mut port_lookup = None;
     d.tabs().add_page("Ports", |r| {
+        controls::label(r.x, r.y, 90, fh, "Port lookup:");
+        let mut lookup = controls::combo(r.x + 90, r.y, 230, fh);
+        for (_, l) in PORT_LOOKUPS {
+            lookup.add_choice(l);
+        }
+        let li = PORT_LOOKUPS
+            .iter()
+            .position(|(l, _)| *l == system.port_lookup)
+            .unwrap_or(0);
+        lookup.set_value(li as i32);
+        lookup.set_tooltip(
+            "How the host servers' ports are found; Telnet always uses its ports below",
+        );
+        port_lookup = Some(lookup);
+        let r = fltk::draw::Rect::new(r.x, r.y + fh + 10, r.w, r.h - fh - 10);
         let (c1, c2, c3) = (r.x, r.x + 150, r.x + 230);
         let head = |x: i32, t: &str| {
             let mut l = controls::label(x, r.y, 80, 18, t);
@@ -274,6 +300,22 @@ pub fn build(title: &str, system: &System) -> (PropertyDialog, SystemForm) {
         });
     });
 
+    // The mapper's own port matters only when the mapper is asked.
+    let mut port_lookup = port_lookup.expect("ports page built");
+    if let Some((_, f)) = ports
+        .iter_mut()
+        .find(|(i, _)| PORT_FIELDS[*i].label == "Server mapper")
+    {
+        let mapper = Switch::for_input(f);
+        mapper.set_enabled(system.port_lookup.uses_mapper());
+        port_lookup.set_callback(move |c| {
+            let mode = PORT_LOOKUPS
+                .get(c.value().max(0) as usize)
+                .map_or(PortLookup::MapperThenStandard, |(m, _)| *m);
+            mapper.set_enabled(mode.uses_mapper());
+        });
+    }
+
     let form = SystemForm {
         name,
         description,
@@ -282,6 +324,7 @@ pub fn build(title: &str, system: &System) -> (PropertyDialog, SystemForm) {
         default_user,
         lookup,
         fixed_ip,
+        port_lookup,
         ports,
         cas,
     };
@@ -306,6 +349,9 @@ impl SystemForm {
             .zip(&self.mode)
             .find(|(_, r)| r.value())
             .map_or(CredentialMode::DefaultUser, |((m, _), _)| *m);
+        s.port_lookup = PORT_LOOKUPS
+            .get(self.port_lookup.value().max(0) as usize)
+            .map_or(PortLookup::MapperThenStandard, |(l, _)| *l);
         s.address_lookup = LOOKUPS
             .get(self.lookup.value().max(0) as usize)
             .map_or(AddressLookup::Always, |(l, _)| *l);
@@ -328,7 +374,7 @@ pub fn tab_for(e: &Invalid) -> usize {
         | Invalid::DefaultUserSpaces
         | Invalid::FixedIpMissing
         | Invalid::FixedIpBad(_) => TAB_CONNECTION,
-        Invalid::PortZero(_) => TAB_PORTS,
+        Invalid::PortZero(_) | Invalid::PortShared(..) => TAB_PORTS,
         Invalid::CaEmpty => TAB_SECURITY,
     }
 }

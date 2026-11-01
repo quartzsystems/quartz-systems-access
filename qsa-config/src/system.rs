@@ -35,6 +35,27 @@ pub enum AddressLookup {
     Never,
 }
 
+/// How a host server's port is found.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PortLookup {
+    /// Ask the server mapper (port 449, never TLS); if it cannot be
+    /// reached or refuses, use the configured port and say so once.
+    #[default]
+    MapperThenStandard,
+    /// Use the configured ports; never contact the server mapper.
+    StandardOnly,
+    /// Use the configured ports, which must each be set and distinct.
+    Fixed,
+}
+
+impl PortLookup {
+    /// Whether the server mapper is asked.
+    pub fn uses_mapper(self) -> bool {
+        self == PortLookup::MapperThenStandard
+    }
+}
+
 /// The server ports. Each service has a plain port and a TLS port.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
@@ -162,6 +183,10 @@ pub struct System {
     pub address_lookup: AddressLookup,
     /// Used when `address_lookup` is `Never`.
     pub fixed_ip: String,
+    /// How host server ports are found. Telnet ports always come from
+    /// `ports`. Systems saved before this setting existed read as the
+    /// default.
+    pub port_lookup: PortLookup,
     pub ports: Ports,
     pub ca_certificates: Vec<CaCertificate>,
 }
@@ -185,6 +210,8 @@ pub enum Invalid {
     FixedIpBad(String),
     #[error("{0} port must be from 1 to 65535.")]
     PortZero(&'static str),
+    #[error("{0} and {1} cannot use the same port when ports are fixed.")]
+    PortShared(&'static str, &'static str),
     #[error("A CA certificate entry is empty.")]
     CaEmpty,
 }
@@ -248,6 +275,20 @@ impl System {
         for f in PORT_FIELDS {
             if (f.get)(&self.ports) == 0 {
                 return Err(Invalid::PortZero(f.label));
+            }
+        }
+        if self.port_lookup == PortLookup::Fixed {
+            // The mapper's own port is not used in this mode.
+            let used: Vec<&PortField> = PORT_FIELDS
+                .iter()
+                .filter(|f| f.label != "Server mapper")
+                .collect();
+            for (i, a) in used.iter().enumerate() {
+                for b in &used[i + 1..] {
+                    if (a.get)(&self.ports) == (b.get)(&self.ports) {
+                        return Err(Invalid::PortShared(a.label, b.label));
+                    }
+                }
             }
         }
         for ca in &self.ca_certificates {
@@ -356,6 +397,16 @@ mod tests {
             Ok(())
         );
         assert_eq!(v(|s| s.ports.file = 0), Err(Invalid::PortZero("File")));
+        // Shared ports are only an error when ports are fixed.
+        assert_eq!(v(|s| s.ports.file = 8476), Ok(()));
+        assert_eq!(
+            v(|s| {
+                s.port_lookup = PortLookup::Fixed;
+                s.ports.file = 8476;
+            }),
+            Err(Invalid::PortShared("Sign-on", "File"))
+        );
+        assert_eq!(v(|s| s.port_lookup = PortLookup::Fixed), Ok(()));
         assert_eq!(
             v(|s| s.ca_certificates.push(CaCertificate::Pem(" ".into()))),
             Err(Invalid::CaEmpty)

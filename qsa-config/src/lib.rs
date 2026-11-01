@@ -38,5 +38,7 @@ pub use doc::FileError;
 pub use keymap::KeyMap;
 pub use settings::Settings;
 pub use store::{ConfigDir, ReadError};
-pub use system::{AddressLookup, CaCertificate, CredentialMode, Invalid, Ports, System};
+pub use system::{
+    AddressLookup, CaCertificate, CredentialMode, Invalid, PortLookup, Ports, System,
+};
 pub use systems::Systems;
