@@ -367,8 +367,8 @@ pub(crate) mod tests {
             assert!(p.ends_with("/Quartz Access/Sessions"), "{p}");
             // It is under the Documents folder the platform reports, which
             // on Windows is wherever Documents has been moved to.
-            if let Some(docs) = directories::UserDirs::new()
-                .and_then(|u| u.document_dir().map(Path::to_owned))
+            if let Some(docs) =
+                directories::UserDirs::new().and_then(|u| u.document_dir().map(Path::to_owned))
             {
                 assert_eq!(d, docs.join("Quartz Access").join("Sessions"));
             }
