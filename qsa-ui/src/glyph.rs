@@ -190,8 +190,10 @@ impl Canvas {
         });
     }
 
-    /// A rectangle with an outline of width `t` in `edge` and body `fill`.
-    fn boxed(&mut self, x: f32, y: f32, w: f32, h: f32, r: f32, t: f32, edge: Rgb, fill: Paint) {
+    /// A rectangle `[x, y, w, h]` with an outline of width `t` in `edge` and
+    /// body `fill`.
+    fn boxed(&mut self, rect: [f32; 4], r: f32, t: f32, edge: Rgb, fill: Paint) {
+        let [x, y, w, h] = rect;
         self.rrect(x, y, w, h, r, Paint::Flat(edge));
         self.rrect(
             x + t,
@@ -276,11 +278,13 @@ impl Canvas {
                     }
                 }
                 let i = (y * size + x) * 4;
-                if a > 0 {
-                    // Colour is the average of covered samples; alpha is coverage.
-                    out[i] = (r / a) as u8;
-                    out[i + 1] = (g / a) as u8;
-                    out[i + 2] = (b / a) as u8;
+                // Colour is the average of covered samples; alpha is coverage.
+                if let (Some(r), Some(g), Some(b)) =
+                    (r.checked_div(a), g.checked_div(a), b.checked_div(a))
+                {
+                    out[i] = r as u8;
+                    out[i + 1] = g as u8;
+                    out[i + 2] = b as u8;
                     out[i + 3] = (a * 255 / (SS * SS) as u32) as u8;
                 }
             }
@@ -299,20 +303,14 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
             // Monitor with a dark screen and prompt lines, on a stand.
             c.rrect(6.0, 12.0, 4.0, 2.0, 0.0, Shade(STEEL, STEEL_EDGE));
             c.boxed(
-                3.5,
-                13.25,
-                9.0,
-                2.0,
+                [3.5, 13.25, 9.0, 2.0],
                 0.75,
                 t,
                 STEEL_EDGE,
                 Shade(STEEL_LIGHT, STEEL),
             );
             c.boxed(
-                0.75,
-                1.25,
-                14.5,
-                11.0,
+                [0.75, 1.25, 14.5, 11.0],
                 1.25,
                 t,
                 STEEL_EDGE,
@@ -326,10 +324,7 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
         Glyph::Printer => {
             // Sheet in, body, sheet out.
             c.boxed(
-                3.75,
-                0.75,
-                8.5,
-                6.0,
+                [3.75, 0.75, 8.5, 6.0],
                 0.5,
                 t,
                 PAPER_EDGE,
@@ -338,10 +333,7 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
             c.stroke(&[(5.25, 2.75), (10.25, 2.75)], 0.5, RULE);
             c.stroke(&[(5.25, 4.5), (9.25, 4.5)], 0.5, RULE);
             c.boxed(
-                0.75,
-                5.75,
-                14.5,
-                6.75,
+                [0.75, 5.75, 14.5, 6.75],
                 1.5,
                 t,
                 STEEL_EDGE,
@@ -350,10 +342,7 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
             c.dot(12.5, 7.75, 0.7, LED_GREEN);
             c.rrect(3.0, 10.0, 10.0, 1.0, 0.5, Flat(GRAPHITE));
             c.boxed(
-                3.75,
-                10.5,
-                8.5,
-                4.75,
+                [3.75, 10.5, 8.5, 4.75],
                 0.5,
                 t,
                 PAPER_EDGE,
@@ -364,10 +353,7 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
         Glyph::Table => {
             // A sheet with a blue header row and light rules.
             c.boxed(
-                0.75,
-                1.75,
-                14.5,
-                12.5,
+                [0.75, 1.75, 14.5, 12.5],
                 1.0,
                 t,
                 PAPER_EDGE,
@@ -418,10 +404,7 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
         Glyph::Disk => {
             // A drive: slab with a slot and a lamp.
             c.boxed(
-                0.75,
-                4.0,
-                14.5,
-                8.5,
+                [0.75, 4.0, 14.5, 8.5],
                 1.5,
                 t,
                 STEEL_EDGE,
@@ -435,10 +418,7 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
         Glyph::System => {
             // A graphite server unit with drive bays and a blue lamp.
             c.boxed(
-                3.25,
-                0.75,
-                9.5,
-                14.5,
+                [3.25, 0.75, 9.5, 14.5],
                 1.25,
                 t,
                 GRAPHITE_EDGE,
@@ -446,10 +426,7 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
             );
             for y in [2.5, 5.0, 7.5] {
                 c.boxed(
-                    4.75,
-                    y,
-                    6.5,
-                    1.75,
+                    [4.75, y, 6.5, 1.75],
                     0.4,
                     0.4,
                     GRAPHITE_EDGE,
