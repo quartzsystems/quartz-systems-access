@@ -8,8 +8,9 @@
 //! Nothing reads the desktop theme: FLTK's system colours are never loaded and
 //! every box is drawn by the functions below from the fixed palette.
 //!
-//! The look is light and flat: a pale face, white panels, one-pixel outlines,
-//! and a single light inner edge on buttons in place of a heavy 3D bevel.
+//! The look is light and flat: a pale grey face, white panels, one-pixel
+//! outlines, and push buttons that turn pale blue with a blue edge under the
+//! pointer.
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -24,7 +25,7 @@ pub mod colors {
     use fltk::enums::Color;
 
     /// Window and dialog face.
-    pub const FACE: Color = Color::from_rgb(0xEE, 0xED, 0xEA);
+    pub const FACE: Color = Color::from_rgb(0xF0, 0xF0, 0xF0);
     /// List, field and panel background.
     pub const WINDOW: Color = Color::from_rgb(0xFF, 0xFF, 0xFF);
     /// Normal text.
@@ -45,19 +46,25 @@ pub mod colors {
     pub const TOOLTIP: Color = Color::from_rgb(0xFF, 0xFF, 0xE1);
 
     /// Push button body.
-    pub const BUTTON: Color = Color::from_rgb(0xF8, 0xF7, 0xF5);
+    pub const BUTTON: Color = Color::from_rgb(0xFD, 0xFD, 0xFD);
     /// Push button body while pressed.
-    pub const BUTTON_PRESSED: Color = Color::from_rgb(0xD9, 0xD7, 0xD2);
-    /// Outline of controls: buttons, fields, lists.
-    pub const BORDER: Color = Color::from_rgb(0x8E, 0x8C, 0x88);
+    pub const BUTTON_PRESSED: Color = Color::from_rgb(0xCF, 0xE0, 0xF7);
+    /// Push button body under the pointer.
+    pub const BUTTON_HOVER: Color = Color::from_rgb(0xE6, 0xEF, 0xFB);
+    /// Push button outline under the pointer or pressed.
+    pub const BUTTON_HOT_BORDER: Color = Color::from_rgb(0x2F, 0x6F, 0xD6);
+    /// Outline of fields, combos and lists.
+    pub const FIELD_BORDER: Color = Color::from_rgb(0x7A, 0x7A, 0x7A);
+    /// Outline of push buttons and tabs.
+    pub const BORDER: Color = Color::from_rgb(0xAD, 0xAD, 0xAD);
     /// Outline of panels, separators and group boxes.
-    pub const BORDER_LIGHT: Color = Color::from_rgb(0xC4, 0xC2, 0xBD);
+    pub const BORDER_LIGHT: Color = Color::from_rgb(0xD5, 0xD5, 0xD5);
     /// Outline of the default button.
-    pub const BORDER_DEFAULT: Color = Color::from_rgb(0x3A, 0x3A, 0x3A);
+    pub const BORDER_DEFAULT: Color = Color::from_rgb(0x2F, 0x6F, 0xD6);
     /// Light inner edge at the top and left of raised controls.
     pub const HIGHLIGHT: Color = Color::from_rgb(0xFF, 0xFF, 0xFF);
     /// Inactive tab body.
-    pub const TAB_INACTIVE: Color = Color::from_rgb(0xE1, 0xDF, 0xDA);
+    pub const TAB_INACTIVE: Color = Color::from_rgb(0xE8, 0xE8, 0xE8);
     /// Task pane group header band.
     pub const TASK_HEADER: Color = Color::from_rgb(0xE3, 0xE6, 0xEE);
     /// Rule that divides sections of the task pane.
@@ -96,9 +103,9 @@ pub const MONO_FONT: Font = Font::Courier;
 /// Monospace, bold.
 pub const MONO_FONT_BOLD: Font = Font::CourierBold;
 
-/// Box type of the default (Enter) button: a dark outline round the button.
+/// Box type of the default (Enter) button: a blue outline.
 pub const DEFAULT_BUTTON_BOX: FrameType = FrameType::PlasticUpBox;
-/// Box type of a pressed push button: darker body, plain outline.
+/// Box type of a pressed push button: pale blue body, blue outline.
 pub const PRESSED_BUTTON_BOX: FrameType = FrameType::PlasticDownBox;
 
 struct BundledFont {
@@ -192,7 +199,7 @@ fn set_colors() {
         (Color::Inactive, colors::DISABLED_TEXT),
         (Color::Black, colors::TEXT),
         (Color::White, colors::WINDOW),
-        (Color::Dark3, colors::BORDER),
+        (Color::Dark3, colors::FIELD_BORDER),
         (Color::Dark2, colors::BORDER_LIGHT),
         (Color::Light3, colors::HIGHLIGHT),
     ] {
@@ -255,16 +262,14 @@ fn fill(x: i32, y: i32, w: i32, h: i32, c: Color) {
     }
 }
 
-/// Raised: a control outline with a light inner edge at the top and left.
+/// Raised: a flat push-button outline.
 pub fn draw_raised(x: i32, y: i32, w: i32, h: i32) {
     outline(x, y, w, h, colors::BORDER);
-    hline(x + 1, y + 1, w - 2, colors::HIGHLIGHT);
-    vline(x + 1, y + 2, h - 3, colors::HIGHLIGHT);
 }
 
-/// Sunken: fields and lists.
+/// Sunken: fields, combos and lists.
 pub fn draw_sunken(x: i32, y: i32, w: i32, h: i32) {
-    outline(x, y, w, h, colors::BORDER);
+    outline(x, y, w, h, colors::FIELD_BORDER);
 }
 
 /// Panel: group boxes, status panels, tab pages.
@@ -284,7 +289,12 @@ pub fn draw_separator_v(x: i32, y: i32, h: i32) {
 
 fn up_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
     fill(x + 1, y + 1, w - 2, h - 2, c);
-    draw_raised(x, y, w, h);
+    // A button under the pointer is given the hover body; its edge turns blue.
+    if c == colors::BUTTON_HOVER {
+        outline(x, y, w, h, colors::BUTTON_HOT_BORDER);
+    } else {
+        draw_raised(x, y, w, h);
+    }
 }
 
 fn up_frame(x: i32, y: i32, w: i32, h: i32, _c: Color) {
@@ -312,13 +322,11 @@ fn panel_frame(x: i32, y: i32, w: i32, h: i32, _c: Color) {
 fn default_button_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
     fill(x + 1, y + 1, w - 2, h - 2, c);
     outline(x, y, w, h, colors::BORDER_DEFAULT);
-    hline(x + 1, y + 1, w - 2, colors::HIGHLIGHT);
-    vline(x + 1, y + 2, h - 3, colors::HIGHLIGHT);
 }
 
 fn pressed_button_box(x: i32, y: i32, w: i32, h: i32, _c: Color) {
     fill(x + 1, y + 1, w - 2, h - 2, colors::BUTTON_PRESSED);
-    outline(x, y, w, h, colors::BORDER);
+    outline(x, y, w, h, colors::BUTTON_HOT_BORDER);
 }
 
 /// The radio button well: a fixed 12×12 bitmap, so it is pixel-identical on

@@ -5,9 +5,9 @@
 //! The glyph set: 16×16 and 32×32 icons drawn in code.
 //!
 //! Glyphs are described with a few vector shapes on a 16-unit grid and
-//! rendered on a 4× supersampled canvas, then averaged down, so edges are
-//! smooth at both sizes. Fills shade softly from top to bottom and outlines
-//! are a darker tone of the fill rather than black.
+//! rendered on a 2× supersampled canvas, then averaged down: crisp, with just
+//! enough smoothing on diagonals. Outlines are one dark pixel; fills are
+//! saturated and shade lightly from top to bottom.
 
 use fltk::enums::ColorDepth;
 use fltk::image::RgbImage;
@@ -20,35 +20,35 @@ const fn hex(v: u32) -> Rgb {
     Rgb((v >> 16) as u8, (v >> 8) as u8, v as u8)
 }
 
-/// The glyph palette: muted tones, each with a light and dark shade.
+/// The glyph palette: saturated tones, each with a light shade and a dark edge.
 pub mod palette {
     use super::{Rgb, hex};
-    pub const STEEL_LIGHT: Rgb = hex(0xF4F6F8);
-    pub const STEEL: Rgb = hex(0xC4CBD4);
-    pub const STEEL_EDGE: Rgb = hex(0x4E5864);
-    pub const GRAPHITE_LIGHT: Rgb = hex(0x4A5563);
-    pub const GRAPHITE: Rgb = hex(0x2B323C);
-    pub const GRAPHITE_EDGE: Rgb = hex(0x1C2128);
-    pub const SCREEN_TOP: Rgb = hex(0x22344A);
-    pub const SCREEN_BOTTOM: Rgb = hex(0x162230);
-    pub const PROMPT: Rgb = hex(0x7FDBA8);
+    pub const STEEL_LIGHT: Rgb = hex(0xF4F4F4);
+    pub const STEEL: Rgb = hex(0xC6C6C6);
+    pub const STEEL_EDGE: Rgb = hex(0x3E3E3E);
+    pub const GRAPHITE_LIGHT: Rgb = hex(0xEAE5D7);
+    pub const GRAPHITE: Rgb = hex(0xBFB7A3);
+    pub const GRAPHITE_EDGE: Rgb = hex(0x57513F);
+    pub const SCREEN_TOP: Rgb = hex(0x0E1E44);
+    pub const SCREEN_BOTTOM: Rgb = hex(0x02060E);
+    pub const PROMPT: Rgb = hex(0x22E022);
     pub const PAPER: Rgb = hex(0xFFFFFF);
-    pub const PAPER_SHADE: Rgb = hex(0xEEF1F4);
-    pub const PAPER_EDGE: Rgb = hex(0x5E6874);
-    pub const RULE: Rgb = hex(0xA9B2BE);
-    pub const BLUE_LIGHT: Rgb = hex(0x6EA2E3);
-    pub const BLUE: Rgb = hex(0x3A73C2);
-    pub const BLUE_EDGE: Rgb = hex(0x24528F);
-    pub const AMBER_LIGHT: Rgb = hex(0xF7D374);
-    pub const AMBER: Rgb = hex(0xE8AE34);
-    pub const AMBER_BACK: Rgb = hex(0xD4972A);
-    pub const AMBER_EDGE: Rgb = hex(0xA87318);
-    pub const GREEN: Rgb = hex(0x2F9E5E);
-    pub const GREEN_EDGE: Rgb = hex(0x1F7444);
-    pub const LED_GREEN: Rgb = hex(0x45D483);
-    pub const LED_BLUE: Rgb = hex(0x5AB0FF);
-    pub const RED: Rgb = hex(0xD5483E);
-    pub const RED_EDGE: Rgb = hex(0xA3302A);
+    pub const PAPER_SHADE: Rgb = hex(0xEDEDED);
+    pub const PAPER_EDGE: Rgb = hex(0x4A4A4A);
+    pub const RULE: Rgb = hex(0x8EA6CF);
+    pub const BLUE_LIGHT: Rgb = hex(0x7BA6F0);
+    pub const BLUE: Rgb = hex(0x2A5FC6);
+    pub const BLUE_EDGE: Rgb = hex(0x163A82);
+    pub const AMBER_LIGHT: Rgb = hex(0xFFE58C);
+    pub const AMBER: Rgb = hex(0xF2BE45);
+    pub const AMBER_BACK: Rgb = hex(0xDCA22C);
+    pub const AMBER_EDGE: Rgb = hex(0x7D5A0C);
+    pub const GREEN: Rgb = hex(0x23A02A);
+    pub const GREEN_EDGE: Rgb = hex(0x0F5E14);
+    pub const LED_GREEN: Rgb = hex(0x18D018);
+    pub const LED_BLUE: Rgb = hex(0x2F8CFF);
+    pub const RED: Rgb = hex(0xE2311F);
+    pub const RED_EDGE: Rgb = hex(0x821408);
 }
 
 /// The glyphs.
@@ -112,7 +112,7 @@ impl Size {
 }
 
 /// Supersampling factor per axis.
-const SS: usize = 4;
+const SS: usize = 2;
 
 /// A fill: flat, or shaded from `top` to `bottom` over the shape's height.
 #[derive(Clone, Copy)]
@@ -296,8 +296,8 @@ impl Canvas {
 fn draw(glyph: Glyph, c: &mut Canvas) {
     use Paint::*;
     use palette::*;
-    // Outline width in grid units: one full pixel at 16, a pixel and a half at 32.
-    let t = if c.large() { 0.75 } else { 1.0 };
+    // Outline width in grid units: one pixel at either size.
+    let t = if c.large() { 0.5 } else { 1.0 };
     match glyph {
         Glyph::Terminal => {
             // Monitor with a dark screen and prompt lines, on a stand.
@@ -416,7 +416,7 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
             c.stroke(&[(2.5, 10.75), (6.0, 10.75)], 0.5, STEEL_EDGE);
         }
         Glyph::System => {
-            // A graphite server unit with drive bays and a blue lamp.
+            // A server unit in a light case, with drive bays and a blue lamp.
             c.boxed(
                 [3.25, 0.75, 9.5, 14.5],
                 1.25,
@@ -434,7 +434,7 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
                 );
             }
             c.dot(9.75, 12.5, 0.85, LED_BLUE);
-            c.stroke(&[(5.0, 12.5), (7.75, 12.5)], 0.5, GRAPHITE_LIGHT);
+            c.stroke(&[(5.0, 12.5), (7.75, 12.5)], 0.5, GRAPHITE_EDGE);
         }
         Glyph::Check => {
             c.stroke(&[(2.5, 8.5), (6.25, 12.25), (13.5, 3.75)], 3.0, GREEN_EDGE);

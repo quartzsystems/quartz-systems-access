@@ -26,7 +26,25 @@ pub fn button(x: i32, y: i32, w: i32, h: i32, label: &str) -> Button {
     b.set_down_frame(theme::PRESSED_BUTTON_BOX);
     b.set_color(colors::BUTTON);
     b.set_label_size(theme::UI_SIZE);
+    b.handle(hover);
     b
+}
+
+/// Pale blue body under the pointer; the box draws the blue edge.
+fn hover<W: WidgetExt>(w: &mut W, ev: Event) -> bool {
+    match ev {
+        Event::Enter => {
+            w.set_color(colors::BUTTON_HOVER);
+            w.redraw();
+            true
+        }
+        Event::Leave => {
+            w.set_color(colors::BUTTON);
+            w.redraw();
+            true
+        }
+        _ => false,
+    }
 }
 
 /// The default button of a dialog: dark outline, pressed by Enter.
@@ -133,25 +151,37 @@ impl Switch {
     where
         W: WidgetExt + WidgetBase + Clone + 'static,
     {
+        Self::install_with(w, false, apply)
+    }
+
+    fn install_with<W>(w: &mut W, hovers: bool, apply: impl Fn(&mut W, bool) + 'static) -> Switch
+    where
+        W: WidgetExt + WidgetBase + Clone + 'static,
+    {
         let enabled = Rc::new(Cell::new(true));
         let flag = enabled.clone();
         w.super_handle_first(false);
-        w.handle(move |_, ev| {
-            !flag.get()
-                && matches!(
-                    ev,
-                    Event::Push
-                        | Event::Released
-                        | Event::Drag
-                        | Event::KeyDown
-                        | Event::KeyUp
-                        | Event::Shortcut
-                        | Event::MouseWheel
-                        | Event::Paste
-                        | Event::DndEnter
-                        | Event::DndDrag
-                        | Event::DndRelease
-                )
+        w.handle(move |w, ev| {
+            if flag.get() {
+                return hovers && hover(w, ev);
+            }
+            if matches!(ev, Event::Leave) && hovers {
+                hover(w, ev);
+            }
+            matches!(
+                ev,
+                Event::Push
+                    | Event::Released
+                    | Event::Drag
+                    | Event::KeyDown
+                    | Event::KeyUp
+                    | Event::Shortcut
+                    | Event::MouseWheel
+                    | Event::Paste
+                    | Event::DndEnter
+                    | Event::DndDrag
+                    | Event::DndRelease
+            )
         });
         let target = w.clone();
         Switch {
@@ -174,7 +204,7 @@ impl Switch {
     where
         B: ButtonExt + WidgetBase + Clone + 'static,
     {
-        Switch::install(b, |b, on| {
+        Switch::install_with(b, true, |b, on| {
             b.set_label_color(if on {
                 colors::TEXT
             } else {

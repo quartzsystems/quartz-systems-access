@@ -39,25 +39,27 @@ impl Toolbar {
         }
     }
 
-    /// Adds a tool button. It is flat until the pointer is over it, then raised;
-    /// pressed, it is sunken.
+    /// Adds a tool button. It is flat until the pointer is over it, then pale
+    /// blue with a blue edge.
     pub fn add(&mut self, glyph: Glyph, tooltip: &str, mut cb: impl FnMut() + 'static) -> Button {
         let y = self.group.y() + (Self::HEIGHT - Self::BUTTON) / 2;
         let mut b = Button::new(self.next_x, y, Self::BUTTON, Self::BUTTON, None);
         self.next_x += Self::BUTTON + 1;
         b.set_frame(FrameType::FlatBox);
-        b.set_down_frame(FrameType::ThinDownBox);
+        b.set_down_frame(theme::PRESSED_BUTTON_BOX);
         b.set_color(colors::FACE);
         b.set_tooltip(tooltip);
         b.set_image(Some(glyph::image(glyph, Size::Small)));
         b.clear_visible_focus();
         b.handle(move |b, ev| match ev {
             Event::Enter => {
-                b.set_frame(FrameType::ThinUpBox);
+                b.set_color(colors::BUTTON_HOVER);
+                b.set_frame(FrameType::UpBox);
                 b.redraw();
                 true
             }
             Event::Leave => {
+                b.set_color(colors::FACE);
                 b.set_frame(FrameType::FlatBox);
                 b.redraw();
                 true

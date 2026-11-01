@@ -57,7 +57,7 @@ impl Tabs {
         let mut panel = Widget::new(x, panel_y, w, h - (panel_y - y), None);
         panel.draw(|p| {
             draw::draw_rect_fill(p.x() + 1, p.y() + 1, p.w() - 2, p.h() - 2, colors::FACE);
-            theme::draw_sunken(p.x(), p.y(), p.w(), p.h());
+            theme::draw_panel(p.x(), p.y(), p.w(), p.h());
         });
         let mut strip = Widget::new(x, y, w, Self::STRIP_H, None);
         group.end();
@@ -216,7 +216,7 @@ fn draw_strip(s: &Widget, titles: &[String], current: usize) {
     let base = y + Tabs::STRIP_H - 1;
     draw::draw_rect_fill(x, y, w, Tabs::STRIP_H - 1, colors::FACE);
     // The panel's top edge, redrawn here so a damaged strip stays whole.
-    draw::draw_rect_fill(x, base, w, 1, colors::BORDER);
+    draw::draw_rect_fill(x, base, w, 1, colors::BORDER_LIGHT);
 
     let widths = tab_widths(titles);
     let mut tx = x + 2;
@@ -242,12 +242,9 @@ fn draw_tab(x: i32, y: i32, w: i32, h: i32, title: &str, active: bool) {
         colors::TAB_INACTIVE
     };
     draw::draw_rect_fill(x, y, w, h, body);
-    draw::draw_rect_fill(x, y, w, 1, colors::BORDER);
-    draw::draw_rect_fill(x, y + 1, 1, h - 1, colors::BORDER);
-    draw::draw_rect_fill(x + w - 1, y + 1, 1, h - 1, colors::BORDER);
-    if active {
-        draw::draw_rect_fill(x + 1, y + 1, w - 2, 1, colors::HIGHLIGHT);
-    }
+    draw::draw_rect_fill(x, y, w, 1, colors::BORDER_LIGHT);
+    draw::draw_rect_fill(x, y + 1, 1, h - 1, colors::BORDER_LIGHT);
+    draw::draw_rect_fill(x + w - 1, y + 1, 1, h - 1, colors::BORDER_LIGHT);
     draw::set_font(theme::UI_FONT, theme::UI_SIZE);
     draw::set_draw_color(colors::TEXT);
     draw::draw_text2(title, x, y, w, h - 1, Align::Center);
