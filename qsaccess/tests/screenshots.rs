@@ -72,17 +72,15 @@ fn fixture() -> Shared {
         credential_mode: CredentialMode::PromptEveryTime,
         ..System::new("10.1.1.7")
     });
-    AppState {
-        dir: None,
+    AppState::new(
+        None,
         systems,
-        settings: Settings {
+        Settings {
             last_system: "sys1.example.net".into(),
             ..Settings::default()
         },
-        credentials: Credentials::with(Box::new(Memory::default())),
-        startup_errors: Vec::new(),
-        record_next: None,
-    }
+        Credentials::with(Box::new(Memory::default())),
+    )
     .shared()
 }
 

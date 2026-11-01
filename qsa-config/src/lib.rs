@@ -11,17 +11,29 @@
 //! - [`store`]: where `settings.toml` and `systems.toml` live, and atomic
 //!   reads and writes.
 //! - [`qsc`]: `.qsc` export and import.
+//! - [`doc`]: what session, keyboard map and macro files share: header,
+//!   version check, unknown keys, relative paths.
+//! - [`qsd`], [`qkm`], [`qsm`]: display session, keyboard map and macro
+//!   files.
+//! - [`migrate`]: moving the earlier per-system keyboard maps into session
+//!   files.
 //! - [`credentials`]: saved passwords, in the platform credential store only.
 
 pub mod credentials;
+pub mod doc;
 pub mod keymap;
+pub mod migrate;
+pub mod qkm;
 pub mod qsc;
+pub mod qsd;
+pub mod qsm;
 pub mod settings;
 pub mod store;
 pub mod system;
 pub mod systems;
 
 pub use credentials::{Credentials, Saved, Secret};
+pub use doc::FileError;
 pub use keymap::KeyMap;
 pub use settings::Settings;
 pub use store::{ConfigDir, ReadError};

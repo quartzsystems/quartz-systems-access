@@ -296,7 +296,6 @@ impl SessionWindow {
             }
         });
 
-        let display = state.borrow().settings.display_for(&opts.system);
         let record_to = state.borrow_mut().record_next.take();
         let terminal = Terminal::new(size, opts.ccsid);
         let sw = Rc::new_cyclic(|me: &Weak<SessionWindow>| {
@@ -332,7 +331,7 @@ impl SessionWindow {
                     mode: None,
                     device: None,
                     decoder: Decoder::default(),
-                    keymap: display.keymap,
+                    keymap: KeyMap::defaults(),
                     recorder: None,
                     record_to,
                     keypad: false,
@@ -673,23 +672,15 @@ impl SessionWindow {
     }
 
     fn keymap(&self) {
-        let (title, map, system) = {
+        let (title, map) = {
             let st = self.st.borrow();
             (
                 format!("Keyboard Map - {}", st.opts.system),
                 st.keymap.clone(),
-                st.opts.system.clone(),
             )
         };
         if let Some(map) = keymapdlg::run(Some(&self.window), &title, &map) {
-            self.st.borrow_mut().keymap = map.clone();
-            let mut app = self.state.borrow_mut();
-            let mut d = app.settings.display_for(&system);
-            d.keymap = map;
-            app.settings.set_display(&system, d);
-            if let Err(e) = app.save_settings() {
-                crate::log!("settings not saved: {e}");
-            }
+            self.st.borrow_mut().keymap = map;
         }
     }
 

@@ -48,28 +48,7 @@ pub struct StartOptions {
     pub color: ColorMap,
 }
 
-/// Checks a device name: empty, or 1 to 10 of A-Z, 0-9, #, $, @ and _,
-/// starting with a letter, #, $ or @. Returns it in upper case.
-pub fn check_device(name: &str) -> Result<String, String> {
-    let n = name.trim().to_ascii_uppercase();
-    if n.is_empty() {
-        return Ok(n);
-    }
-    let ok = n.len() <= 10
-        && n.chars()
-            .all(|c| c.is_ascii_alphanumeric() || "#$@_".contains(c))
-        && n.chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || "#$@".contains(c));
-    if ok {
-        Ok(n)
-    } else {
-        Err(
-            "Device name must be 1 to 10 letters, digits, #, $, @ or _, starting with a letter, #, $ or @."
-                .into(),
-        )
-    }
-}
+pub use qsa_config::settings::check_device;
 
 #[derive(Clone)]
 struct Form {
@@ -269,7 +248,6 @@ pub fn run(
 /// Keeps the options as the system's last values.
 fn remember(state: &Shared, o: &StartOptions) {
     let mut st = state.borrow_mut();
-    let keymap = st.settings.display_for(&o.system).keymap;
     st.settings.set_display(
         &o.system,
         Display {
@@ -277,7 +255,7 @@ fn remember(state: &Shared, o: &StartOptions) {
             ccsid: o.ccsid,
             device_name: o.device.clone(),
             color_map: o.color,
-            keymap,
+            legacy_keymap: None,
         },
     );
     if let Err(e) = st.save_settings() {
@@ -290,19 +268,11 @@ mod tests {
     use super::*;
 
     #[test]
-    fn device_names() {
-        assert_eq!(check_device(" qsadsp01 ").as_deref(), Ok("QSADSP01"));
-        assert_eq!(check_device("").as_deref(), Ok(""));
-        assert_eq!(check_device("#DSP$@_1").as_deref(), Ok("#DSP$@_1"));
-        assert!(check_device("1DSP").is_err());
-        assert!(check_device("BAD.NAME").is_err());
-        assert!(check_device("ELEVENCHARS").is_err());
-    }
-
-    #[test]
     fn every_ccsid_offered_is_built_in() {
         for (c, _) in CCSIDS {
             assert!(tn5250::codepage::by_ccsid(*c).is_some(), "{c}");
         }
+        let offered: Vec<u16> = CCSIDS.iter().map(|(c, _)| *c).collect();
+        assert_eq!(offered, qsa_config::settings::CCSIDS);
     }
 }

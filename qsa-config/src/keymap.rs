@@ -10,8 +10,9 @@
 //! 5250 key names the session uses (`Enter`, `FieldExit`, `F:13`,
 //! `SysReq` ...); [`FUNCTIONS`] lists them with their display names.
 //!
-//! A map is kept per system for now (in `settings.toml`); it moves into
-//! session and keyboard map files later.
+//! A session keeps its map in its session file, as the changes from the
+//! built-in defaults named [`DEFAULTS_ID`] (see [`crate::qsd`]); a whole map
+//! is passed between sessions as a `.qkm` file (see [`crate::qkm`]).
 
 use std::collections::BTreeMap;
 
@@ -72,6 +73,16 @@ pub const FUNCTIONS: &[(&str, &str)] = &[
     ("Up", "Cursor up"),
     ("Down", "Cursor down"),
 ];
+
+/// Names [`KeyMap::defaults`] as session files refer to it. The defaults
+/// must not change under this name: a change to them needs a new name, so
+/// that files saved against the old ones keep meaning what they meant.
+pub const DEFAULTS_ID: &str = "defaults-v1";
+
+/// Whether `f` is one of the [`FUNCTIONS`].
+pub fn is_function(f: &str) -> bool {
+    FUNCTIONS.iter().any(|(name, _)| *name == f)
+}
 
 /// The display name of a function, or the stored name if unknown.
 pub fn function_label(f: &str) -> &str {

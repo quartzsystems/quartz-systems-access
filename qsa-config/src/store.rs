@@ -109,6 +109,26 @@ impl ConfigDir {
     }
 }
 
+/// The folder session files are kept in unless the user picks another:
+/// `%USERPROFILE%\Documents\Quartz Access\Sessions` on Windows, and
+/// `$XDG_DOCUMENTS_DIR/Quartz Access/Sessions` (else
+/// `~/Documents/Quartz Access/Sessions`) elsewhere. It may not exist yet.
+pub fn default_sessions_dir() -> Option<PathBuf> {
+    let documents = if cfg!(windows) {
+        std::env::var_os("USERPROFILE")
+            .map(PathBuf::from)
+            .or_else(|| directories::BaseDirs::new().map(|b| b.home_dir().to_owned()))
+            .map(|home| home.join("Documents"))
+    } else {
+        directories::UserDirs::new().map(|u| {
+            u.document_dir()
+                .map(Path::to_owned)
+                .unwrap_or_else(|| u.home_dir().join("Documents"))
+        })
+    };
+    documents.map(|d| d.join("Quartz Access").join("Sessions"))
+}
+
 /// Reads and parses a TOML file. `None` (or the default) for a missing file.
 fn load<T: DeserializeOwned + LoadDefault>(path: &Path) -> (T::Out, Option<ReadError>) {
     match fs::read_to_string(path) {
@@ -339,6 +359,20 @@ pub(crate) mod tests {
                 assert!(p.ends_with("/Quartz Systems/Access"), "{p}");
             } else {
                 assert!(p.ends_with("/quartz-access"), "{p}");
+            }
+        }
+    }
+
+    #[test]
+    fn default_sessions_dir_is_under_documents() {
+        if let Some(d) = default_sessions_dir() {
+            let p = d.to_string_lossy().replace('\\', "/");
+            assert!(p.ends_with("/Quartz Access/Sessions"), "{p}");
+            if cfg!(windows)
+                && let Some(home) = std::env::var_os("USERPROFILE")
+            {
+                let home = home.to_string_lossy().replace('\\', "/");
+                assert_eq!(p, format!("{home}/Documents/Quartz Access/Sessions"));
             }
         }
     }

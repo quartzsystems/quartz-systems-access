@@ -205,6 +205,18 @@ fn is_host_name(s: &str) -> bool {
         })
 }
 
+/// Checks a system name: a host name or an IP address.
+pub fn check_name(name: &str) -> Result<(), Invalid> {
+    let name = name.trim();
+    if name.is_empty() {
+        return Err(Invalid::NameMissing);
+    }
+    if name.parse::<IpAddr>().is_err() && !is_host_name(name) {
+        return Err(Invalid::NameNotHost);
+    }
+    Ok(())
+}
+
 impl System {
     /// A new system with the given name and defaults for everything else.
     pub fn new(name: &str) -> System {
@@ -217,13 +229,7 @@ impl System {
     /// Checks the fields that a system needs on its own. Uniqueness is
     /// checked by [`crate::Systems`].
     pub fn validate(&self) -> Result<(), Invalid> {
-        let name = self.name.trim();
-        if name.is_empty() {
-            return Err(Invalid::NameMissing);
-        }
-        if name.parse::<IpAddr>().is_err() && !is_host_name(name) {
-            return Err(Invalid::NameNotHost);
-        }
+        check_name(&self.name)?;
         if self.default_user.contains(char::is_whitespace) {
             return Err(Invalid::DefaultUserSpaces);
         }

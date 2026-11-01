@@ -387,6 +387,10 @@ pub fn reload(ui: &Ui) {
 
 /// Reports files that could not be read at start-up.
 pub fn report_startup_errors(ui: &Ui) {
+    let messages = std::mem::take(&mut ui.state.borrow_mut().startup_messages);
+    for m in messages {
+        ui.report(&m);
+    }
     let errors = std::mem::take(&mut ui.state.borrow_mut().startup_errors);
     for e in errors {
         let m = e.message();

@@ -8,7 +8,8 @@ use std::cell::RefCell;
 use std::io;
 use std::rc::Rc;
 
-use qsa_config::{ConfigDir, Credentials, ReadError, Settings, Systems};
+use qsa_config::{ConfigDir, Credentials, ReadError, Settings, Systems, migrate, store};
+use qsa_msg::Message;
 
 /// Everything the windows share.
 pub struct AppState {
@@ -21,6 +22,8 @@ pub struct AppState {
     pub startup_errors: Vec<ReadError>,
     /// Record the next 5250 session opened to this file (`--record`).
     pub record_next: Option<std::path::PathBuf>,
+    /// Messages to show in the main window's status bar once it is up.
+    pub startup_messages: Vec<Message>,
 }
 
 /// Shared, mutable application state.
@@ -40,13 +43,63 @@ impl AppState {
             }
             None => (Settings::default(), Systems::new()),
         };
+        let mut st = AppState::new(dir, systems, settings, credentials);
+        st.startup_errors = startup_errors;
+        st.migrate_keymaps();
+        st
+    }
+
+    /// State from values already in hand (tests, screenshots).
+    pub fn new(
+        dir: Option<ConfigDir>,
+        systems: Systems,
+        settings: Settings,
+        credentials: Credentials,
+    ) -> AppState {
         AppState {
             dir,
             systems,
             settings,
             credentials,
-            startup_errors,
+            startup_errors: Vec::new(),
             record_next: None,
+            startup_messages: Vec::new(),
+        }
+    }
+
+    /// Moves keyboard maps an earlier release kept per system into session
+    /// files, once (see [`qsa_config::migrate`]), and logs what moved.
+    fn migrate_keymaps(&mut self) {
+        if !migrate::pending(&self.settings) {
+            return;
+        }
+        let Some(sessions) = store::default_sessions_dir() else {
+            crate::log!("keyboard maps not migrated: no Documents folder");
+            return;
+        };
+        match migrate::migrate_keymaps(
+            &mut self.settings,
+            &self.systems,
+            std::slice::from_ref(&sessions),
+            &sessions,
+        ) {
+            Ok(report) => {
+                for line in report.log_lines() {
+                    crate::log!("{line}");
+                }
+                if let Err(e) = self.save_settings() {
+                    crate::log!("settings not saved after keyboard map migration: {e}");
+                }
+                if report.count() > 0 {
+                    let m = qsa_msg::message(
+                        qsa_msg::id::KEYMAPS_MIGRATED,
+                        &[&report.count().to_string()],
+                    );
+                    crate::log!("{m}");
+                    self.startup_messages.push(m);
+                }
+            }
+            Err(e) => crate::log!("keyboard maps not migrated; will try again: {e}"),
         }
     }
 
