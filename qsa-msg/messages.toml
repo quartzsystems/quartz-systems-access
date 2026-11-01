@@ -142,3 +142,97 @@ severity = 0
 text = "Screen printed to &1."
 cause = "The screen was written as a PDF file to &1."
 recovery = "None needed. Open the file to view or print it."
+
+# Session, keyboard map and macro files; Session Manager.
+
+[QAD2001]
+severity = 30
+text = "Session file &1 could not be read: &2."
+cause = "The file &1 could not be opened, or it is not a valid session, keyboard map or macro file. The reason given was: &2"
+recovery = "Correct the file, or open another one. These files are TOML text whose first table is [qsaccess], giving the kind of file and its format version."
+
+[QAD2002]
+severity = 30
+text = "Session file &1 was made by a newer version (&2)."
+cause = "The file &1 is format version &2, which is newer than this release of QS/400 Access for Desktop can read. The file was not opened and has not been changed."
+recovery = "Open the file with the release that made it, or install a newer release of QS/400 Access for Desktop."
+
+[QAD2003]
+severity = 20
+text = "System &1 is not configured."
+cause = "The session file names system &1, but no system configuration of that name exists on this computer. The file holds the host, Telnet port and TLS setting to use as a starting point."
+recovery = "Select Create system from session file to add a system configuration from those values, or add the system in System Configurations and open the session file again."
+
+[QAD2004]
+severity = 0
+text = "Session saved to &1."
+cause = "The session's settings were written to the session file &1. The file holds no password and no certificate trust."
+recovery = "None needed. Open the file, or double-click it, to start the session again."
+
+[QAD2010]
+severity = 0
+text = "Keyboard map loaded from &1."
+cause = "The keyboard map in the file &1 was copied. Later changes to the file do not affect the copy."
+recovery = "None needed. Save the session to keep the map with it."
+
+[QAD2011]
+severity = 0
+text = "Keyboard maps migrated for &1 systems."
+cause = "Keyboard maps kept per system by an earlier release were moved into session files for &1 systems and removed from settings.toml. The details were written to the log."
+recovery = "None needed. Each session now carries its own keyboard map; use Load keyboard map to copy one between sessions."
+
+[QAD2020]
+severity = 30
+text = "Macro &1 stopped at step &2: &3."
+cause = "Macro &1 could not carry out step &2 and was stopped. The reason was: &3. The steps after it were not run."
+recovery = "Check that the session shows the screen the macro expects at step &2, then run the macro again. To change the step, open the macro in the Macro editor."
+
+[QAD2021]
+severity = 0
+text = "Macro &1 recorded with &2 steps."
+cause = "Recording ended and macro &1 was saved with &2 steps. Text typed into fields that are not displayed, such as passwords, was not recorded; a step that asks for the value when the macro runs takes its place."
+recovery = "None needed. Run the macro from the session's Macro menu, or open it in the Macro editor to change it."
+
+[QAD2030]
+severity = 0
+text = "Folder &1 added to Session Manager."
+cause = "Session Manager now lists the session files in the folder &1, together with those in the other folders it shows."
+recovery = "None needed. To stop listing the folder, select it and select Remove folder. The files in it are not affected."
+
+# Installer.
+
+[QAD2101]
+severity = 0
+text = "QS/400 Access for Desktop installed in &1."
+cause = "The program files were installed in &1, and the shortcuts and file types you selected were registered. Every item created is listed in install-manifest.toml in that folder."
+recovery = "None needed. Start QS/400 Access for Desktop from the applications menu, or double-click a session file."
+
+[QAD2102]
+severity = 0
+text = "Upgrade from &1 to &2 complete."
+cause = "The program files of release &1 were replaced with those of release &2. Settings, system configurations, session files and saved passwords were kept."
+recovery = "None needed."
+
+[QAD2103]
+severity = 40
+text = "Installer payload is damaged; download it again."
+cause = "The program files packed inside the installer do not match the checksum recorded when it was built. The file was probably changed or cut short while it was copied or downloaded. Nothing was installed or changed."
+recovery = "Download the installer again, and check that its size matches the size published with it."
+
+[QAD2104]
+severity = 30
+text = "Administrator rights are needed to install for all users."
+cause = "Installing for all users writes to a folder and settings that only an administrator can change. The rights were not granted, so nothing was installed for all users."
+recovery = "Run the installer again and allow the change when asked, or select Just me to install for your own account. On Linux, run the installer as root to install for all users."
+
+[QAD2105]
+severity = 0
+text = "QS/400 Access for Desktop removed."
+cause = "Every file, folder, shortcut and file type listed in the install manifest was removed. Settings, system configurations and saved passwords were kept unless you asked for your settings to be removed. The Sessions folder is never removed."
+recovery = "None needed."
+
+[QAD2106]
+severity = 0
+text = "Repair complete."
+cause = "The program files, shortcuts and file types recorded in the install manifest were written again. Settings, system configurations, session files and saved passwords were not changed."
+recovery = "None needed."

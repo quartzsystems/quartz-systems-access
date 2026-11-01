@@ -49,6 +49,21 @@ pub mod id {
     pub const BASIC_5250: &str = "QAD1022";
     pub const PROTOCOL_ERROR: &str = "QAD1030";
     pub const SCREEN_PRINTED: &str = "QAD1040";
+    pub const SESSION_FILE_UNREADABLE: &str = "QAD2001";
+    pub const SESSION_FILE_NEWER: &str = "QAD2002";
+    pub const SYSTEM_NOT_CONFIGURED: &str = "QAD2003";
+    pub const SESSION_SAVED: &str = "QAD2004";
+    pub const KEYMAP_LOADED: &str = "QAD2010";
+    pub const KEYMAPS_MIGRATED: &str = "QAD2011";
+    pub const MACRO_STOPPED: &str = "QAD2020";
+    pub const MACRO_RECORDED: &str = "QAD2021";
+    pub const FOLDER_ADDED: &str = "QAD2030";
+    pub const INSTALLED: &str = "QAD2101";
+    pub const UPGRADED: &str = "QAD2102";
+    pub const PAYLOAD_DAMAGED: &str = "QAD2103";
+    pub const ADMIN_NEEDED: &str = "QAD2104";
+    pub const REMOVED: &str = "QAD2105";
+    pub const REPAIRED: &str = "QAD2106";
 }
 
 /// Errors in the catalogue itself.
@@ -218,7 +233,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 22] = [
+    const SEEDS: [&str; 37] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -241,6 +256,21 @@ mod tests {
         id::BASIC_5250,
         id::PROTOCOL_ERROR,
         id::SCREEN_PRINTED,
+        id::SESSION_FILE_UNREADABLE,
+        id::SESSION_FILE_NEWER,
+        id::SYSTEM_NOT_CONFIGURED,
+        id::SESSION_SAVED,
+        id::KEYMAP_LOADED,
+        id::KEYMAPS_MIGRATED,
+        id::MACRO_STOPPED,
+        id::MACRO_RECORDED,
+        id::FOLDER_ADDED,
+        id::INSTALLED,
+        id::UPGRADED,
+        id::PAYLOAD_DAMAGED,
+        id::ADMIN_NEEDED,
+        id::REMOVED,
+        id::REPAIRED,
     ];
 
     #[test]
@@ -295,6 +325,78 @@ mod tests {
             t(id::SCREEN_PRINTED, &["f.pdf"]),
             "Screen printed to f.pdf."
         );
+    }
+
+    #[test]
+    fn phase_2_texts() {
+        let t = |id: &str, args: &[&str]| message(id, args).text;
+        for (id, args, want) in [
+            (
+                id::SESSION_FILE_UNREADABLE,
+                &["a.qsd", "why"][..],
+                "Session file a.qsd could not be read: why.",
+            ),
+            (
+                id::SESSION_FILE_NEWER,
+                &["a.qsd", "2"],
+                "Session file a.qsd was made by a newer version (2).",
+            ),
+            (
+                id::SYSTEM_NOT_CONFIGURED,
+                &["SYS"],
+                "System SYS is not configured.",
+            ),
+            (id::SESSION_SAVED, &["a.qsd"], "Session saved to a.qsd."),
+            (
+                id::KEYMAP_LOADED,
+                &["k.qkm"],
+                "Keyboard map loaded from k.qkm.",
+            ),
+            (
+                id::KEYMAPS_MIGRATED,
+                &["2"],
+                "Keyboard maps migrated for 2 systems.",
+            ),
+            (
+                id::MACRO_STOPPED,
+                &["M", "3", "timed out"],
+                "Macro M stopped at step 3: timed out.",
+            ),
+            (
+                id::MACRO_RECORDED,
+                &["M", "7"],
+                "Macro M recorded with 7 steps.",
+            ),
+            (
+                id::FOLDER_ADDED,
+                &["D"],
+                "Folder D added to Session Manager.",
+            ),
+            (
+                id::INSTALLED,
+                &["D"],
+                "QS/400 Access for Desktop installed in D.",
+            ),
+            (
+                id::UPGRADED,
+                &["V1R0M0", "V1R0M1"],
+                "Upgrade from V1R0M0 to V1R0M1 complete.",
+            ),
+            (
+                id::PAYLOAD_DAMAGED,
+                &[],
+                "Installer payload is damaged; download it again.",
+            ),
+            (
+                id::ADMIN_NEEDED,
+                &[],
+                "Administrator rights are needed to install for all users.",
+            ),
+            (id::REMOVED, &[], "QS/400 Access for Desktop removed."),
+            (id::REPAIRED, &[], "Repair complete."),
+        ] {
+            assert_eq!(t(id, args), want, "{id}");
+        }
     }
 
     #[test]
