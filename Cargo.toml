@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "tn5250", "xtask"]
+members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "tn5250", "scs", "xtask"]
 
 [workspace.package]
 version = "1.0.0"
@@ -35,6 +35,7 @@ qsa-icons = { path = "qsa-icons" }
 qsa-config = { path = "qsa-config" }
 qsa-msg = { path = "qsa-msg" }
 tn5250 = { path = "tn5250" }
+scs = { path = "scs" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

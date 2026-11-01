@@ -1,4 +1,4 @@
-# Fuzz targets for tn5250 (cargo-fuzz; nightly). Not part of the main
+# Fuzz targets for tn5250 and scs (cargo-fuzz; nightly). Not part of the main
 # workspace. See README.md.
 [package]
 name = "tn5250-fuzz"
@@ -12,6 +12,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 tn5250 = { path = "../tn5250" }
+scs = { path = "../scs" }
 
 [workspace]
 members = ["."]
@@ -33,6 +34,13 @@ bench = false
 [[bin]]
 name = "parser_input"
 path = "fuzz_targets/parser_input.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "scs_parser"
+path = "fuzz_targets/scs_parser.rs"
 test = false
 doc = false
 bench = false

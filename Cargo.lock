@@ -1257,6 +1257,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "scs"
+version = "1.0.0"
+dependencies = [
+ "tn5250",
+]
+
+[[package]]
 name = "secret-service"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"

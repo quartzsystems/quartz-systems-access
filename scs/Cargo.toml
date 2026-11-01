@@ -1,0 +1,14 @@
+[package]
+name = "scs"
+description = "SCS (SNA character string) printer data to a page model, for QS/400 Access for Desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+tn5250.workspace = true
+
+[lints]
+workspace = true
