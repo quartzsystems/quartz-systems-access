@@ -64,3 +64,95 @@ fn fixtures_replay_to_their_goldens() {
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
+
+/// Switching screen sizes: a synthetic stream for a 27×132 display, as
+/// QS/400 sends it once its screen-mode fix is in: wide screens come with
+/// Clear Unit Alternate, 24×80-only screens with Clear Unit and their errors
+/// on row 24. The screen must follow both ways, every time, cleanly.
+#[test]
+fn switching_screen_sizes() {
+    use tn5250::negotiate::ScreenSize;
+    use tn5250::record::{Record, opcode};
+    use tn5250::replay::Event;
+    use tn5250::screen::Keyboard;
+
+    const ESC: u8 = 0x04;
+    const CLEAR_UNIT: u8 = 0x40;
+    const CLEAR_UNIT_ALTERNATE: u8 = 0x20;
+    const WRITE_TO_DISPLAY: u8 = 0x11;
+    const WRITE_ERROR_CODE: u8 = 0x21;
+    const SBA: u8 = 0x11;
+    let page = tn5250::codepage::default_page();
+    let text = |s: &str| page.encode(s);
+    let at = |row: u8, col: u8, s: &str| {
+        let mut v = vec![SBA, row, col];
+        v.extend(text(s));
+        v
+    };
+    let wide = |label: &str| {
+        let mut v = vec![
+            ESC,
+            CLEAR_UNIT_ALTERNATE,
+            0x00,
+            ESC,
+            WRITE_TO_DISPLAY,
+            0x00,
+            0x00,
+        ];
+        v.extend(at(1, 1, label));
+        v.extend(at(27, 120, "ROW 27"));
+        v
+    };
+    let narrow = |label: &str| {
+        let mut v = vec![ESC, CLEAR_UNIT, ESC, WRITE_TO_DISPLAY, 0x00, 0x00];
+        v.extend(at(1, 1, label));
+        v.extend([ESC, WRITE_ERROR_CODE]);
+        v.extend(text("ERROR ON ROW 24"));
+        v
+    };
+    let steps = [
+        (wide("WIDE ONE"), (27, 132)),
+        (narrow("NARROW ONE"), (24, 80)),
+        (wide("WIDE TWO"), (27, 132)),
+        (narrow("NARROW TWO"), (24, 80)),
+        (wide("WIDE THREE"), (27, 132)),
+    ];
+    let mut rec = Recording {
+        size: ScreenSize::S27x132,
+        ccsid: 37,
+        events: Vec::new(),
+    };
+    for (i, (data, (rows, cols))) in steps.iter().enumerate() {
+        rec.events.push((
+            i as u64,
+            Event::In(Record::new(opcode::PUT_GET, data.clone()).encode()),
+        ));
+        let r = replay(&rec);
+        assert!(r.errors.is_empty(), "step {i}: {:?}", r.errors);
+        let s = &r.terminal.screen;
+        assert_eq!((s.rows(), s.cols()), (*rows, *cols), "step {i}");
+        let lines = s.text_rows();
+        assert_eq!(lines.len(), *rows);
+        assert!(lines.iter().all(|l| l.chars().count() == *cols), "step {i}");
+        if *cols == 132 {
+            assert!(lines[0].starts_with("WIDE"), "step {i}: {}", lines[0]);
+            assert_eq!(&lines[26][119..125], "ROW 27", "step {i}");
+            assert!(
+                lines[1..26].iter().all(|l| l.trim().is_empty()),
+                "step {i}: left over"
+            );
+        } else {
+            assert!(lines[0].starts_with("NARROW"), "step {i}: {}", lines[0]);
+            assert!(
+                lines[23].starts_with("ERROR ON ROW 24"),
+                "step {i}: {}",
+                lines[23]
+            );
+            assert!(
+                lines[1..23].iter().all(|l| l.trim().is_empty()),
+                "step {i}: left over"
+            );
+            assert_eq!(s.keyboard, Keyboard::HostError);
+        }
+    }
+}

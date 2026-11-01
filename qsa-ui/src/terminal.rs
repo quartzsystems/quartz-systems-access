@@ -94,6 +94,28 @@ impl Inner {
         }
     }
 
+    /// Takes the screen's cells and status line. A change of size (24×80
+    /// to 27×132 or back) drops the selection; the next update lays the
+    /// grid out afresh: the largest whole scale that fits, centred.
+    fn set_screen(&mut self, s: &Screen, oia: &Oia, cursor: bool) {
+        let (rows, cols) = (s.rows(), s.cols());
+        let mut cells = Vec::with_capacity(rows * cols);
+        for r in 0..rows {
+            for c in 0..cols {
+                let mut p = Paint::of(s.cell(r, c));
+                p.cursor = cursor && s.addr(r, c) == s.cursor;
+                cells.push(p);
+            }
+        }
+        if (self.rows, self.cols) != (rows, cols) {
+            self.selection = None;
+        }
+        self.rows = rows;
+        self.cols = cols;
+        self.cells = cells;
+        self.status = console::oia_cells(oia, cols);
+    }
+
     fn selected(&self, r: usize, c: usize) -> bool {
         self.selection.is_some_and(|((r0, c0), (r1, c1))| {
             (r0.min(r1)..=r0.max(r1)).contains(&r) && (c0.min(c1)..=c0.max(c1)).contains(&c)
@@ -338,25 +360,7 @@ impl TerminalView {
 
     /// Shows a screen and its status line. `cursor` draws the cursor.
     pub fn show_screen(&self, s: &Screen, oia: &Oia, cursor: bool) {
-        let (rows, cols) = (s.rows(), s.cols());
-        let mut cells = Vec::with_capacity(rows * cols);
-        for r in 0..rows {
-            for c in 0..cols {
-                let mut p = Paint::of(s.cell(r, c));
-                p.cursor = cursor && s.addr(r, c) == s.cursor;
-                cells.push(p);
-            }
-        }
-        {
-            let mut inner = self.inner.borrow_mut();
-            if (inner.rows, inner.cols) != (rows, cols) {
-                inner.selection = None;
-            }
-            inner.rows = rows;
-            inner.cols = cols;
-            inner.cells = cells;
-            inner.status = console::oia_cells(oia, cols);
-        }
+        self.inner.borrow_mut().set_screen(s, oia, cursor);
         let mut w = self.widget.clone();
         w.set_damage_type(Damage::User1);
     }
@@ -440,3 +444,79 @@ pub fn block_text(s: &Screen, r0: usize, c0: usize, r1: usize, c1: usize) -> Str
 }
 
 fltk::widget_extends!(TerminalView, Widget, widget);
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::console::{GLYPH_H, GLYPH_W};
+    use tn5250::negotiate::ScreenSize;
+
+    fn oia() -> Oia {
+        Oia {
+            system: "SYS".into(),
+            state: "Connected".into(),
+            keyboard: None,
+            insert: false,
+            message_waiting: false,
+            tls: false,
+            cursor: (1, 1),
+        }
+    }
+
+    fn screen(size: ScreenSize, text: &str) -> Screen {
+        let mut s = Screen::new(size, tn5250::codepage::default_page());
+        s.clear(size);
+        for (c, ch) in text.chars().enumerate() {
+            let b = s.page().to_byte(ch).unwrap_or(0x40);
+            let a = s.addr(0, c);
+            s.set_byte(a, b);
+        }
+        s.recompute_attrs();
+        s
+    }
+
+    /// Whether every pixel outside the grid and status line is background.
+    fn outside_is_background(inner: &Inner, bg: u32) -> bool {
+        let l = inner.layout.unwrap();
+        let (gw, gh) = (l.cols * GLYPH_W * l.scale, (l.rows + 1) * GLYPH_H * l.scale);
+        let rgb = [(bg >> 16) as u8, (bg >> 8) as u8, bg as u8];
+        let c = &inner.canvas;
+        (0..c.h).all(|y| {
+            (0..c.w).all(|x| {
+                let inside = x >= l.x0 && x < l.x0 + gw && y >= l.y0 && y < l.y0 + gh;
+                inside || c.px[(y * c.w + x) * 3..][..3] == rgb
+            })
+        })
+    }
+
+    #[test]
+    fn switching_screen_sizes_rescales_and_recentres_cleanly() {
+        // A widget sized for 24 x 80 at scale 2: 27 x 132 needs scale 1.
+        let (w, h) = (80 * GLYPH_W * 2 + 40, 25 * GLYPH_H * 2 + 30);
+        let mut inner = Inner::new();
+        let bg = inner.look.scheme.background();
+        inner.set_screen(&screen(ScreenSize::S24x80, "NARROW"), &oia(), false);
+        inner.update(w, h, 1.0);
+        let narrow = (inner.layout.unwrap(), inner.canvas.px.clone());
+        assert_eq!(narrow.0.scale, 2);
+        assert_eq!(narrow.0.x0, 20);
+        assert!(outside_is_background(&inner, bg));
+
+        inner.set_screen(&screen(ScreenSize::S27x132, "WIDE"), &oia(), false);
+        inner.update(w, h, 1.0);
+        let l = inner.layout.unwrap();
+        assert_eq!((l.rows, l.cols, l.scale), (27, 132, 1));
+        assert_eq!(l.x0, (w - 132 * GLYPH_W) / 2, "centred across");
+        assert_eq!(l.y0, (h - 28 * GLYPH_H) / 2, "centred down");
+        assert!(
+            outside_is_background(&inner, bg),
+            "nothing of the narrow screen is left"
+        );
+
+        // And back: the same picture as the first time, to the pixel.
+        inner.set_screen(&screen(ScreenSize::S24x80, "NARROW"), &oia(), false);
+        inner.update(w, h, 1.0);
+        assert_eq!(inner.layout.unwrap(), narrow.0);
+        assert!(inner.canvas.px == narrow.1, "switching back is exact");
+    }
+}

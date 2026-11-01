@@ -191,13 +191,21 @@ pub fn response_text(code: &str) -> &'static str {
     }
 }
 
+/// Whether a start-up response record has RFC 4777's layout (the reserved
+/// field `9000` and a variable header), rather than the older one QS/400
+/// still sends: opcode 0, the code, and the device name padded to ten.
+pub fn is_rfc_startup_layout(rec: &Record) -> bool {
+    rec.reserved == 0x9000
+}
+
 /// Reads a start-up response from a record, if it is one: opcode 0 (or the
 /// RFC's reserved field `9000`), then four EBCDIC characters, a letter
 /// `I` or a digit followed by three digits. The device name follows: as
 /// exactly ten characters (QS/400 sends that alone), else as the last
-/// name-like run of characters after the code.
+/// name-like run of characters after the code. Both layouts are read; the
+/// older one is logged as a warning, since QS/400 is moving to RFC 4777's.
 pub fn startup_response(rec: &Record, page: &dyn CodePage) -> Option<StartupResponse> {
-    if rec.opcode != opcode::NO_OP && rec.reserved != 0x9000 {
+    if rec.opcode != opcode::NO_OP && !is_rfc_startup_layout(rec) {
         return None;
     }
     let text = page.decode(&rec.data);
@@ -209,6 +217,11 @@ pub fn startup_response(rec: &Record, page: &dyn CodePage) -> Option<StartupResp
         && c[1..].iter().all(char::is_ascii_digit);
     if !shaped {
         return None;
+    }
+    if !is_rfc_startup_layout(rec) {
+        crate::warn!(
+            "tn5250: start-up response {code} is not in the RFC 4777 layout (no 9000 reserved field); read the older way"
+        );
     }
     let rest: String = chars.collect();
     let device = if rest.chars().count() == 10 {
@@ -616,6 +629,13 @@ mod tests {
         assert_eq!(s.code, "8902");
         assert_eq!(s.device.as_deref(), Some("QSADSP01"));
         assert_eq!(s.outcome(), Outcome::InUse);
+        assert!(is_rfc_startup_layout(&rec));
+        // QS/400's older layout is still read, and told apart.
+        let mut data = page.encode("I902");
+        data.extend(page.encode("QSADSP01  "));
+        let old = Record::new(0, data);
+        assert!(!is_rfc_startup_layout(&old));
+        assert_eq!(startup_response(&old, page).unwrap().code, "I902");
     }
 
     #[test]

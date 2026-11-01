@@ -24,6 +24,22 @@ The replay test lists these and skips each until its `.qsr` exists:
 `qs400-signon-24x80` and `qs400-signon-27x132` are already recorded: QS/400's
 sign-on display at each size (with Enter pressed on an empty sign-on at 24×80).
 
+The macros in `../macros/` are run against these recordings by
+`qsaccess/tests/macro_replay.rs` (a macro named like a recording plays against
+it and must reach its golden). `sign-on-wrkactjob-f3.qsm` waits for its
+recording.
+
+TODO(Cody): QS/400 is moving its start-up response record to the RFC 4777
+layout (reserved field `9000`). The recordings above have the older layout,
+which is still read but now logged as a warning. Once QS/400 ships the fix,
+re-record `qs400-signon-24x80` and `qs400-signon-27x132` (and any QS/400
+fixture recorded before then), regenerate their goldens, and check the log
+has no "not in the RFC 4777 layout" line.
+
+`switch-24x80-27x132` is not recorded: it is a synthetic stream made by
+`tn5250/tests/replay.rs` (see "Switching screen sizes" there), for the screen
+switching between 24×80 and 27×132 in both directions.
+
 ## Recording a session
 
 1. Start QS/400 Access for Desktop with recording on for the next session:
