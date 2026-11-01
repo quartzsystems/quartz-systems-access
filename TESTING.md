@@ -82,3 +82,35 @@ Right Ctrl is told apart from left Ctrl by FLTK's key codes, which FLTK
 reports on Windows (the extended-key flag), X11 (`Control_R`) and Wayland (the
 xkb keysym `Control_R`). It acts on release, and only when no other key went
 down while it was held. Check it by hand on each platform (step 4 above).
+
+## Installer: Windows
+
+`ci/installer-test-windows.ps1` runs the whole cycle silently and checks every
+step. In a fresh Windows 11 VM, copy the installer and the script in, then:
+
+```
+powershell -ExecutionPolicy Bypass -File installer-test-windows.ps1 -Installer QS400-Access-V1R0M0-windows-x86_64.exe -Scope user
+powershell -ExecutionPolicy Bypass -File installer-test-windows.ps1 -Installer QS400-Access-V1R0M0-windows-x86_64.exe -Scope machine   # as administrator
+```
+
+It snapshots the registry keys and folders an install can touch, then:
+
+1. a damaged copy of the installer exits 2 and changes nothing;
+2. silent install exits 0: program, uninstaller, manifest, version information,
+   `.qsd`/`.qkm`/`.qsm` ProgIDs and open commands, Start menu and desktop
+   shortcuts, the Apps entry;
+3. (just me) a `.qsd` opened through the shell starts `qsaccess open <file>`,
+   and `qsaccess --quit` closes it;
+4. installing again over the top (upgrade) exits 0;
+5. `uninstall.exe --repair --silent` exits 0 and keeps the program;
+6. `uninstall.exe --uninstall --silent` exits 0, and the snapshot taken after
+   it equals the one taken before (only user data may differ).
+
+It refuses to start while QS/400 Access for Desktop is running, and puts the
+user's `settings.toml` back afterwards. By hand, also run the wizard once for
+each scope: All users must bring up the Windows consent prompt and nothing
+else; Finish with **Start QS/400 Access for Desktop** ticked must open the main
+window in the middle of the main monitor; Settings > Apps must list the
+program with Uninstall and Modify (repair); uninstalling from there with
+**Also remove my settings** ticked must remove `%APPDATA%\Quartz Systems\Access`
+and leave `Documents\Quartz Access\Sessions` alone.
