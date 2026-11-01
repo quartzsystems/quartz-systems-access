@@ -8,9 +8,11 @@
 //! The client answers the server's `DO TERMINAL-TYPE` and `DO NEW-ENVIRON`.
 //! To the terminal type `SEND` it answers with the device's terminal type;
 //! to the environment `SEND` with `DEVNAME` (when a device name was given),
-//! `KBDTYPE`, `CODEPAGE` and `CHARSET`. It never sends `USER`, `IBMRSEED`
-//! or a password substitute: the user signs on at the system's own sign-on
-//! display.
+//! `KBDTYPE`, `CODEPAGE` and `CHARSET`. It never sends `USER`, the random
+//! seed or a password substitute: the user signs on at the system's own
+//! sign-on display.
+//!
+//! Vendor-prefixed wire strings come from [`crate::wire`].
 //!
 //! A server that never enables NEW-ENVIRON gets plain TN5250
 //! ([`Mode::Basic`]). With a device name the server answers with a start-up
@@ -22,6 +24,7 @@ use crate::codepage::{self, CodePage};
 use crate::debug;
 use crate::record::{Record, opcode};
 use crate::telnet::{self, Event as TelnetEvent, NEW_ENVIRON, Side, TERMINAL_TYPE, Telnet};
+use crate::wire;
 
 /// RFC 1091 and RFC 1572 subnegotiation commands.
 pub const IS: u8 = 0;
@@ -36,10 +39,10 @@ pub const USERVAR: u8 = 3;
 /// A display's screen size and the terminal type that asks for it.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 pub enum ScreenSize {
-    /// 24 by 80, terminal type `IBM-3179-2`.
+    /// 24 by 80, terminal type [`wire::TT_DISPLAY_24X80`].
     #[default]
     S24x80,
-    /// 27 by 132, terminal type `IBM-3477-FC`.
+    /// 27 by 132, terminal type [`wire::TT_DISPLAY_27X132`].
     S27x132,
 }
 
@@ -60,8 +63,8 @@ impl ScreenSize {
 
     pub fn terminal_type(self) -> &'static str {
         match self {
-            ScreenSize::S24x80 => "IBM-3179-2",
-            ScreenSize::S27x132 => "IBM-3477-FC",
+            ScreenSize::S24x80 => wire::TT_DISPLAY_24X80,
+            ScreenSize::S27x132 => wire::TT_DISPLAY_27X132,
         }
     }
 }
@@ -443,9 +446,9 @@ impl Negotiator {
     }
 }
 
-/// The items of a `SEND`: type and name. RFC 4777's `IBMRSEED` carries its
-/// eight seed bytes in the name, which is fine: the name is never used for
-/// it.
+/// The items of a `SEND`: type and name. RFC 4777's random seed
+/// ([`wire::RANDOM_SEED`]) carries its eight seed bytes in the name, which
+/// is fine: the name is never used for it.
 pub fn parse_send(body: &[u8]) -> Vec<(u8, Vec<u8>)> {
     let mut items = Vec::new();
     let mut i = 0;
@@ -476,8 +479,13 @@ fn describe_send(items: &[(u8, Vec<u8>)]) -> String {
         .iter()
         .map(|(k, n)| {
             let kind = if *k == VAR { "VAR" } else { "USERVAR" };
-            if n.starts_with(b"IBMRSEED") {
-                format!("{kind} IBMRSEED(+{} seed bytes)", n.len() - 8)
+            let seed = wire::RANDOM_SEED.as_bytes();
+            if n.starts_with(seed) {
+                format!(
+                    "{kind} {}(+{} seed bytes)",
+                    wire::RANDOM_SEED,
+                    n.len() - seed.len()
+                )
             } else if n.is_empty() {
                 kind.to_owned()
             } else {
@@ -530,7 +538,7 @@ mod tests {
     /// The server's environment SEND with an RFC 4777 seed.
     fn seeded_send() -> Vec<u8> {
         let mut body = vec![SEND, USERVAR];
-        body.extend_from_slice(b"IBMRSEED");
+        body.extend_from_slice(wire::RANDOM_SEED.as_bytes());
         body.extend_from_slice(&[0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]);
         body.extend_from_slice(&[VAR, USERVAR]);
         sb(NEW_ENVIRON, &body)
@@ -564,7 +572,9 @@ mod tests {
         assert_eq!(env, want);
         let text = String::from_utf8_lossy(&env);
         assert!(
-            !text.contains("USER\u{1}") && !text.contains("IBMRSEED") && !text.contains("SUBSPW")
+            !text.contains("USER\u{1}")
+                && !text.contains(wire::RANDOM_SEED)
+                && !text.contains(wire::PASSWORD_SUBSTITUTE)
         );
     }
 
@@ -584,7 +594,7 @@ mod tests {
         n.take_output();
         n.receive(&sb(TERMINAL_TYPE, &[SEND]));
         let mut want = vec![IAC, SB, TERMINAL_TYPE, IS];
-        want.extend_from_slice(b"IBM-3477-FC");
+        want.extend_from_slice(wire::TT_DISPLAY_27X132.as_bytes());
         want.extend_from_slice(&[IAC, SE]);
         assert_eq!(n.take_output(), want);
     }

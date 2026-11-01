@@ -16,6 +16,11 @@ CI also runs `cargo fmt --check`, `cargo clippy -D warnings`, the clean-room
 check (`ci/cleanroom.sh`), the copyright header check and `ci/deps.sh`
 (`tn5250` must not depend on FLTK).
 
+The clean-room check allows exactly one file, `tn5250/src/wire.rs`: the
+protocol's vendor-prefixed terminal types and environment variable names live
+there and nowhere else. Other code uses its constants, and logs them only at
+debug level.
+
 ## Screenshot goldens
 
 Goldens are made by CI's own runners, so they match what CI compares against:

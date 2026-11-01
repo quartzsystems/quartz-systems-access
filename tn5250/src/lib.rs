@@ -15,6 +15,7 @@
 //! - [`codepage`]: EBCDIC translation behind one trait.
 //! - [`replay`]: recording sessions and replaying them against goldens.
 //! - [`log`]: where the crate's log lines go.
+//! - [`wire`]: the vendor-prefixed strings the protocol requires.
 //!
 //! The crate is deliberately free of any user-interface dependency: the UI
 //! crates depend on it, never the other way round.
@@ -32,3 +33,4 @@ pub mod session;
 pub mod stream;
 pub mod telnet;
 pub mod terminal;
+pub mod wire;

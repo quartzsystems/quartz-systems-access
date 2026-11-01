@@ -41,7 +41,7 @@ fn main() {
         wire.extend_from_slice(&[IAC, DO, NEW_ENVIRON, IAC, DO, TERMINAL_TYPE]);
         wire.extend_from_slice(&[IAC, SB, NEW_ENVIRON]);
         wire.extend_from_slice(&[SEND, USERVAR]);
-        wire.extend_from_slice(b"IBMRSEED");
+        wire.extend_from_slice(tn5250::wire::RANDOM_SEED.as_bytes());
         wire.extend_from_slice(&[0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, VAR, USERVAR]);
         wire.extend_from_slice(&[IAC, SE, IAC, SB, TERMINAL_TYPE, 1, IAC, SE]);
         wire.extend_from_slice(&[
