@@ -15,6 +15,11 @@ components below. Each is used under its own licence.
 | `directories` | 6 | MIT OR Apache-2.0 | Settings location |
 | `thiserror` | 2 | MIT OR Apache-2.0 | Error types |
 | `windows-sys` | 0.61 | MIT OR Apache-2.0 | Named pipe, SID lookup (Windows only) |
+| `rustls` (ring provider) | 0.23 | Apache-2.0 OR ISC OR MIT | TLS for 5250 sessions |
+| `ring` (via rustls) | 0.17 | Apache-2.0 AND ISC | Cryptography for TLS |
+| `rustls-pki-types` | 1 | MIT OR Apache-2.0 | Certificate and PEM types |
+| `rustls-native-certs` | 0.8 | Apache-2.0 OR ISC OR MIT | The platform's trusted roots |
+| `sha2` | 0.10 | MIT OR Apache-2.0 | Certificate fingerprints |
 
 Transitive dependencies are listed in `Cargo.lock`.
 

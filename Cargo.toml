@@ -18,6 +18,10 @@ keyring = { version = "3.6", default-features = false }
 directories = "6"
 thiserror = "2"
 windows-sys = "0.61"
+rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }
+rustls-pki-types = { version = "1.12", features = ["std"] }
+rustls-native-certs = "0.8"
+sha2 = "0.10"
 
 qsa-ui = { path = "qsa-ui" }
 qsa-config = { path = "qsa-config" }
