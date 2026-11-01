@@ -5,7 +5,7 @@
 //! Connects, negotiates, prints the debug log and the first records, and
 //! disconnects without typing anything.
 //!
-//! `cargo run -p tn5250 --example probe -- HOST [PORT] [--tls] [--132] [--device NAME] [--hex] [--enter] [--record FILE]`
+//! `cargo run -p tn5250 --example probe -- HOST [PORT] [--tls] [--132] [--device NAME] [--hex] [--enter] [--keys K,K] [--record FILE]`
 
 use std::time::{Duration, Instant};
 
@@ -53,6 +53,17 @@ fn main() {
     };
     let hex = args.iter().any(|a| a == "--hex");
     let mut enter = args.iter().any(|a| a == "--enter");
+    let mut keys: Vec<tn5250::input::Key> = args
+        .iter()
+        .position(|a| a == "--keys")
+        .and_then(|i| args.get(i + 1))
+        .map(|k| {
+            k.split(',')
+                .filter_map(tn5250::replay::key_from_name)
+                .collect()
+        })
+        .unwrap_or_default();
+    keys.reverse();
     let mut term = tn5250::terminal::Terminal::new(size, 37);
     let mut recorder = args
         .iter()
@@ -65,7 +76,12 @@ fn main() {
     let mut screen = Screen::new(size, tn5250::codepage::default_page());
     let start = Instant::now();
     let mut records = 0;
-    while start.elapsed() < Duration::from_secs(8) && records < 6 {
+    let wait = if args.iter().any(|a| a == "--long") {
+        25
+    } else {
+        8
+    };
+    while start.elapsed() < Duration::from_secs(wait) && records < 6 {
         match s.poll(Duration::from_millis(200)) {
             Ok(events) => {
                 for ev in events {
@@ -85,6 +101,18 @@ fn main() {
                                     rec.outbound(&term.screen, reply);
                                 }
                                 s.send(reply).ok();
+                            }
+                            if !keys.is_empty() && term.screen.keyboard.is_open() {
+                                let k = keys.pop().unwrap();
+                                println!("key {k:?}");
+                                for rec in term.key(k).send {
+                                    println!(
+                                        "sent flags {:04X} {}",
+                                        rec.flags,
+                                        tn5250::log::hex(&rec.data)
+                                    );
+                                    s.send(&rec).ok();
+                                }
                             }
                             if enter && term.screen.keyboard.is_open() {
                                 enter = false;

@@ -1,0 +1,38 @@
+# Fuzz targets for tn5250 (cargo-fuzz; nightly). Not part of the main
+# workspace. See README.md.
+[package]
+name = "tn5250-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2024"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+tn5250 = { path = "../tn5250" }
+
+[workspace]
+members = ["."]
+
+[[bin]]
+name = "telnet_decoder"
+path = "fuzz_targets/telnet_decoder.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "stream_parser"
+path = "fuzz_targets/stream_parser.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "parser_input"
+path = "fuzz_targets/parser_input.rs"
+test = false
+doc = false
+bench = false

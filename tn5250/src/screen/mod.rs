@@ -386,12 +386,14 @@ impl Screen {
 
     /// Adds or replaces a field. Fields it overlaps are dropped.
     pub fn define_field(&mut self, f: Field) -> bool {
+        // Fields the new one overlaps go, whether it is new or redefines
+        // the field at its address with another length.
+        self.fields
+            .retain(|g| g.start == f.start || g.end() <= f.start || g.start >= f.end());
         if let Some(i) = self.fields.iter().position(|g| g.start == f.start) {
             self.fields[i] = f;
             return true;
         }
-        self.fields
-            .retain(|g| g.end() <= f.start || g.start >= f.end());
         if self.fields.len() >= MAX_FIELDS {
             return false;
         }
@@ -515,7 +517,10 @@ impl Snapshot {
             for _ in 0..nfcw {
                 fcw.push(r.u16()?);
             }
-            if start + flen > size || fields.len() >= MAX_FIELDS {
+            // In order, not overlapping, on the screen: as the format table
+            // always is.
+            let after_last = fields.last().is_none_or(|g: &Field| g.end() <= start);
+            if flen == 0 || start + flen > size || fields.len() >= MAX_FIELDS || !after_last {
                 return None;
             }
             fields.push(Field {
@@ -632,6 +637,31 @@ mod tests {
         );
         assert_eq!(s.field_at(97), Some(2));
         assert_eq!(s.field_at(9), None);
+    }
+
+    /// Found by fuzzing: a field redefined longer at its own address used
+    /// to keep the fields it then covered.
+    #[test]
+    fn a_longer_redefinition_drops_the_fields_it_covers() {
+        let mut s = Screen::default_24x80();
+        s.define_field(field(10, 5));
+        s.define_field(field(20, 5));
+        s.define_field(field(10, 15));
+        assert_eq!(s.fields.len(), 1);
+        assert_eq!((s.fields[0].start, s.fields[0].len), (10, 15));
+    }
+
+    #[test]
+    fn restore_data_with_overlapping_fields_is_refused() {
+        let mut s = Screen::default_24x80();
+        s.define_field(field(10, 5));
+        s.define_field(field(20, 5));
+        let mut snap = s.snapshot();
+        snap.fields[0].len = 15;
+        assert!(Snapshot::decode(&snap.encode()).is_none());
+        snap.fields.swap(0, 1);
+        snap.fields[1].len = 5;
+        assert!(Snapshot::decode(&snap.encode()).is_none(), "out of order");
     }
 
     #[test]

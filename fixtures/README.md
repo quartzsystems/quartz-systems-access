@@ -35,7 +35,9 @@ sign-on display at each size (with Enter pressed on an empty sign-on at 24×80).
    or set `QSACCESS_RECORD=fixtures/replay/sign-on.qsr` before starting it.
    Only the next 5250 session opened is recorded.
 2. Open 5250 Display for the system and do the session's steps. Type at a
-   normal pace; times are recorded but replay ignores them.
+   normal pace; times are recorded but replay ignores them. Use the keyboard
+   only: paste and clicking to move the cursor are not recorded, so a
+   session that uses them does not replay.
 3. Close the session window. The recording is complete.
 4. Write the golden from the replay, then look at it before committing:
 
