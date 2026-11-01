@@ -12,6 +12,7 @@ fltk.workspace = true
 qsa-ui.workspace = true
 qsa-config.workspace = true
 qsa-msg.workspace = true
+tn5250.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [

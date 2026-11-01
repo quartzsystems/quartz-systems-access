@@ -12,6 +12,7 @@ pub mod ipc;
 pub mod log;
 pub mod mainwin;
 pub mod properties;
+pub mod session;
 pub mod sysconfig;
 
 /// Product name, as shown in titles.

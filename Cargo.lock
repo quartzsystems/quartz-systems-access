@@ -970,6 +970,7 @@ dependencies = [
  "qsa-config",
  "qsa-msg",
  "qsa-ui",
+ "tn5250",
  "windows-sys 0.61.2",
 ]
 

@@ -32,6 +32,8 @@ pub struct KeyPress {
     /// Text the key produced, if any.
     pub text: String,
     pub state: fltk::enums::Shortcut,
+    /// A key coming up rather than going down.
+    pub up: bool,
 }
 
 type KeyCb = Box<dyn FnMut(&KeyPress) -> bool>;
@@ -204,7 +206,7 @@ impl TerminalView {
                 w.redraw();
                 true
             }
-            Event::KeyDown | Event::Shortcut => {
+            Event::KeyDown | Event::KeyUp | Event::Shortcut => {
                 if ev == Event::Shortcut
                     && app::focus().map(|f| f.as_widget_ptr()) != Some(w.as_widget_ptr())
                 {
@@ -214,6 +216,7 @@ impl TerminalView {
                     key: app::event_key(),
                     text: app::event_text(),
                     state: app::event_state(),
+                    up: ev == Event::KeyUp,
                 };
                 let cb = i3.borrow_mut().on_key.take();
                 match cb {
