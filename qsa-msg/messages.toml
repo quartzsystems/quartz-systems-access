@@ -320,3 +320,95 @@ severity = 10
 text = "Reconnecting printer session &1 in &2 seconds."
 cause = "The connection for printer session &1 was lost. The session tries again by itself, waiting longer each time, up to 5 minutes."
 recovery = "None needed. To stop trying, select Disconnect. Received output is never lost."
+
+# Host servers: port lookup, sign-on, connection verification.
+
+[QAD4001]
+severity = 0
+text = "Connected to &1 server on &2 port &3."
+cause = "A connection to the &1 server on system &2 was opened on port &3."
+recovery = "None needed."
+
+[QAD4010]
+severity = 0
+text = "Server mapper on &1 returned port &2 for &3."
+cause = "The server mapper on system &1 said that service &3 listens on port &2. The answer is kept as long as the system's address lookup setting allows."
+recovery = "None needed."
+
+[QAD4011]
+severity = 10
+text = "Server mapper on &1 not available; using configured ports."
+cause = "The server mapper on system &1 (port 449) could not be reached or did not answer, so the ports on the Ports tab of the system's properties are used instead. This is reported once while the program runs."
+recovery = "If connections work, none is needed. Otherwise check that the system's server mapper is started and that port 449 is open between this computer and the system, or set Port lookup to Standard ports only on the Ports tab."
+
+[QAD4012]
+severity = 30
+text = "Service &1 is not registered on &2."
+cause = "The server mapper on system &2 does not know service &1: the server is not started, or the system does not offer it."
+recovery = "Start the server on system &2, or ask its administrator to. If the service listens on a fixed port, set Port lookup to Fixed ports as listed and enter the port on the Ports tab."
+
+[QAD4020]
+severity = 0
+text = "Sign-on to &1 as &2 succeeded."
+cause = "System &1 accepted user &2 and the password."
+recovery = "None needed."
+
+[QAD4021]
+severity = 30
+text = "Sign-on to &1 failed: &2."
+cause = "System &1 did not accept the sign-on. The reason is &2, as the system gave it; a system message ID in it is the system's own."
+recovery = "Check the user ID and password and try again. If the profile is disabled, or sign-on attempts were exceeded, ask the system's security officer to enable it."
+
+[QAD4022]
+severity = 20
+text = "Password for &1 on &2 has expired."
+cause = "The password of user &1 on system &2 is correct but has expired. The system requires a new one before it allows a sign-on."
+recovery = "Change the password in the Change Password dialog. The new password must meet the system's password rules, which the system reports if it is refused."
+
+[QAD4023]
+severity = 0
+text = "Password changed for &1 on &2."
+cause = "System &2 accepted the new password for user &1."
+recovery = "None needed. If the password was saved, the saved password was updated too."
+
+[QAD4030]
+severity = 10
+text = "Credential store not available; password not saved."
+cause = "Save password was selected, but no credential store could be reached. On Windows this is the Windows Credential Manager; on Linux it is a Secret Service provider on the session bus. Passwords are never saved anywhere else."
+recovery = "On Linux, start a Secret Service provider for your session. Until then, enter the password when you are prompted."
+
+[QAD4031]
+severity = 10
+text = "Password for &1 on &2 expires in &3 days."
+cause = "The password of user &1 on system &2 expires in &3 days, within the system's warning period."
+recovery = "Select Change password to change it now, or change it before it expires."
+
+[QAD4040]
+severity = 20
+text = "Automatic sign-on to &1 was not accepted: &2."
+cause = "The 5250 session asked system &1 to sign on automatically, and the system refused: &2. The system's sign-on display is shown instead."
+recovery = "Sign on at the sign-on display. If the reason is the password, check the password used for the system; if automatic sign-on is not allowed on the system, clear Automatic sign-on in Session Properties."
+
+[QAD4050]
+severity = 0
+text = "Connection to &1 verified."
+cause = "Every required check of the connection to system &1 passed."
+recovery = "None needed."
+
+[QAD4051]
+severity = 10
+text = "Connection to &1 verified with warnings."
+cause = "The required checks of the connection to system &1 passed, but at least one passed only through a fallback (such as the configured ports instead of the server mapper), was not tested, or an informational check failed."
+recovery = "Look at the Detail column of the results for each check that did not pass. The system can be used, but some functions may not work."
+
+[QAD4052]
+severity = 30
+text = "Connection verification for &1 failed."
+cause = "At least one required check of the connection to system &1 failed."
+recovery = "Look at the Detail column of the failed checks. Check the system's name or address, that its servers are started, and that the ports are open between this computer and the system."
+
+[QAD4060]
+severity = 30
+text = "Server &1 on &2 returned an unexpected reply: &3."
+cause = "The &1 server on system &2 sent something this program cannot read: &3. The connection was closed."
+recovery = "Check that the port on the Ports tab belongs to the &1 server. If it does, keep the program's log and report the problem."
