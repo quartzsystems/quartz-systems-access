@@ -38,10 +38,11 @@ pub fn details_window(m: &Message) -> Window {
     let inner = w - 2 * margin - 2 * CONTENT_SIDE;
     draw::set_font(theme::UI_FONT, theme::UI_SIZE);
     let section_h = |text: &str| draw::wrap_measure(text, inner, false).1.max(14);
+    let fit = |t: &str| crate::msgbox::break_long_words(t, inner, draw::width);
     let sections = [
-        ("Message", m.text.as_str()),
-        ("Cause", m.cause.as_str()),
-        ("Recovery", m.recovery.as_str()),
+        ("Message", fit(&m.text)),
+        ("Cause", fit(&m.cause)),
+        ("Recovery", fit(&m.recovery)),
     ];
     let heights: Vec<i32> = sections.iter().map(|(_, t)| section_h(t)).collect();
     let mut h = margin + 20 + 6;

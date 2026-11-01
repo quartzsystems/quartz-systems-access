@@ -160,6 +160,13 @@ fn certificate() -> Window {
     .0
 }
 
+/// QAD0030 for a settings file with a long path, which must wrap.
+fn long_path_message() -> Window {
+    let p = r"C:\Users\someone\AppData\Local\Temp\claude\c--Users-someone-Documents-GitHub-example\e77d43e6-eac0-4c01-9379-4ad509a246ef\scratchpad\e2e\cfg\settings.toml";
+    let m = qsa_msg::message(qsa_msg::id::SETTINGS_UNREADABLE, &[p, "expected `]`"]);
+    qsa_ui::msgdetails::message_box(&m).build().0
+}
+
 fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Window)> {
     let mut out = Vec::new();
     let (ui, _rx) = mainwin::build(state.clone());
@@ -193,6 +200,7 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
         keymapdlg::build("Keyboard Map - sys1.example.net", &KeyMap::defaults()).window,
     ));
     out.push(("certificate".to_owned(), certificate()));
+    out.push(("message-long-path".to_owned(), long_path_message()));
     out
 }
 
