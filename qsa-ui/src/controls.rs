@@ -119,6 +119,8 @@ pub fn check(x: i32, y: i32, w: i32, h: i32, label: &str) -> CheckButton {
     c.set_label(label);
     c.set_label_size(theme::UI_SIZE);
     c.set_selection_color(colors::TEXT);
+    c.set_down_frame(theme::CHECK_BOX);
+    c.set_color(colors::WINDOW);
     c
 }
 
@@ -165,9 +167,6 @@ impl Switch {
             if flag.get() {
                 return hovers && hover(w, ev);
             }
-            if matches!(ev, Event::Leave) && hovers {
-                hover(w, ev);
-            }
             matches!(
                 ev,
                 Event::Push
@@ -205,6 +204,15 @@ impl Switch {
         B: ButtonExt + WidgetBase + Clone + 'static,
     {
         Switch::install_with(b, true, |b, on| {
+            // Only push buttons have a body that greys out; check boxes and
+            // radios keep their white well.
+            if b.frame() == FrameType::UpBox || b.frame() == theme::DEFAULT_BUTTON_BOX {
+                b.set_color(if on {
+                    colors::BUTTON
+                } else {
+                    colors::BUTTON_DISABLED
+                });
+            }
             b.set_label_color(if on {
                 colors::TEXT
             } else {

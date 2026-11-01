@@ -56,7 +56,7 @@ impl Tabs {
         let panel_y = y + Self::STRIP_H - 1;
         let mut panel = Widget::new(x, panel_y, w, h - (panel_y - y), None);
         panel.draw(|p| {
-            draw::draw_rect_fill(p.x() + 1, p.y() + 1, p.w() - 2, p.h() - 2, colors::FACE);
+            draw::draw_rect_fill(p.x() + 1, p.y() + 1, p.w() - 2, p.h() - 2, colors::WINDOW);
             theme::draw_panel(p.x(), p.y(), p.w(), p.h());
         });
         let mut strip = Widget::new(x, y, w, Self::STRIP_H, None);
@@ -125,7 +125,7 @@ impl Tabs {
         self.group.begin();
         let mut page = Group::new(r.x, r.y, r.w, r.h, None);
         page.set_frame(FrameType::FlatBox);
-        page.set_color(colors::FACE);
+        page.set_color(colors::WINDOW);
         let pad = Self::PAGE_PAD;
         build(Rect {
             x: r.x + pad,
@@ -236,11 +236,7 @@ fn draw_strip(s: &Widget, titles: &[String], current: usize) {
 }
 
 fn draw_tab(x: i32, y: i32, w: i32, h: i32, title: &str, active: bool) {
-    let body = if active {
-        colors::FACE
-    } else {
-        colors::TAB_INACTIVE
-    };
+    let body = if active { colors::WINDOW } else { colors::FACE };
     draw::draw_rect_fill(x, y, w, h, body);
     draw::draw_rect_fill(x, y, w, 1, colors::BORDER_LIGHT);
     draw::draw_rect_fill(x, y + 1, 1, h - 1, colors::BORDER_LIGHT);

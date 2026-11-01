@@ -58,9 +58,11 @@ impl TaskPane {
     /// then call [`TaskPane::end`].
     pub fn new(x: i32, y: i32, w: i32, h: i32) -> TaskPane {
         let mut scroll = Scroll::new(x, y, w, h, None);
-        scroll.set_frame(FrameType::DownBox);
+        scroll.set_frame(FrameType::BorderBox);
         scroll.set_color(colors::WINDOW);
         scroll.set_type(ScrollType::Vertical);
+        theme::style_scrollbar(&mut scroll.scrollbar());
+        theme::style_scrollbar(&mut scroll.hscrollbar());
         TaskPane {
             layout: Rc::new(RefCell::new(Layout {
                 scroll,
@@ -307,13 +309,13 @@ fn draw_header(h: &Widget, collapsed: bool) {
     theme::draw_panel(x, y, w, hh);
     // The collapse box: minus when open, plus when collapsed.
     let (bx, by) = (x + 5, y + (hh - 9) / 2);
-    draw::draw_rect_fill(bx, by, 9, 9, colors::BORDER);
+    draw::draw_rect_fill(bx, by, 9, 9, colors::FIELD_BORDER);
     draw::draw_rect_fill(bx + 1, by + 1, 7, 7, colors::WINDOW);
     draw::draw_rect_fill(bx + 2, by + 4, 5, 1, colors::TEXT);
     if collapsed {
         draw::draw_rect_fill(bx + 4, by + 2, 1, 5, colors::TEXT);
     }
-    draw::set_font(theme::UI_FONT_BOLD, theme::UI_SIZE);
+    draw::set_font(theme::UI_FONT, theme::UI_SIZE);
     draw::set_draw_color(colors::TEXT);
     let label = h.label();
     draw::draw_text2(&label, x + 20, y, w - 24, hh, Align::Left);

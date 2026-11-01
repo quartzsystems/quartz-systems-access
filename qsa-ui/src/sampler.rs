@@ -38,8 +38,8 @@ pub fn menu_bar(x: i32, y: i32, w: i32) -> MenuBar {
     let mut m = MenuBar::new(x, y, w, MENU_H, None);
     m.set_frame(FrameType::FlatBox);
     m.set_down_frame(FrameType::FlatBox);
-    m.set_color(colors::FACE);
-    m.set_selection_color(colors::SELECTION);
+    m.set_color(colors::WINDOW);
+    m.set_selection_color(colors::MENU_HIGHLIGHT);
     m.set_text_size(theme::UI_SIZE);
     m
 }

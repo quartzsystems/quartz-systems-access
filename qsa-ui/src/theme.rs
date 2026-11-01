@@ -8,9 +8,10 @@
 //! Nothing reads the desktop theme: FLTK's system colours are never loaded and
 //! every box is drawn by the functions below from the fixed palette.
 //!
-//! The look is light and flat: a pale grey face, white panels, one-pixel
-//! outlines, and push buttons that turn pale blue with a blue edge under the
-//! pointer.
+//! The look follows the plain Windows desktop controls: a `#F0F0F0` face,
+//! white fields, lists and tab pages, light buttons with softly rounded
+//! corners that turn blue under the pointer, and `#0078D7` selection. It is
+//! the same on every platform.
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -26,16 +27,16 @@ pub mod colors {
 
     /// Window and dialog face.
     pub const FACE: Color = Color::from_rgb(0xF0, 0xF0, 0xF0);
-    /// List, field and panel background.
+    /// Field, list, menu bar and tab page background.
     pub const WINDOW: Color = Color::from_rgb(0xFF, 0xFF, 0xFF);
     /// Normal text.
     pub const TEXT: Color = Color::from_rgb(0x00, 0x00, 0x00);
-    /// Selection background.
-    pub const SELECTION: Color = Color::from_rgb(0x2F, 0x6F, 0xD6);
+    /// Selection background in lists and task links.
+    pub const SELECTION: Color = Color::from_rgb(0x00, 0x78, 0xD7);
     /// Text on the selection background.
     pub const SELECTION_TEXT: Color = Color::from_rgb(0xFF, 0xFF, 0xFF);
     /// Disabled text.
-    pub const DISABLED_TEXT: Color = Color::from_rgb(0x80, 0x80, 0x80);
+    pub const DISABLED_TEXT: Color = Color::from_rgb(0x8C, 0x8C, 0x8C);
     /// Status word: active, running.
     pub const STATUS_ACTIVE: Color = Color::from_rgb(0x00, 0x80, 0x00);
     /// Status word: ended, error, not connected.
@@ -43,44 +44,58 @@ pub mod colors {
     /// The Quartz accent. Used once only: the rule in the About box.
     pub const QUARTZ_ACCENT: Color = Color::from_rgb(0x00, 0xD9, 0x92);
     /// Tooltip background.
-    pub const TOOLTIP: Color = Color::from_rgb(0xFF, 0xFF, 0xE1);
+    pub const TOOLTIP: Color = Color::from_rgb(0xFF, 0xFF, 0xFF);
 
     /// Push button body.
     pub const BUTTON: Color = Color::from_rgb(0xFD, 0xFD, 0xFD);
-    /// Push button body while pressed.
-    pub const BUTTON_PRESSED: Color = Color::from_rgb(0xCF, 0xE0, 0xF7);
     /// Push button body under the pointer.
-    pub const BUTTON_HOVER: Color = Color::from_rgb(0xE6, 0xEF, 0xFB);
-    /// Push button outline under the pointer or pressed.
-    pub const BUTTON_HOT_BORDER: Color = Color::from_rgb(0x2F, 0x6F, 0xD6);
-    /// Outline of fields, combos and lists.
+    pub const BUTTON_HOVER: Color = Color::from_rgb(0xE0, 0xEE, 0xF9);
+    /// Push button body while pressed.
+    pub const BUTTON_PRESSED: Color = Color::from_rgb(0xCC, 0xE4, 0xF7);
+    /// Push button body while disabled.
+    pub const BUTTON_DISABLED: Color = Color::from_rgb(0xF5, 0xF5, 0xF5);
+    /// Push button outline: top and sides.
+    pub const BUTTON_BORDER: Color = Color::from_rgb(0xD0, 0xD0, 0xD0);
+    /// Push button outline: bottom edge, a shade darker.
+    pub const BUTTON_BORDER_BOTTOM: Color = Color::from_rgb(0xB8, 0xB8, 0xB8);
+    /// Push button outline while disabled.
+    pub const BUTTON_BORDER_DISABLED: Color = Color::from_rgb(0xE3, 0xE3, 0xE3);
+    /// Outline of the default button, and of any button under the pointer.
+    pub const ACCENT_BORDER: Color = Color::from_rgb(0x00, 0x78, 0xD4);
+    /// Outline of a pressed button.
+    pub const PRESSED_BORDER: Color = Color::from_rgb(0x00, 0x54, 0x99);
+    /// Outline of text fields and combos.
     pub const FIELD_BORDER: Color = Color::from_rgb(0x7A, 0x7A, 0x7A);
-    /// Outline of push buttons and tabs.
-    pub const BORDER: Color = Color::from_rgb(0xAD, 0xAD, 0xAD);
-    /// Outline of panels, separators and group boxes.
-    pub const BORDER_LIGHT: Color = Color::from_rgb(0xD5, 0xD5, 0xD5);
-    /// Outline of the default button.
-    pub const BORDER_DEFAULT: Color = Color::from_rgb(0x2F, 0x6F, 0xD6);
-    /// Light inner edge at the top and left of raised controls.
-    pub const HIGHLIGHT: Color = Color::from_rgb(0xFF, 0xFF, 0xFF);
-    /// Inactive tab body.
-    pub const TAB_INACTIVE: Color = Color::from_rgb(0xE8, 0xE8, 0xE8);
+    /// Outline of lists.
+    pub const LIST_BORDER: Color = Color::from_rgb(0x82, 0x87, 0x90);
+    /// Outline of check boxes and radio buttons.
+    pub const CHECK_BORDER: Color = Color::from_rgb(0x33, 0x33, 0x33);
+    /// Outline of panels, tabs, group boxes and separators.
+    pub const BORDER_LIGHT: Color = Color::from_rgb(0xDC, 0xDC, 0xDC);
+    /// Column separators in list headers.
+    pub const HEADER_RULE: Color = Color::from_rgb(0xE5, 0xE5, 0xE5);
+    /// Menu bar and menu item highlight.
+    pub const MENU_HIGHLIGHT: Color = Color::from_rgb(0xCC, 0xE8, 0xFF);
     /// Task pane group header band.
-    pub const TASK_HEADER: Color = Color::from_rgb(0xE3, 0xE6, 0xEE);
+    pub const TASK_HEADER: Color = Color::from_rgb(0xE3, 0xE6, 0xF0);
     /// Rule that divides sections of the task pane.
-    pub const TASK_RULE: Color = Color::from_rgb(0x5A, 0x6E, 0x96);
+    pub const TASK_RULE: Color = Color::from_rgb(0x2F, 0x5B, 0xC2);
     /// Task links.
-    pub const LINK: Color = Color::from_rgb(0x1C, 0x46, 0x96);
+    pub const LINK: Color = Color::from_rgb(0x1F, 0x4F, 0xCB);
     /// Background of a task link under the pointer or focus.
-    pub const HOVER: Color = Color::from_rgb(0x2F, 0x6F, 0xD6);
+    pub const HOVER: Color = SELECTION;
     /// Text of a task link under the pointer or focus.
-    pub const HOVER_TEXT: Color = Color::from_rgb(0xFF, 0xFF, 0xFF);
+    pub const HOVER_TEXT: Color = SELECTION_TEXT;
     /// Task link bullet.
-    pub const BULLET: Color = Color::from_rgb(0xA4, 0xAB, 0xB5);
+    pub const BULLET: Color = Color::from_rgb(0xA8, 0xAD, 0xB8);
+    /// Scroll bar track.
+    pub const SCROLL_TRACK: Color = Color::from_rgb(0xF0, 0xF0, 0xF0);
+    /// Scroll bar thumb.
+    pub const SCROLL_THUMB: Color = Color::from_rgb(0xCD, 0xCD, 0xCD);
 }
 
 /// UI text size in pixels.
-pub const UI_SIZE: i32 = 11;
+pub const UI_SIZE: i32 = 12;
 /// Monospace text size in pixels.
 pub const MONO_SIZE: i32 = 12;
 /// Standard button size.
@@ -96,7 +111,7 @@ pub const CELL_PAD: i32 = 4;
 
 /// UI sans, regular.
 pub const UI_FONT: Font = Font::Helvetica;
-/// UI sans, bold: group titles.
+/// UI sans, bold.
 pub const UI_FONT_BOLD: Font = Font::HelveticaBold;
 /// Monospace: anything that shows system output.
 pub const MONO_FONT: Font = Font::Courier;
@@ -105,8 +120,11 @@ pub const MONO_FONT_BOLD: Font = Font::CourierBold;
 
 /// Box type of the default (Enter) button: a blue outline.
 pub const DEFAULT_BUTTON_BOX: FrameType = FrameType::PlasticUpBox;
-/// Box type of a pressed push button: pale blue body, blue outline.
-pub const PRESSED_BUTTON_BOX: FrameType = FrameType::PlasticDownBox;
+/// Box type of a pressed push button: pale blue body, dark blue outline.
+pub const PRESSED_BUTTON_BOX: FrameType = FrameType::GtkDownBox;
+/// Box type of a check box's well. It must be one of the types FLTK draws a
+/// check mark in, rather than filling.
+pub const CHECK_BOX: FrameType = FrameType::PlasticDownBox;
 
 struct BundledFont {
     file: &'static str,
@@ -118,35 +136,35 @@ struct BundledFont {
     pango_name: &'static str,
 }
 
-// Placeholders until the Quartz faces exist; see THIRD_PARTY.md.
+// Open-licence faces until Quartz Systems' own fonts exist; see THIRD_PARTY.md.
 const FONTS: &[BundledFont] = &[
     BundledFont {
-        file: "NotoSans-Regular.ttf",
-        data: include_bytes!("../fonts/NotoSans-Regular.ttf"),
+        file: "Selawik-Regular.ttf",
+        data: include_bytes!("../fonts/Selawik-Regular.ttf"),
         slots: &[Font::Helvetica],
-        gdi_name: " Noto Sans",
-        pango_name: "Noto Sans",
+        gdi_name: " Selawik",
+        pango_name: "Selawik",
     },
     BundledFont {
-        file: "NotoSans-Bold.ttf",
-        data: include_bytes!("../fonts/NotoSans-Bold.ttf"),
+        file: "Selawik-Bold.ttf",
+        data: include_bytes!("../fonts/Selawik-Bold.ttf"),
         slots: &[Font::HelveticaBold],
-        gdi_name: "BNoto Sans",
-        pango_name: "Noto Sans Bold",
+        gdi_name: "BSelawik",
+        pango_name: "Selawik Bold",
     },
     BundledFont {
-        file: "NotoSansMono-Regular.ttf",
-        data: include_bytes!("../fonts/NotoSansMono-Regular.ttf"),
+        file: "CascadiaMono-Regular.ttf",
+        data: include_bytes!("../fonts/CascadiaMono-Regular.ttf"),
         slots: &[Font::Courier, Font::Screen],
-        gdi_name: " Noto Sans Mono",
-        pango_name: "Noto Sans Mono",
+        gdi_name: " Cascadia Mono",
+        pango_name: "Cascadia Mono",
     },
     BundledFont {
-        file: "NotoSansMono-Bold.ttf",
-        data: include_bytes!("../fonts/NotoSansMono-Bold.ttf"),
+        file: "CascadiaMono-Bold.ttf",
+        data: include_bytes!("../fonts/CascadiaMono-Bold.ttf"),
         slots: &[Font::CourierBold, Font::ScreenBold],
-        gdi_name: "BNoto Sans Mono",
-        pango_name: "Noto Sans Mono Bold",
+        gdi_name: "BCascadia Mono",
+        pango_name: "Cascadia Mono Bold",
     },
 ];
 
@@ -165,15 +183,15 @@ pub fn init() -> Result<(), String> {
         let fonts = load_fonts();
         app::set_font(UI_FONT);
         app::set_font_size(UI_SIZE);
-        app::set_scrollbar_size(16);
+        app::set_scrollbar_size(17);
         app::set_visible_focus(true);
-        app::set_menu_linespacing(6);
+        app::set_menu_linespacing(8);
         Tooltip::set_color(colors::TOOLTIP);
         Tooltip::set_text_color(colors::TEXT);
         Tooltip::set_font(UI_FONT);
         Tooltip::set_font_size(UI_SIZE);
-        Tooltip::set_margin_width(4);
-        Tooltip::set_margin_height(2);
+        Tooltip::set_margin_width(5);
+        Tooltip::set_margin_height(3);
         fonts
     })
     .clone()
@@ -201,7 +219,7 @@ fn set_colors() {
         (Color::White, colors::WINDOW),
         (Color::Dark3, colors::FIELD_BORDER),
         (Color::Dark2, colors::BORDER_LIGHT),
-        (Color::Light3, colors::HIGHLIGHT),
+        (Color::Light3, colors::WINDOW),
     ] {
         let (r, g, b) = colour.to_rgb();
         app::set_color(index, r, g, b);
@@ -210,12 +228,12 @@ fn set_colors() {
 
 fn set_box_types() {
     use FrameType::*;
-    app::set_frame_type_cb(UpBox, up_box, 1, 1, 2, 2);
-    app::set_frame_type_cb(UpFrame, up_frame, 1, 1, 2, 2);
+    app::set_frame_type_cb(UpBox, up_box, 2, 2, 4, 4);
+    app::set_frame_type_cb(UpFrame, up_frame, 2, 2, 4, 4);
     app::set_frame_type_cb(DownBox, down_box, 1, 1, 2, 2);
     app::set_frame_type_cb(DownFrame, down_frame, 1, 1, 2, 2);
-    app::set_frame_type_cb(BorderBox, down_box, 1, 1, 2, 2);
-    app::set_frame_type_cb(BorderFrame, down_frame, 1, 1, 2, 2);
+    app::set_frame_type_cb(BorderBox, list_box, 1, 1, 2, 2);
+    app::set_frame_type_cb(BorderFrame, list_frame, 1, 1, 2, 2);
     for (b, f) in [
         (ThinUpBox, ThinUpFrame),
         (ThinDownBox, ThinDownFrame),
@@ -226,7 +244,8 @@ fn set_box_types() {
         app::set_frame_type_cb(f, panel_frame, 1, 1, 2, 2);
     }
     app::set_frame_type_cb(DEFAULT_BUTTON_BOX, default_button_box, 2, 2, 4, 4);
-    app::set_frame_type_cb(PRESSED_BUTTON_BOX, pressed_button_box, 1, 1, 2, 2);
+    app::set_frame_type_cb(PRESSED_BUTTON_BOX, pressed_button_box, 2, 2, 4, 4);
+    app::set_frame_type_cb(CHECK_BOX, check_box, 1, 1, 2, 2);
     app::set_frame_type_cb(RoundDownBox, radio_box, 1, 1, 2, 2);
 }
 
@@ -245,7 +264,13 @@ fn vline(x: i32, y: i32, h: i32, c: Color) {
     }
 }
 
-/// A one-pixel outline.
+fn fill(x: i32, y: i32, w: i32, h: i32, c: Color) {
+    if w > 0 && h > 0 {
+        draw::draw_rect_fill(x, y, w, h, c);
+    }
+}
+
+/// A one-pixel square outline.
 fn outline(x: i32, y: i32, w: i32, h: i32, c: Color) {
     if w <= 0 || h <= 0 {
         return;
@@ -256,18 +281,43 @@ fn outline(x: i32, y: i32, w: i32, h: i32, c: Color) {
     vline(x + w - 1, y + 1, h - 2, c);
 }
 
-fn fill(x: i32, y: i32, w: i32, h: i32, c: Color) {
-    if w > 0 && h > 0 {
-        draw::draw_rect_fill(x, y, w, h, c);
+/// A button shape: body and one-pixel outline with corners rounded by two
+/// pixels. The four corner pixels outside the curve are left untouched.
+fn rounded(x: i32, y: i32, w: i32, h: i32, body: Color, edge: Color, bottom: Color) {
+    if w < 6 || h < 6 {
+        fill(x, y, w, h, body);
+        outline(x, y, w, h, edge);
+        return;
     }
+    // Body.
+    fill(x + 2, y + 1, w - 4, h - 2, body);
+    fill(x + 1, y + 2, w - 2, h - 4, body);
+    // Edge.
+    hline(x + 2, y, w - 4, edge);
+    vline(x, y + 2, h - 4, edge);
+    vline(x + w - 1, y + 2, h - 4, edge);
+    hline(x + 2, y + h - 1, w - 4, bottom);
+    fill(x + 1, y + 1, 1, 1, edge);
+    fill(x + w - 2, y + 1, 1, 1, edge);
+    fill(x + 1, y + h - 2, 1, 1, bottom);
+    fill(x + w - 2, y + h - 2, 1, 1, bottom);
 }
 
-/// Raised: a flat push-button outline.
-pub fn draw_raised(x: i32, y: i32, w: i32, h: i32) {
-    outline(x, y, w, h, colors::BORDER);
+/// Raised: a push button in its normal, hover or disabled state, chosen by
+/// its body colour.
+pub fn draw_button(x: i32, y: i32, w: i32, h: i32, body: Color) {
+    use colors::*;
+    let (edge, bottom) = if body == BUTTON_HOVER {
+        (ACCENT_BORDER, ACCENT_BORDER)
+    } else if body == BUTTON_DISABLED {
+        (BUTTON_BORDER_DISABLED, BUTTON_BORDER_DISABLED)
+    } else {
+        (BUTTON_BORDER, BUTTON_BORDER_BOTTOM)
+    };
+    rounded(x, y, w, h, body, edge, bottom);
 }
 
-/// Sunken: fields, combos and lists.
+/// Sunken: fields and combos.
 pub fn draw_sunken(x: i32, y: i32, w: i32, h: i32) {
     outline(x, y, w, h, colors::FIELD_BORDER);
 }
@@ -288,17 +338,11 @@ pub fn draw_separator_v(x: i32, y: i32, h: i32) {
 }
 
 fn up_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
-    fill(x + 1, y + 1, w - 2, h - 2, c);
-    // A button under the pointer is given the hover body; its edge turns blue.
-    if c == colors::BUTTON_HOVER {
-        outline(x, y, w, h, colors::BUTTON_HOT_BORDER);
-    } else {
-        draw_raised(x, y, w, h);
-    }
+    draw_button(x, y, w, h, c);
 }
 
 fn up_frame(x: i32, y: i32, w: i32, h: i32, _c: Color) {
-    draw_raised(x, y, w, h);
+    outline(x, y, w, h, colors::BUTTON_BORDER);
 }
 
 fn down_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
@@ -308,6 +352,15 @@ fn down_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
 
 fn down_frame(x: i32, y: i32, w: i32, h: i32, _c: Color) {
     draw_sunken(x, y, w, h);
+}
+
+fn list_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
+    fill(x + 1, y + 1, w - 2, h - 2, c);
+    outline(x, y, w, h, colors::LIST_BORDER);
+}
+
+fn list_frame(x: i32, y: i32, w: i32, h: i32, _c: Color) {
+    outline(x, y, w, h, colors::LIST_BORDER);
 }
 
 fn panel_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
@@ -320,52 +373,69 @@ fn panel_frame(x: i32, y: i32, w: i32, h: i32, _c: Color) {
 }
 
 fn default_button_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
-    fill(x + 1, y + 1, w - 2, h - 2, c);
-    outline(x, y, w, h, colors::BORDER_DEFAULT);
+    use colors::*;
+    rounded(x, y, w, h, c, ACCENT_BORDER, ACCENT_BORDER);
+    // A second, inner rule makes the default button's edge read as heavier.
+    if w > 8 && h > 8 && c != BUTTON_DISABLED {
+        hline(x + 2, y + 1, w - 4, ACCENT_BORDER);
+        hline(x + 2, y + h - 2, w - 4, ACCENT_BORDER);
+        vline(x + 1, y + 2, h - 4, ACCENT_BORDER);
+        vline(x + w - 2, y + 2, h - 4, ACCENT_BORDER);
+    }
 }
 
 fn pressed_button_box(x: i32, y: i32, w: i32, h: i32, _c: Color) {
-    fill(x + 1, y + 1, w - 2, h - 2, colors::BUTTON_PRESSED);
-    outline(x, y, w, h, colors::BUTTON_HOT_BORDER);
+    use colors::*;
+    rounded(x, y, w, h, BUTTON_PRESSED, PRESSED_BORDER, PRESSED_BORDER);
 }
 
-/// The radio button well: a fixed 12×12 bitmap, so it is pixel-identical on
+fn check_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
+    fill(x + 1, y + 1, w - 2, h - 2, c);
+    outline(x, y, w, h, colors::CHECK_BORDER);
+}
+
+/// The radio button well: a fixed 13×13 bitmap, so it is pixel-identical on
 /// every backend. `o` is the outline, `.` the inside.
-const RADIO: [&str; 12] = [
-    "    oooo    ",
-    "  oo....oo  ",
-    " o........o ",
-    " o........o ",
-    "o..........o",
-    "o..........o",
-    "o..........o",
-    "o..........o",
-    " o........o ",
-    " o........o ",
-    "  oo....oo  ",
-    "    oooo    ",
+const RADIO: [&str; 13] = [
+    "    ooooo    ",
+    "  oo.....oo  ",
+    " o.........o ",
+    " o.........o ",
+    "o...........o",
+    "o...........o",
+    "o...........o",
+    "o...........o",
+    "o...........o",
+    " o.........o ",
+    " o.........o ",
+    "  oo.....oo  ",
+    "    ooooo    ",
 ];
 
 fn radio_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
-    let ox = x + (w - 12) / 2;
-    let oy = y + (h - 12) / 2;
+    let n = RADIO.len() as i32;
+    let ox = x + (w - n) / 2;
+    let oy = y + (h - n) / 2;
     for (py, row) in RADIO.iter().enumerate() {
-        let mut inside: Option<i32> = None;
+        let py = oy + py as i32;
+        let first = row.find('.').map(|i| i as i32);
+        let len = row.bytes().filter(|b| *b == b'.').count() as i32;
+        if let Some(start) = first {
+            draw::draw_rect_fill(ox + start, py, len, 1, c);
+        }
         for (px, ch) in row.bytes().enumerate() {
-            let px = px as i32;
-            match ch {
-                b'o' => draw::draw_rect_fill(ox + px, oy + py as i32, 1, 1, colors::BORDER),
-                b'.' => {
-                    inside.get_or_insert(px);
-                }
-                _ => {}
+            if ch == b'o' {
+                draw::draw_rect_fill(ox + px as i32, py, 1, 1, colors::CHECK_BORDER);
             }
         }
-        if let Some(start) = inside {
-            let len = row.bytes().filter(|b| *b == b'.').count() as i32;
-            draw::draw_rect_fill(ox + start, oy + py as i32, len, 1, c);
-        }
     }
+}
+
+/// Styles a scroll bar: a flat track with a plain grey thumb.
+pub fn style_scrollbar<S: fltk::prelude::ValuatorExt + fltk::prelude::WidgetExt>(s: &mut S) {
+    s.set_frame(FrameType::FlatBox);
+    s.set_color(colors::SCROLL_TRACK);
+    s.set_selection_color(colors::SCROLL_THUMB);
 }
 
 /// Directory the bundled fonts are unpacked to. FLTK can only register a font

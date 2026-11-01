@@ -66,7 +66,7 @@ impl ListTable {
     /// A list with the given columns: (title, width).
     pub fn new(x: i32, y: i32, w: i32, h: i32, columns: &[(&str, i32)]) -> ListTable {
         let mut table = TableRow::new(x, y, w, h, None);
-        table.set_frame(FrameType::DownBox);
+        table.set_frame(FrameType::BorderBox);
         table.set_color(colors::WINDOW);
         table.set_type(TableRowSelectMode::Single);
         table.set_rows(0);
@@ -80,6 +80,8 @@ impl ListTable {
             table.set_col_width(i as i32, *cw);
         }
         table.end();
+        crate::theme::style_scrollbar(&mut table.scrollbar());
+        crate::theme::style_scrollbar(&mut table.hscrollbar());
 
         let model = Rc::new(RefCell::new(Model {
             headers: columns.iter().map(|(t, _)| (*t).to_owned()).collect(),
@@ -95,7 +97,9 @@ impl ListTable {
                 let m = m.borrow();
                 let text = m.headers.get(col as usize).map_or("", |s| s.as_str());
                 draw::push_clip(x, y, w, h);
-                draw::draw_box(FrameType::UpBox, x, y, w, h, colors::FACE);
+                draw::draw_rect_fill(x, y, w, h, colors::WINDOW);
+                draw::draw_rect_fill(x + w - 1, y + 2, 1, h - 4, colors::HEADER_RULE);
+                draw::draw_rect_fill(x, y + h - 1, w, 1, colors::HEADER_RULE);
                 draw::set_font(theme::UI_FONT, theme::UI_SIZE);
                 draw::set_draw_color(colors::TEXT);
                 draw::draw_text2(
