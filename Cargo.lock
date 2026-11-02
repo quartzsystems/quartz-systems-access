@@ -1003,6 +1003,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ipc"
+version = "0.1.0"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813#58a7e6d3a95a498d50ce3ff40e4969f2351fc813"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1540,6 +1548,33 @@ dependencies = [
  "des",
  "sha1",
  "zeroize",
+]
+
+[[package]]
+name = "qap-client"
+version = "1.0.0"
+dependencies = [
+ "ipc",
+ "qap-proto",
+ "qapd",
+]
+
+[[package]]
+name = "qap-proto"
+version = "0.1.0"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813#58a7e6d3a95a498d50ce3ff40e4969f2351fc813"
+dependencies = [
+ "ipc",
+ "thiserror",
+]
+
+[[package]]
+name = "qapd"
+version = "0.1.0"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813#58a7e6d3a95a498d50ce3ff40e4969f2351fc813"
+dependencies = [
+ "ipc",
+ "qap-proto",
 ]
 
 [[package]]

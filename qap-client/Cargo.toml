@@ -1,0 +1,18 @@
+[package]
+name = "qap-client"
+description = "The QAP (Quartz Access Protocol) client of QS/400 Access for Desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+ipc.workspace = true
+qap-proto.workspace = true
+
+[dev-dependencies]
+qapd.workspace = true
+
+[lints]
+workspace = true

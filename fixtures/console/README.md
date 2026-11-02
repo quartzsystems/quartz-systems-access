@@ -25,7 +25,10 @@ cd fixtures/console/reference
 cargo run --release -- ../../replay/NAME.qsr ../NAME.png
 ```
 
-The checkout is git-ignored. Use the commit in
+The checkout is git-ignored and is for the console renderer only: nothing
+else builds against it. The QAP crates (`ipc`, `qap-proto`, `qapd`) come from
+the QS/400 repository as git dependencies pinned in the workspace
+`Cargo.toml`, never from this checkout. Use the commit in
 `qsa-ui/assets/console/SOURCE.md`; when the console's look changes upstream,
 vendor the new font and update the palette and rules first, then move the
 commit here and regenerate.
