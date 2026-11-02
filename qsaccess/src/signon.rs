@@ -110,6 +110,9 @@ pub fn run(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) -> bool
             Some(true) => {
                 if attempt(&mut d, state, sys.clone()) {
                     d.window.hide();
+                    // A resume after this one is news; the sign-on is not.
+                    state.borrow_mut().qap.resumed(&sys.name);
+                    crate::qap::warn_expiry(parent, state, &sys.name);
                     return true;
                 }
                 let _ = d.password.take_focus();

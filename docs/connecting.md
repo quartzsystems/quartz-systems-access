@@ -152,6 +152,17 @@ Values already typed on the command line are filled in.
   the command line, ready to run. **Cancel** keeps nothing.
 - The parameters scroll inside the dialog; it never grows past the screen.
 
+## Password expiry warning
+
+After each sign-on, and each time a session is resumed on a new connection,
+the program asks the system when the signed-on profile's password expires
+(`PasswordStatus`, QAP version 2). When that is within the system's warning
+period (`QPWDEXPWRN`), it shows `QAD4031` with **Change Password...**, once per
+session. The expiry is the profile's last password change plus its interval
+(`PWDEXPITV`, or `QPWDEXPITV` when that says `*SYSVAL`), counted on the
+system's clock. A password that never expires, or a system on QAP version 1,
+shows nothing.
+
 ## Changing a password
 
 **Actions > Change Password...** changes the password of the signed-on profile

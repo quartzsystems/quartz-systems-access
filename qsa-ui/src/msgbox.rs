@@ -120,8 +120,15 @@ impl MessageBox {
         let body = break_long_words(&self.text, wrap, draw::width);
         let (tw, th) = draw::wrap_measure(&body, wrap, false);
         let tw = tw.min(wrap);
+        // A button is as wide as its label needs, and never narrower than
+        // the standard width.
+        let widths: Vec<i32> = self
+            .buttons
+            .iter()
+            .map(|l| bw.max(draw::width(l) as i32 + 20))
+            .collect();
         let n = self.buttons.len() as i32;
-        let buttons_w = n * bw + (n - 1) * 6;
+        let buttons_w = widths.iter().sum::<i32>() + (n - 1) * 6;
         let w = (text_x + tw.max(180) + m).max(buttons_w + 2 * m);
         let body_h = th.max(32);
         let h = m + body_h + m + bh + m;
@@ -149,6 +156,7 @@ impl MessageBox {
         let answer = Rc::new(Cell::new(None));
         let mut x = w - m - buttons_w;
         for (i, label) in self.buttons.iter().enumerate() {
+            let bw = widths[i];
             let mut b = if i == self.default {
                 controls::default_button(x, h - m - bh, bw, bh, label)
             } else {

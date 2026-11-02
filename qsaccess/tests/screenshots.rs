@@ -536,6 +536,15 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     out.push(("run-command-results".to_owned(), run_command_results()));
     out.extend(prompt_views());
     out.push((
+        "password-expiry".to_owned(),
+        qsa_ui::msgdetails::ask_message_box(
+            &qsaccess::qap::expiry_message("QATEST", "sys1.example.net", 3),
+            &["Change Password...", "Close"],
+        )
+        .build()
+        .0,
+    ));
+    out.push((
         "run-macro".to_owned(),
         qsaccess::macros::build_run(
             "Sign on and WRKACTJOB",

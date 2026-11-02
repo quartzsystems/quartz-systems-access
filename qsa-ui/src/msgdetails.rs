@@ -161,28 +161,27 @@ pub fn show_message(parent: Option<&dyn WindowExt>, m: &Message) {
     }
 }
 
-/// The small message box for `m` with `buttons` and Details... after them,
-/// until one of `buttons` is chosen; its index. Escape chooses the last.
-pub fn ask_message(parent: Option<&dyn WindowExt>, m: &Message, buttons: &[&str]) -> usize {
+/// The small message box for `m` with `buttons` and Details... after them.
+/// Escape chooses the last of `buttons`.
+pub fn ask_message_box(m: &Message, buttons: &[&str]) -> MessageBox {
     let mut labels: Vec<&str> = buttons.to_vec();
     labels.push("Details...");
     let last = buttons.len().saturating_sub(1);
-    loop {
-        let mb = MessageBox::new(
-            "QS/400 Access for Desktop",
-            &format!(
-                "{}
+    let mb = MessageBox::new(
+        "QS/400 Access for Desktop",
+        &format!("{}\n\nMessage ID: {}", m.text, m.id),
+    )
+    .buttons(&labels, 0, last);
+    match glyph_for(m) {
+        Some(g) => mb.glyph(g),
+        None => mb,
+    }
+}
 
-Message ID: {}",
-                m.text, m.id
-            ),
-        )
-        .buttons(&labels, 0, last);
-        let mb = match glyph_for(m) {
-            Some(g) => mb.glyph(g),
-            None => mb,
-        };
-        let i = mb.run(parent);
+/// [`ask_message_box`] until one of `buttons` is chosen; its index.
+pub fn ask_message(parent: Option<&dyn WindowExt>, m: &Message, buttons: &[&str]) -> usize {
+    loop {
+        let i = ask_message_box(m, buttons).run(parent);
         if i < buttons.len() {
             return i;
         }

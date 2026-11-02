@@ -25,6 +25,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use fltk::app;
 use fltk::prelude::*;
 use qap_client::proto::ops::command::CommandDefinition;
+use qap_client::proto::ops::signon::PasswordStatus;
 use qap_client::proto::{Op, ServerMessage};
 use qap_client::{Client, Closed, Error, Notice, Status, Target};
 use qsa_config::{AddressLookup, System};
@@ -71,6 +72,10 @@ struct Entry {
     /// Command definitions Prompt asked for in this session, by
     /// `LIBRARY/NAME` as asked, with the profile they were asked as.
     definitions: HashMap<String, (String, CommandDefinition)>,
+    /// The password expiry warning was shown in this session.
+    warned: bool,
+    /// The client's resume count when last looked at.
+    resumes_seen: u64,
 }
 
 /// Every system's client in this process.
@@ -98,9 +103,39 @@ impl Registry {
                 client: Arc::clone(&client),
                 profile: None,
                 definitions: HashMap::new(),
+                warned: false,
+                resumes_seen: 0,
             },
         );
         client
+    }
+
+    /// Whether `system`'s session resumed since this was last asked (the
+    /// client free to look at).
+    pub fn resumed(&mut self, system: &str) -> bool {
+        let Some(e) = self.map.get_mut(&key(system)) else {
+            return false;
+        };
+        let Ok(c) = e.client.try_lock() else {
+            return false;
+        };
+        let n = c.resumes();
+        drop(c);
+        let new = n != e.resumes_seen;
+        e.resumes_seen = n;
+        new
+    }
+
+    /// Takes `system`'s one password expiry warning of the session: true
+    /// the first time.
+    pub fn take_warning(&mut self, system: &str) -> bool {
+        match self.map.get_mut(&key(system)) {
+            Some(e) if !e.warned => {
+                e.warned = true;
+                true
+            }
+            _ => false,
+        }
     }
 
     /// A command definition kept for `system`'s session, if this session
@@ -181,6 +216,66 @@ pub fn client(state: &Shared, system: &System) -> Handle {
 /// The profile signed on to `system`, if any.
 pub fn signed_on(state: &Shared, system: &str) -> Option<String> {
     state.borrow_mut().qap.profile(system)
+}
+
+/// The days until a password expires, when that is within the system's
+/// warning period: `status` from `PasswordStatus`, `now_ms` the system's
+/// time. Part of a day counts as a day; an expired password has 0.
+pub fn expires_within(status: &PasswordStatus, now_ms: i64) -> Option<u32> {
+    const DAY: i64 = 86_400_000;
+    let left = status.expires? - now_ms;
+    if left > i64::from(status.warning_days) * DAY {
+        return None;
+    }
+    let days = (left.max(0) + DAY - 1) / DAY;
+    u32::try_from(days).ok()
+}
+
+/// Asks the system when the signed-on profile's password expires: the
+/// profile and the days left when within the warning period. A system
+/// whose QAP version has no `PasswordStatus` answers `None`, silently.
+pub fn expiry_due(h: &Handle) -> Result<Option<(String, u32)>, Error> {
+    let mut c = lock(h);
+    if c.supports(Op::PasswordStatus).is_err() {
+        return Ok(None);
+    }
+    let status = c.password_status()?;
+    let now = c.server_now_ms().unwrap_or(0);
+    let profile = c.profile().map(|p| p.profile.clone()).unwrap_or_default();
+    Ok(expires_within(&status, now).map(|d| (profile, d)))
+}
+
+/// `QAD4031`: `user`'s password on `system` expires in `days` days.
+pub fn expiry_message(user: &str, system: &str, days: u32) -> Message {
+    qsa_msg::message(
+        id::PASSWORD_EXPIRES_SOON,
+        &[user, system, &days.to_string()],
+    )
+}
+
+/// After a sign-on or a resume on `system`: asks when the password
+/// expires and, within the system's warning period, shows `QAD4031` with
+/// Change Password..., once per session.
+pub fn warn_expiry(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
+    let Some(h) = state.borrow_mut().qap.signed_on_client(system) else {
+        return;
+    };
+    let due = match busy(|| expiry_due(&h)) {
+        Ok(Some(due)) => due,
+        Ok(None) => return,
+        Err(e) => {
+            crate::log!("password status of {system}: {e}");
+            return;
+        }
+    };
+    if !state.borrow_mut().qap.take_warning(system) {
+        return;
+    }
+    let m = expiry_message(&due.0, system, due.1);
+    crate::log!("{m}");
+    if msgdetails::ask_message(parent, &m, &["Change Password...", "Close"]) == 0 {
+        crate::chgpwd::run(parent, state, system, None, None);
+    }
 }
 
 /// A signed-on session on `system` for a tool: the one this process has,
@@ -377,6 +472,9 @@ pub fn pump(ui: &Ui) {
         for n in notices {
             offer = offer.or(tell(ui, &system, n));
         }
+        if ui.state.borrow_mut().qap.resumed(&k) {
+            warn_expiry(Some(&ui.window), &ui.state, &system.name);
+        }
         ui.refresh_systems();
         match offer {
             Some(Offer::SignOn) => crate::signon::run(Some(&ui.window), &ui.state, &system.name),
@@ -528,6 +626,27 @@ mod tests {
         let x = explain(&system(), &e);
         assert_eq!(x.line(), "CPF22C6: Password validation program failed.");
         assert_eq!(x.server.unwrap().id, "CPF22C6");
+    }
+
+    #[test]
+    fn expiry_within_the_warning_period() {
+        const DAY: i64 = 86_400_000;
+        let now = 1_793_000_000_000;
+        let s = |expires: Option<i64>, warning_days| PasswordStatus {
+            expires,
+            warning_days,
+        };
+        assert_eq!(expires_within(&s(None, 7), now), None);
+        assert_eq!(expires_within(&s(Some(now + 3 * DAY), 7), now), Some(3));
+        assert_eq!(expires_within(&s(Some(now + 3 * DAY - 1), 7), now), Some(3));
+        assert_eq!(expires_within(&s(Some(now + 7 * DAY), 7), now), Some(7));
+        assert_eq!(expires_within(&s(Some(now + 7 * DAY + 1), 7), now), None);
+        assert_eq!(expires_within(&s(Some(now - DAY), 7), now), Some(0));
+        assert_eq!(expires_within(&s(Some(now + DAY), 0), now), None);
+        assert_eq!(
+            expiry_message("WARN", "sys1", 3).text,
+            "Password for WARN on sys1 expires in 3 days."
+        );
     }
 
     #[test]

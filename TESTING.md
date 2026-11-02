@@ -100,6 +100,7 @@ on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 | `sign-on`, `change-password`, `message-system` | New: the QAP Sign On and Change Password dialogs, and a system's message shown as sent. No golden yet. |
 | `verify-connection` | New: Verify Connection. No golden yet. |
 | `run-command`, `run-command-results` | New: Run Command, empty and after runs and a check. No golden yet. |
+| `password-expiry` | New: the password expiry warning, `QAD4031` with Change Password.... No golden yet. |
 | `prompt-simple`, `prompt-qualifiers`, `prompt-list`, `prompt-additional`, `prompt-elements`, `prompt-checked`, `prompt-help` | New: Prompt for QS/400's test commands (`qapd::testing`): CRTLIB; DSPOBJD with a qualified name, then a list with "+"; CRTPF with its additional parameters shown, then its element list changed; DSPOBJD after a failed check; a qualifier's help. No golden yet. |
 | `qsa-install`: `wizard-0-welcome`, `wizard-1-licence`, `wizard-2-install-for`, `wizard-3-location`, `wizard-4-options`, `wizard-5-ready`, `wizard-7-finish`, `uninstall`, `repair` | The licence text, the check box control, and no saved passwords in the Welcome, Uninstall and Repair text. |
 

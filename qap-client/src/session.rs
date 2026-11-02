@@ -77,7 +77,19 @@ pub struct Client {
     profile: Option<SignOnReply>,
     /// Set by `ServerEnding`: nothing reconnects until asked to.
     ending: bool,
+    /// Sessions resumed on a new connection so far, quietly or not.
+    resumes: u64,
+    /// The server's clock less this computer's, at the last `Hello`, in
+    /// milliseconds.
+    clock_offset_ms: Option<i64>,
     notices: Vec<Notice>,
+}
+
+/// This computer's time, in milliseconds since 1970.
+fn local_ms() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
 }
 
 /// Whether two profile names are the same profile.
@@ -95,8 +107,24 @@ impl Client {
             token: None,
             profile: None,
             ending: false,
+            resumes: 0,
+            clock_offset_ms: None,
             notices: Vec::new(),
         }
+    }
+
+    /// How many times the session has been resumed on a new connection,
+    /// quietly inside a request or from [`Client::poll`]. A caller that
+    /// does something after each resume notes this and compares.
+    pub fn resumes(&self) -> u64 {
+        self.resumes
+    }
+
+    /// The server's time now, in milliseconds since 1970, from its clock at
+    /// the last `Hello` and this computer's since; `None` before a
+    /// connection.
+    pub fn server_now_ms(&self) -> Option<i64> {
+        self.clock_offset_ms.map(|o| local_ms() + o)
     }
 
     pub fn target(&self) -> &Target {
@@ -313,10 +341,12 @@ impl Client {
             }
             let c = Connection::open(&self.target)?;
             self.hello = Some(c.hello().clone());
+            self.clock_offset_ms = Some(c.hello().server_time - local_ms());
             if let Some(token) = self.token.clone() {
                 match c.call::<_, SignOnReply>(Op::Resume, &Resume { token }) {
                     Ok(reply) => {
                         qsa_net::debug!("qap: {}: session resumed", self.target.host);
+                        self.resumes += 1;
                         self.signed_on(reply);
                     }
                     Err(e) => {

@@ -17,7 +17,7 @@ use common::{Server, cfg, start};
 use qap_client::{CommandOutcome, Secret, Status};
 use qsa_config::System;
 use qsa_config::system::CaCertificate;
-use qsaccess::qap::{Registry, lock};
+use qsaccess::qap::{Registry, expiry_due, lock};
 
 /// The test server as a system configuration: its port, the test CA.
 fn system(s: &Server) -> System {
@@ -118,6 +118,42 @@ fn command_definitions_are_kept_for_the_session_only() {
     assert!(r.definition("127.0.0.1", "*LIBL/CRTLIB").is_none());
     signed_on(&mut r, &sys);
     assert!(r.definition("127.0.0.1", "*LIBL/CRTLIB").is_none());
+}
+
+#[test]
+fn the_password_expiry_comes_from_password_status() {
+    let s = start(cfg());
+    let sys = system(&s);
+    let mut r = Registry::default();
+    // WARN's password expires in 3 days; the warning period is 7.
+    let h = r.client(&sys);
+    lock(&h).sign_on("WARN", &Secret::from("WARNPW1")).unwrap();
+    assert_eq!(expiry_due(&h).unwrap(), Some(("WARN".to_owned(), 3)));
+    assert!(r.take_warning("127.0.0.1"), "once per session");
+    assert!(!r.take_warning("127.0.0.1"));
+    // BOB's never expires.
+    let s2 = start(cfg());
+    let h2 = Registry::default().client(&system(&s2));
+    lock(&h2).sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    assert_eq!(expiry_due(&h2).unwrap(), None);
+}
+
+#[test]
+fn a_quiet_resume_is_noticed_once() {
+    let s = start(qapd::Config {
+        idle_close: Duration::from_millis(200),
+        ..cfg()
+    });
+    let sys = system(&s);
+    let mut r = Registry::default();
+    signed_on(&mut r, &sys);
+    assert!(!r.resumed("127.0.0.1"));
+    common::until("the idle close", || s.ended().len() == 1);
+    let h = r.signed_on_client("127.0.0.1").unwrap();
+    // A request finds the connection gone and resumes on a new one.
+    lock(&h).system_info().unwrap();
+    assert!(r.resumed("127.0.0.1"));
+    assert!(!r.resumed("127.0.0.1"));
 }
 
 #[test]
