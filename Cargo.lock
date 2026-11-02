@@ -977,6 +977,7 @@ dependencies = [
  "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
  "qsa-net",
  "rustls",
+ "scs",
  "thiserror",
 ]
 

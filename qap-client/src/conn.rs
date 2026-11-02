@@ -18,7 +18,10 @@
 //! Replies come back in the order the server finishes them, not the order
 //! they were asked: each goes to the request whose ID it carries, and a
 //! split reply is joined per ID, so the frames of two replies may
-//! interleave.
+//! interleave. A split reply is joined only up to [`Options::max_reply`]
+//! (64 MiB): one that grows past it fails its request with
+//! [`Error::ReplyTooLarge`] and closes the connection, which leaves the
+//! session to resume on the next ([`Closed::ReplyTooLarge`]).
 //!
 //! Short operations have a reply timeout ([`Options::reply_timeout`]):
 //! past it the request is cancelled. [`runs_long`] operations (a command
@@ -85,6 +88,16 @@ pub enum Closed {
     ByClient,
     /// The server sent a frame over 1 MiB or one that does not decode.
     BadFrame(String),
+    /// The reply to this request grew past [`Options::max_reply`]. The
+    /// session can be resumed.
+    ReplyTooLarge(u32),
+}
+
+impl Closed {
+    /// Whether the session, if any, may be resumed on a new connection.
+    pub fn resumable(&self) -> bool {
+        matches!(self, Closed::Quietly | Closed::ReplyTooLarge(_))
+    }
 }
 
 impl fmt::Display for Closed {
@@ -94,6 +107,7 @@ impl fmt::Display for Closed {
             Closed::ServerEnding => f.write_str("the server is ending"),
             Closed::ByClient => f.write_str("by this program"),
             Closed::BadFrame(e) => write!(f, "unreadable frame: {e}"),
+            Closed::ReplyTooLarge(id) => write!(f, "the reply to request {id} was too large"),
         }
     }
 }
@@ -294,7 +308,10 @@ impl Pending {
     }
 
     fn gone(&self) -> Error {
-        Error::Closed(lock(&self.shared).closed.clone().unwrap_or(Closed::Quietly))
+        match lock(&self.shared).closed.clone().unwrap_or(Closed::Quietly) {
+            Closed::ReplyTooLarge(id) if id == self.id => Error::ReplyTooLarge,
+            why => Error::Closed(why),
+        }
     }
 }
 
@@ -383,9 +400,11 @@ impl Connection {
             shared: Arc::clone(&shared),
             rx,
             ping_after: target.options.ping_after,
+            max_reply: target.options.max_reply,
             wake: target.wake.clone(),
             frames: FrameReader::default(),
             asm: Reassembly::new(),
+            joined: HashMap::new(),
             server_ending: false,
         };
         std::thread::Builder::new()
@@ -527,9 +546,12 @@ struct Pump {
     shared: Link,
     rx: Receiver<Out>,
     ping_after: Duration,
+    max_reply: usize,
     wake: Option<Wake>,
     frames: FrameReader,
     asm: Reassembly,
+    /// Bytes of each split reply joined so far.
+    joined: HashMap<u32, usize>,
     server_ending: bool,
 }
 
@@ -552,7 +574,11 @@ impl Pump {
                     wipe(&mut buf[..n]);
                     loop {
                         match self.frames.next_frame() {
-                            Ok(Some(env)) => self.take(env),
+                            Ok(Some(env)) => {
+                                if let Some(why) = self.take(env) {
+                                    break 'run why;
+                                }
+                            }
                             Ok(None) => break,
                             Err(e) => {
                                 qsa_net::warn!("qap: unreadable frame: {e}");
@@ -630,13 +656,25 @@ impl Pump {
         self.t.write_all(&b).and_then(|()| self.t.flush()).is_ok()
     }
 
-    fn take(&mut self, env: Envelope) {
+    /// Takes one frame in; `Some` when the connection is to end.
+    fn take(&mut self, mut env: Envelope) -> Option<Closed> {
         lock(&self.shared).frames_in += 1;
         match env.kind {
             Kind::Reply => {
-                let Some(whole) = self.asm.push(env) else {
-                    return;
-                };
+                let id = env.request_id;
+                let so_far = self.joined.remove(&id).unwrap_or(0) + env.body.len();
+                if so_far > self.max_reply {
+                    qsa_net::warn!(
+                        "qap: the reply to {id} passed {} bytes; closing the connection",
+                        self.max_reply
+                    );
+                    wipe(&mut env.body);
+                    return Some(Closed::ReplyTooLarge(id));
+                }
+                if env.more() {
+                    self.joined.insert(id, so_far);
+                }
+                let whole = self.asm.push(env)?;
                 let waiter = lock(&self.shared).waiters.remove(&whole.request_id);
                 match waiter {
                     Some(Some(tx)) => {
@@ -649,6 +687,7 @@ impl Pump {
                         whole.request_id
                     ),
                 }
+                None
             }
             Kind::Event => {
                 let ev = match (env.service, env.op) {
@@ -662,15 +701,16 @@ impl Pump {
                     },
                     (service, op) => {
                         qsa_net::debug!("qap: event {service:?} {op} not known; ignored");
-                        return;
+                        return None;
                     }
                 };
                 qsa_net::debug!("qap: event {ev:?}");
                 lock(&self.shared).events.push_back(ev);
                 self.wake();
+                None
             }
             // Requests and cancels are the client's to send.
-            Kind::Request | Kind::Cancel => {}
+            Kind::Request | Kind::Cancel => None,
         }
     }
 }

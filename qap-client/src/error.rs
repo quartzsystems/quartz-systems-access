@@ -28,6 +28,13 @@ pub enum Error {
     /// No reply in time; the request was cancelled.
     #[error("no reply in time")]
     TimedOut,
+    /// The reply grew past [`crate::Options::max_reply`]: it was not
+    /// joined, and the connection was closed. The session can be resumed.
+    #[error("reply larger than this program allows")]
+    ReplyTooLarge,
+    /// What a read was written to failed.
+    #[error("write failed: {0}")]
+    Write(std::io::Error),
     /// A request that does not fit in one frame.
     #[error("request of {0} bytes exceeds the 1 MiB frame limit")]
     TooLarge(usize),

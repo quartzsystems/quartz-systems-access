@@ -14,6 +14,17 @@ use qap_client::proto::types::ObjectName;
 use qap_client::proto::{Op, Service};
 use qap_client::{Client, Connection, Error, Secret as ClientSecret};
 
+/// Version 3's operations.
+const SPOOL: [Op; 7] = [
+    Op::ListSpooledFiles,
+    Op::ReadSpooledFile,
+    Op::HoldSpooledFile,
+    Op::ReleaseSpooledFile,
+    Op::DeleteSpooledFile,
+    Op::MoveSpooledFile,
+    Op::ListOutputQueues,
+];
+
 fn unsupported(e: Error) -> (Op, u16, u16) {
     match e {
         Error::Unsupported { op, needs, has } => (op, needs, has),
@@ -39,6 +50,9 @@ fn hello_agrees_version_1() {
         Op::TelnetTicket,
     ] {
         assert_eq!(unsupported(c.request(op, &()).unwrap_err()), (op, 2, 1));
+    }
+    for op in SPOOL {
+        assert_eq!(unsupported(c.request(op, &()).unwrap_err()), (op, 3, 1));
     }
 }
 

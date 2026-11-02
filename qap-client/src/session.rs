@@ -317,7 +317,7 @@ impl Client {
         self.absorb_events();
         if let Some(why) = self.conn.as_ref().and_then(Connection::closed) {
             self.conn = None;
-            if why == Closed::Quietly && !self.ending && self.token.is_some() {
+            if why.resumable() && !self.ending && self.token.is_some() {
                 match self.live() {
                     Ok(_) => self.notices.push(Notice::Resumed),
                     // `live` has said SignOnNeeded already.

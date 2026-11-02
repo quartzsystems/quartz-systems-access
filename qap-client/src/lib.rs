@@ -20,6 +20,10 @@
 //!   expires and for Telnet tickets.
 //! - [`command`]: version 2's `Command` service: run, check and describe CL
 //!   commands, with every status they answer.
+//! - [`spool`]: version 3's `Spool` service: spooled files and output
+//!   queues listed a page at a time, held, released, deleted and moved one
+//!   request per file, and read in page batches to a file, with progress
+//!   and cancel.
 //!
 //! `Hello` offers versions [`proto::MIN_VERSION`] to [`proto::VERSION`] (1
 //! to 3) and the server picks the highest both speak. An operation is sent
@@ -34,6 +38,7 @@
 pub mod command;
 pub mod conn;
 pub mod session;
+pub mod spool;
 
 mod error;
 mod frames;
@@ -47,6 +52,9 @@ pub use error::Error;
 pub use qap_proto as proto;
 pub use qap_proto::{Secret, ServerMessage, Status, Token};
 pub use session::{Client, Notice};
+
+/// The most a split reply is joined to: 64 MiB.
+pub const MAX_REPLY: usize = 64 << 20;
 
 /// The name `Hello` gives for this client.
 pub const CLIENT_NAME: &str = "QS/400 Access for Desktop";
@@ -113,6 +121,9 @@ pub struct Options {
     pub reply_timeout: Duration,
     /// `Ping` after this long without traffic either way.
     pub ping_after: Duration,
+    /// The most a split reply may join to, in bytes; past it the request
+    /// fails with [`Error::ReplyTooLarge`] and the connection closes.
+    pub max_reply: usize,
     /// The protocol versions `Hello` offers.
     pub min_version: u16,
     pub max_version: u16,
@@ -124,6 +135,7 @@ impl Default for Options {
             connect_timeout: qsa_net::CONNECT_TIMEOUT,
             reply_timeout: Duration::from_secs(60),
             ping_after: proto::PING_AFTER,
+            max_reply: MAX_REPLY,
             min_version: proto::MIN_VERSION,
             max_version: proto::VERSION,
         }

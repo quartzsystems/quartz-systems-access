@@ -20,6 +20,7 @@ qap_proto_v1.workspace = true
 qapd_v2.workspace = true
 qap_proto_v2.workspace = true
 rustls.workspace = true
+scs.workspace = true
 
 [lints]
 workspace = true
