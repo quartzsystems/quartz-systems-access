@@ -215,6 +215,20 @@ impl TaskPane {
         link
     }
 
+    /// Draws `link` dimmed, in the disabled text colour without the hover
+    /// highlight, with `why` as its tooltip; or as a link again. A dimmed
+    /// link still answers a click, so that what it runs can say why it is
+    /// not available.
+    pub fn set_link_dimmed(link: &mut Widget, dimmed: bool, why: &str) {
+        link.set_label_color(if dimmed {
+            colors::DISABLED_TEXT
+        } else {
+            colors::LINK
+        });
+        link.set_tooltip(if dimmed { why } else { "" });
+        link.redraw();
+    }
+
     /// Finishes the pane.
     pub fn end(&mut self) {
         self.layout.borrow_mut().scroll.end();
@@ -340,9 +354,12 @@ fn draw_link(l: &Widget, hover: bool, image: &RefCell<Option<RgbImage>>) {
     let label = l.label();
     let tw = draw::width(&label) as i32;
     let focused = has_focus(l);
-    if hover || focused {
+    let dimmed = l.label_color() == colors::DISABLED_TEXT;
+    if (hover || focused) && !dimmed {
         draw::draw_rect_fill(tx - 2, y, tw + 4, h, colors::HOVER);
         draw::set_draw_color(colors::HOVER_TEXT);
+    } else if dimmed {
+        draw::set_draw_color(colors::DISABLED_TEXT);
     } else {
         draw::set_draw_color(colors::LINK);
     }

@@ -264,6 +264,17 @@ pub fn auto_sign_on_blocked(system: &str, tls: bool, version: Option<u16>) -> Op
     }
 }
 
+/// Why Printer Output is not available for `system`, if it is not:
+/// `QAD5001` when the system's QAP version has no `Spool` service. A
+/// version not known does not stop it: opening it finds out.
+pub fn printer_output_blocked(system: &str, version: Option<u16>) -> Option<Message> {
+    let op = Op::ListSpooledFiles;
+    match version {
+        Some(v) if v < op.since() => Some(version_needed(function_name(op), system, op, v)),
+        _ => None,
+    }
+}
+
 /// The days until a password expires, when that is within the system's
 /// warning period: `status` from `PasswordStatus`, `now_ms` the system's
 /// time. Part of a day counts as a day; an expired password has 0.

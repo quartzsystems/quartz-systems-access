@@ -110,6 +110,9 @@ pub struct Ui {
     tx: chan::Sender<Action>,
     /// The recent sessions generation the menu shows.
     recent_gen: Rc<Cell<Option<u64>>>,
+    /// The task pane's Printer Output link, dimmed for a system whose QAP
+    /// version has no Spool service.
+    printer_output: Widget,
 }
 
 impl Ui {
@@ -192,6 +195,7 @@ impl Ui {
             Some(i) => {
                 let name = st.systems.as_slice()[i].name.clone();
                 drop(st);
+                self.dim_tasks(&name);
                 match crate::qap::signed_on(&self.state, &name) {
                     Some(p) => {
                         status.set_status(&format!("{name}: Signed on as {p}"), Status::Active)
@@ -201,6 +205,22 @@ impl Ui {
             }
             None => status.set_status("No system configured", Status::Neutral),
         }
+    }
+
+    /// Dims the task pane's Printer Output for `system` when the QAP
+    /// version this process last agreed with it has no Spool service, with
+    /// `QAD5001` as the reason; a version not known yet leaves it as it is.
+    fn dim_tasks(&self, system: &str) {
+        let version = crate::qap::version_of(&self.state, system, false);
+        let why = crate::qap::printer_output_blocked(system, version);
+        let mut link = self.printer_output.clone();
+        let text = why.as_ref().map(ToString::to_string).unwrap_or_default();
+        TaskPane::set_link_dimmed(&mut link, why.is_some(), &text);
+    }
+
+    /// Whether the task pane's Printer Output is dimmed.
+    pub fn printer_output_dimmed(&self) -> bool {
+        self.printer_output.label_color() == qsa_ui::theme::colors::DISABLED_TEXT
     }
 
     /// The selected system's name.
@@ -505,6 +525,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
         vec![l.as_base_widget(), c.as_base_widget(), b.as_base_widget()]
     });
     let system = system.expect("system row is built");
+    let mut printer_output = None;
     pane.add_rule();
     for (title, tasks) in TASK_GROUPS {
         match title {
@@ -512,7 +533,11 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
                 pane.add_group(t);
                 for task in *tasks {
                     let task = *task;
-                    pane.add_link(None, task.label(), move || tx.send(Action::Task(task)));
+                    let link =
+                        pane.add_link(None, task.label(), move || tx.send(Action::Task(task)));
+                    if task == Task::PrinterOutput {
+                        printer_output = Some(link);
+                    }
                 }
             }
             None => pane.add_rule(),
@@ -534,6 +559,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
         menu,
         tx,
         recent_gen: Rc::new(Cell::new(None)),
+        printer_output: printer_output.expect("the General group has Printer Output"),
     };
     ui.refresh_systems();
     ui.refresh_recent();

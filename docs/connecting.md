@@ -115,7 +115,9 @@ and only Close works.
   results show the command, then every message it sent, oldest first, as
   the system sent them; the job line shows the job's name, user (the job's
   own, `QUSER`) and number. Each run adds to the results until **Clear**.
-  Select a message's ID for its second-level text.
+  The Severity column is the system's two digits; from 20, an error on
+  the system's scale, the message's ID is red. Select a message's ID for
+  its second-level text.
 - **How it ended**, on the status line: `QAD5010` completed, `QAD5011`
   ended with an error (the escape message is the last one listed),
   `QAD5012` cancelled, `QAD5013` not found. Not authorized shows the
@@ -123,8 +125,10 @@ and only Close works.
   interactively ends with an error and the system's escape message.
 - **Cancel** ends the command while it runs (a program or `DLYJOB` ends
   where it is; a command the system carries out in one piece finishes
-  first). QS/400 answers a cancelled request without the command's
-  messages, so none are listed for it.
+  first). The results list what the command sent before it ended, the
+  cancel's own message (`CPF1907`) last, with the job.
+- A command runs for as long as it takes: no timeout cancels it, and other
+  tools on the same system go on meanwhile.
 - **Check** checks the command without running it and lists the check's
   messages; `QAD5020` when it has errors.
 - **Prompt** (F4) builds the command from its definition, below.
@@ -159,6 +163,85 @@ Values already typed on the command line are filled in.
   dialog with `QAD5020` and it stays open; a command without errors goes to
   the command line, ready to run. **Cancel** keeps nothing.
 - The parameters scroll inside the dialog; it never grows past the screen.
+
+## Printer Output
+
+**Printer Output** in the task pane's General group lists the spooled files
+on the selected system, signing on first if this program has no session on
+it. It needs QAP version 3 (the `Spool` service); for a system whose QAP
+server speaks an older version the task pane shows the entry dimmed, with
+`QAD5001` as its tip, and opening it says the same.
+
+It is about spooled files on the system. A 5250 printer session's
+**Received output** is different: that is output this computer received
+through its printer device, kept here, and it is unchanged.
+
+- **Filter.** User (`*CURRENT`, `*ALL` or a profile), Output queue (`*ALL`,
+  or a queue from the system's list, or typed as `LIBRARY/QUEUE`), Status,
+  Form type and User data; **Go** lists what matches.
+- **The list** is fetched a page at a time (25, 50 or 100 rows,
+  `[printer_output] rows_per_page` in `settings.toml`), with **Previous**
+  and **Next**; the status bar gives the total (`QAD6001`). Columns: File,
+  User, User data, Status, Pages, Copies, Form type, Output queue, Created
+  and Job. A column heading sorts the page shown, not the whole list, and
+  the status bar says so. Ready and Printing are green, Message is red.
+- **Refresh** (F5) fetches the page in view again; **Auto-refresh** (Off,
+  15, 30 or 60 seconds, 30 unless changed) does it only while the window
+  is shown and not minimised. Both keep the selection and where the list
+  is scrolled to. QS/400 sends no change events yet.
+- **Open**, from the File menu, the toolbar, a double-click or the
+  right-click menu. An SCS file opens in the viewer (below). A file of
+  another kind (AFP, ASCII, line data) is asked for as PDF (text for ASCII
+  and line data) and opened in this computer's PDF viewer from a temporary
+  file, which is deleted when the program ends. QS/400 makes neither for
+  such files today and says so with its own message (`TCP1A56`), which is
+  shown as it sent it.
+- **Save as PDF...**, **Save as Text...** and **Print...** read the file and
+  lay it out as a 5250 printer session lays out the same data: the same
+  page model, the print font (Courier Prime) and the same PDF. Print goes
+  to a printer of this computer (the Windows spooler, or CUPS on Linux).
+  `QAD6020` and `QAD6021` say where it went.
+- **Hold** (immediately or at the end of the page), **Release**, **Delete**
+  (after a confirmation listing every file) and **Move** (to a queue picked
+  or typed, optionally to its top) act on every file selected: one request
+  each, sent side by side. One file's result goes to the status bar
+  (`QAD6002` to `QAD6005`), or the system's message is shown as it sent
+  it; several files' results are listed in one summary with each refusal's
+  message as the system sent it (`QAD6006`). On QS/400 a writer hands a
+  whole file to its device at once, so the two kinds of hold stop it alike.
+- **Properties** shows every field the system sends for the file.
+- **Output Queues** (View menu or toolbar) lists the system's queues by
+  library (`*ALL`, `*LIBL` or a name): queue, library, text, files, writer
+  and whether it is held. A double-click opens Printer Output on that
+  queue.
+
+### Reading a spooled file
+
+A file is read on its own thread, a batch of 25 pages at a time, each batch
+written to a temporary file as it arrives: the status bar counts the pages
+(`QAD6010`, the total from the first reply). **Cancel Reading** stops it:
+the batch in flight is cancelled and whatever the system sends back for it
+is discarded (`QAD6011`). A read has no timeout and nothing cancels it by
+itself; other tools, Run Command among them, go on beside it on the same
+connection. A file still being written cannot be read yet (QS/400's
+`TCP1A57`, or `QAD6012`), and a reply larger than 64 MiB is refused, the
+connection closed and the session resumed (`QAD6014`).
+
+### The viewer
+
+An SCS file opens in the viewer, which draws its pages from the same page
+model, in the print font, each character where the PDF puts it. Page 1 shows
+as soon as its batch arrives.
+
+- **Fit Width** or **100 %**.
+- **First**, **Previous**, a page number to type, **Next**, **Last**; Page Up
+  and Page Down.
+- **Find** searches the page text; every match on the page is highlighted
+  and the current one is darker. **Find Next** (F3) goes on through the
+  pages read.
+- **Save as PDF...**, **Save as Text...** and **Print...** use what was read,
+  once the read is complete. **Copy** (Ctrl+C) copies the text of the page
+  shown.
 
 ## 5250 automatic sign-on
 

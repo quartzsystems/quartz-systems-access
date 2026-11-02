@@ -7,6 +7,8 @@
 //! version-2 function is turned off before anything is sent, with
 //! `QAD5001` naming the version it needs and the one the system has. The
 //! password expiry warning, which has nothing to turn off, is silent.
+//! Against version 1 and version 2 alike, Printer Output (version 3) is
+//! dimmed with `QAD5001`, and every earlier function still works.
 
 #[path = "../../qap-client/tests/common/mod.rs"]
 mod common;
@@ -17,7 +19,9 @@ use qsa_config::system::CaCertificate;
 use qsa_config::{Settings, System, Systems};
 use qsa_msg::id;
 use qsaccess::app::AppState;
-use qsaccess::qap::{self, auto_sign_on_blocked, expiry_due, function_name, lock};
+use qsaccess::qap::{
+    self, auto_sign_on_blocked, expiry_due, function_name, lock, printer_output_blocked,
+};
 
 fn system(port: u16) -> System {
     let mut sys = System::new("127.0.0.1");
@@ -73,6 +77,14 @@ fn every_version_2_function_is_qad5001_and_sign_on_still_works() {
     );
     // The expiry warning: nothing asked, nothing shown.
     assert_eq!(expiry_due(&h).unwrap(), None);
+    // Printer Output: the task pane's entry dimmed, and QAD5001 if opened.
+    let m = printer_output_blocked("127.0.0.1", Some(1)).unwrap();
+    assert_eq!(
+        m.text,
+        "Printer Output needs QAP version 3; system 127.0.0.1 has version 1."
+    );
+    let e = lock(&h).supports(Op::ListSpooledFiles).unwrap_err();
+    assert_eq!(qap::explain(&sys, &e).message, m);
 
     // Nothing of version 2 went out: the connection and session are there.
     assert!(closed.lock().unwrap().is_empty());
@@ -94,4 +106,59 @@ fn a_version_2_system_offers_them() {
     );
     // Not known (the system not reached): left to the connection.
     assert!(auto_sign_on_blocked("127.0.0.1", true, None).is_none());
+}
+
+#[test]
+fn a_version_2_system_has_no_printer_output_and_everything_else_works() {
+    let (port, _, closed) = common::v2::start_v2();
+    let sys = system(port);
+    let st = state(&sys);
+    let h = qap::client(&st, &sys);
+    lock(&h).sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    assert_eq!(qap::version_of(&st, "127.0.0.1", false), Some(2));
+    // Printer Output: dimmed, and QAD5001 with the versions.
+    let m = printer_output_blocked("127.0.0.1", Some(2)).unwrap();
+    assert_eq!(m.id, id::QAP_VERSION_NEEDED);
+    assert_eq!(
+        m.text,
+        "Printer Output needs QAP version 3; system 127.0.0.1 has version 2."
+    );
+    for op in [
+        Op::ListSpooledFiles,
+        Op::ReadSpooledFile,
+        Op::HoldSpooledFile,
+        Op::ListOutputQueues,
+    ] {
+        let e = lock(&h).supports(op).unwrap_err();
+        assert_eq!(qap::explain(&sys, &e).message, m, "{op:?}");
+    }
+    // Everything of version 2 works: Run Command, Check, Prompt, the
+    // expiry warning and the Telnet ticket.
+    let p = lock(&h).run_command("CRTLIB LIB(QATEST)").unwrap();
+    let o = qap_client::CommandOutcome::from_reply(p.wait_done().unwrap()).unwrap();
+    assert_eq!(o.status, qap_client::Status::Ok);
+    assert!(lock(&h).check_command("CRTLIB LIB(X)").unwrap().valid());
+    let def = lock(&h)
+        .describe_command(qap_client::proto::types::ObjectName {
+            library: "*LIBL".into(),
+            name: "CRTLIB".into(),
+        })
+        .unwrap();
+    assert_eq!(def.text, "Create Library");
+    assert_eq!(expiry_due(&h).unwrap(), None);
+    assert!(lock(&h).telnet_ticket().is_ok());
+    assert!(
+        closed.lock().unwrap().is_empty(),
+        "nothing of version 3 went out"
+    );
+}
+
+#[test]
+fn a_version_3_system_offers_printer_output() {
+    let s = common::start(common::cfg());
+    let sys = system(s.port);
+    let st = state(&sys);
+    assert_eq!(qap::version_of(&st, "127.0.0.1", true), Some(3));
+    assert!(printer_output_blocked("127.0.0.1", Some(3)).is_none());
+    assert!(printer_output_blocked("127.0.0.1", None).is_none());
 }
