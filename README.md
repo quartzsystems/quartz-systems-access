@@ -1,6 +1,22 @@
 # QS/400 Access for Desktop
 
-QS/400 Access for Desktop is the native desktop client for QS/400, the operating system from Quartz Systems, on Windows and Linux. It is written in Rust on FLTK and keeps a single, fixed look on every platform. It will provide a 5250 display and printer emulator, saved session files, data transfer, Run SQL, Integrated File System browsing and printer output; this first phase provides the workspace, the look, the main window and System Configurations. Build with `cargo build --release`; the binary is `qsaccess`, and `qsaccess --ui-sampler` opens a window that shows every widget once.
+QS/400 Access for Desktop is the native desktop client for QS/400, the operating system from Quartz Systems, on Windows and Linux. It is written in Rust on FLTK, with plain Windows-style controls on every platform (see Look below). It will provide a 5250 display and printer emulator, saved session files, data transfer, Run SQL, Integrated File System browsing and printer output; this first phase provides the workspace, the look, the main window and System Configurations. Build with `cargo build --release`; the binary is `qsaccess`, and `qsaccess --ui-sampler` opens a window that shows every widget once.
+
+## Look
+
+- **Controls.** Plain Windows-style desktop controls, drawn by the program
+  from a fixed palette on every platform; the desktop theme is never read.
+- **UI text.** On Windows, the system's own Segoe UI. Elsewhere, the bundled
+  Selawik.
+- **System output** (certificate fingerprints and PEM text): the bundled
+  Cascadia Mono, everywhere.
+- **The 5250 grid** of display sessions: the QS/400 service console's font and
+  palette, everywhere.
+
+Because the UI text face differs, and each platform rasterises text its own
+way, windows do not look pixel-identical across platforms. Screenshot goldens
+are kept per platform (`qsaccess/tests/goldens/{windows,linux,linux-wayland}`);
+only the 5250 grid is checked against the service console pixel for pixel.
 
 ## 5250 display
 

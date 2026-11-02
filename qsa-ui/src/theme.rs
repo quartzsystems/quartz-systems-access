@@ -11,8 +11,10 @@
 //! The look follows the plain Windows desktop controls: a `#F0F0F0` face,
 //! white fields, lists and tab pages, square grey buttons that turn blue under
 //! the pointer, white menus with a thin grey border, and `#0078D7` selection.
-//! It is the same on every platform, except that UI text on Windows is drawn
-//! in the system's own Segoe UI.
+//! The controls are drawn the same way on every platform. UI text is the
+//! system's own Segoe UI on Windows and the bundled Selawik elsewhere, and
+//! system output is the bundled Cascadia Mono, so text, and with it the
+//! pixels, differ by platform: screenshot goldens are per platform.
 
 use std::path::PathBuf;
 use std::sync::OnceLock;
@@ -436,8 +438,8 @@ fn check_box(x: i32, y: i32, w: i32, h: i32, c: Color) {
     outline(x, y, w, h, colors::CHECK_BORDER);
 }
 
-/// The radio button well: a fixed 13×13 bitmap, so it is pixel-identical on
-/// every backend. `o` is the outline, `.` the inside.
+/// The radio button well: a fixed 13×13 bitmap, so its shape does not
+/// depend on the backend's circle drawing. `o` is the outline, `.` the inside.
 const RADIO: [&str; 13] = [
     "    ooooo    ",
     "  oo.....oo  ",
