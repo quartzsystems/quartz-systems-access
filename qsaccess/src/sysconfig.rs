@@ -3,7 +3,7 @@
 // root directory of this project.
 
 //! The System Configurations dialog: the list of systems, with New, Edit,
-//! Delete, Import, Export and Close.
+//! Delete, Verify, Import, Export and Close.
 
 use qsa_ui::chan::{self, Emit};
 use std::path::Path;
@@ -46,6 +46,7 @@ enum Request {
     New,
     Edit,
     Delete,
+    Verify,
     Import,
     Export,
     Close,
@@ -58,6 +59,7 @@ pub struct ListDialog {
     pub status: StatusLine,
     edit: Switch,
     delete: Switch,
+    verify: Switch,
     export: Switch,
 }
 
@@ -102,6 +104,8 @@ fn build_with(state: &Shared) -> (ListDialog, chan::Receiver<Request>) {
     let mut edit = button("Edit...", Request::Edit, y);
     y += bh + 6;
     let mut delete = button("Delete", Request::Delete, y);
+    y += bh + 6;
+    let mut verify = button("Verify...", Request::Verify, y);
     y += bh + 18;
     button("Import...", Request::Import, y);
     y += bh + 6;
@@ -115,12 +119,14 @@ fn build_with(state: &Shared) -> (ListDialog, chan::Receiver<Request>) {
 
     let edit = Switch::for_button(&mut edit);
     let delete = Switch::for_button(&mut delete);
+    let verify = Switch::for_button(&mut verify);
     let export = Switch::for_button(&mut export);
     {
-        let (e, d) = (edit.clone(), delete.clone());
+        let (e, d, v) = (edit.clone(), delete.clone(), verify.clone());
         list.on_select(move |sel| {
             e.set_enabled(sel.is_some());
             d.set_enabled(sel.is_some());
+            v.set_enabled(sel.is_some());
         });
     }
     list.on_activate(move |sel| {
@@ -135,6 +141,7 @@ fn build_with(state: &Shared) -> (ListDialog, chan::Receiver<Request>) {
         status,
         edit,
         delete,
+        verify,
         export,
     };
     d.fill(state, None);
@@ -161,6 +168,7 @@ impl ListDialog {
         self.list.select(index);
         self.edit.set_enabled(index.is_some());
         self.delete.set_enabled(index.is_some());
+        self.verify.set_enabled(index.is_some());
         self.export.set_enabled(!state.borrow().systems.is_empty());
     }
 
@@ -218,6 +226,11 @@ pub fn open(ui: &Ui) {
             Request::New => new_system(&mut d, ui),
             Request::Edit => edit_system(&mut d, ui),
             Request::Delete => delete_system(&mut d, ui),
+            Request::Verify => {
+                if let Some(sys) = d.selected(&state) {
+                    crate::verify::open(Some(&d.window), &state, &sys.name);
+                }
+            }
             Request::Import => import(&mut d, ui),
             Request::Export => export(&mut d, ui),
         }

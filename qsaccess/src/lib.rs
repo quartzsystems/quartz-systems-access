@@ -26,6 +26,7 @@ pub mod shell;
 pub mod signon;
 pub mod sysconfig;
 pub mod trust;
+pub mod verify;
 
 /// Product name, as shown in titles.
 pub const PRODUCT: &str = "QS/400 Access for Desktop";

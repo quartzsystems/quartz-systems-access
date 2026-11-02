@@ -19,6 +19,10 @@ tn5250.workspace = true
 scs.workspace = true
 qsa-print.workspace = true
 
+[dev-dependencies]
+qapd.workspace = true
+rustls.workspace = true
+
 [build-dependencies]
 qsa-glyph.workspace = true
 qsa-icons.workspace = true

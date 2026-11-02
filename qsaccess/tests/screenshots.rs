@@ -217,6 +217,48 @@ fn long_path_message() -> Window {
     qsa_ui::msgdetails::message_box(&m).build().0
 }
 
+/// Verify Connection for sys1 after a run: Telnet's TLS certificate not
+/// trusted, the rest passed, no test sign-on.
+fn verify(state: &Shared) -> Window {
+    use qsaccess::verify::checks::{Check, Outcome};
+    let sys = state
+        .borrow()
+        .systems
+        .get("sys1.example.net")
+        .cloned()
+        .expect("fixture system");
+    let ok = |s: &str| Outcome::Ok(s.into());
+    let results = [
+        (Check::Dns, ok("sys1.example.net is 192.0.2.10")),
+        (Check::Telnet, ok("Port 23 accepts connections.")),
+        (
+            Check::TelnetTls,
+            Outcome::Failed {
+                message: qsa_msg::message(
+                    qsa_msg::id::CERT_UNTRUSTED,
+                    &[
+                        "sys1.example.net",
+                        "invalid peer certificate: UnknownIssuer",
+                    ],
+                ),
+                server: None,
+                untrusted: None,
+            },
+        ),
+        (Check::Qap, ok("Port 2320 accepts connections.")),
+        (
+            Check::QapTls,
+            ok("TLSv1_3, TLS13_AES_256_GCM_SHA384; certificate trusted"),
+        ),
+        (Check::Hello, ok("Version 1, system SYS1, release V1R0M0.")),
+        (
+            Check::SignOn,
+            Outcome::Skipped("Not tested: no user ID entered.".into()),
+        ),
+    ];
+    qsaccess::verify::build(&sys, &results).window
+}
+
 /// A refusal from the system's password validation program, as sent.
 fn system_message() -> Window {
     let m = qsa_ui::msgdetails::SystemMessage {
@@ -379,6 +421,7 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
             .window,
     ));
     out.push(("message-system".to_owned(), system_message()));
+    out.push(("verify-connection".to_owned(), verify(state)));
     out.push((
         "run-macro".to_owned(),
         qsaccess::macros::build_run(

@@ -70,7 +70,8 @@ impl Target {
         }
     }
 
-    pub(crate) fn tls(&self) -> qsa_net::TlsOptions {
+    /// The TLS options for this target: TLS 1.3 only.
+    pub fn tls(&self) -> qsa_net::TlsOptions {
         qsa_net::TlsOptions {
             trust: self.trust.clone(),
             system_roots: self.system_roots,

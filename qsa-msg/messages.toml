@@ -405,7 +405,7 @@ recovery = "None needed."
 [QAD4051]
 severity = 10
 text = "Connection to &1 verified with warnings."
-cause = "The required checks of the connection to system &1 passed, but at least one optional check failed or was not tested."
+cause = "The required checks of the connection to system &1 passed, but the optional test sign-on failed."
 recovery = "Look at the Detail column of the results for each check that did not pass. The system can be used, but some functions may not work."
 
 [QAD4052]
