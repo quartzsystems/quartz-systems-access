@@ -234,14 +234,21 @@ pub struct TlsOptions {
     /// Use the platform's store as well. Off only in tests.
     pub system_roots: bool,
     pub timeout: Duration,
+    /// Offer TLS 1.3 alone (QAP); otherwise TLS 1.2 and 1.3 (Telnet).
+    pub tls13_only: bool,
 }
 
 impl Tls {
     /// Runs the handshake over `tcp`, for the server named `host`.
     pub fn handshake(tcp: Tcp, host: &str, opts: &TlsOptions) -> Result<Tls, TlsError> {
         let verifier = Arc::new(Verifier::new(&opts.trust, opts.system_roots));
-        let config = ClientConfig::builder_with_provider(provider())
-            .with_safe_default_protocol_versions()
+        let builder = ClientConfig::builder_with_provider(provider());
+        let builder = if opts.tls13_only {
+            builder.with_protocol_versions(&[&rustls::version::TLS13])
+        } else {
+            builder.with_safe_default_protocol_versions()
+        };
+        let config = builder
             .map_err(|e| TlsError::Handshake(e.to_string()))?
             .dangerous()
             .with_custom_certificate_verifier(verifier.clone())
@@ -348,10 +355,19 @@ mod tests {
 
     /// A TLS server on a free port that sends `hello` and closes.
     fn server(cert: &str, key: &str) -> u16 {
+        server_with(cert, key, rustls::DEFAULT_VERSIONS)
+    }
+
+    /// The same, offering only `versions`.
+    fn server_with(
+        cert: &str,
+        key: &str,
+        versions: &[&'static rustls::SupportedProtocolVersion],
+    ) -> u16 {
         let certs = certs_from_pem(&file(cert));
         let key = PrivateKeyDer::from_pem_slice(file(key).as_bytes()).unwrap();
         let config = rustls::ServerConfig::builder_with_provider(provider())
-            .with_safe_default_protocol_versions()
+            .with_protocol_versions(versions)
             .unwrap()
             .with_no_client_auth()
             .with_single_cert(certs, key)
@@ -372,6 +388,15 @@ mod tests {
     }
 
     fn connect(port: u16, host: &str, trust: Trust) -> Result<Tls, TlsError> {
+        connect_with(port, host, trust, false)
+    }
+
+    fn connect_with(
+        port: u16,
+        host: &str,
+        trust: Trust,
+        tls13_only: bool,
+    ) -> Result<Tls, TlsError> {
         let tcp = Tcp::connect("127.0.0.1", port, Duration::from_secs(5)).unwrap();
         Tls::handshake(
             tcp,
@@ -380,6 +405,7 @@ mod tests {
                 trust,
                 system_roots: false,
                 timeout: Duration::from_secs(5),
+                tls13_only,
             },
         )
     }
@@ -435,6 +461,21 @@ mod tests {
             connect(port, "other.example", trust),
             Err(TlsError::Untrusted { .. })
         ));
+    }
+
+    #[test]
+    fn tls13_only_refuses_a_tls12_server() {
+        let ca = file("test-ca.pem");
+        let port = server_with("server.pem", "server.key", &[&rustls::version::TLS12]);
+        assert!(matches!(
+            connect_with(port, "localhost", Trust::from_pem([ca.as_str()]), true),
+            Err(TlsError::Handshake(_))
+        ));
+        let port = server_with("server.pem", "server.key", &[&rustls::version::TLS12]);
+        assert!(connect_with(port, "localhost", Trust::from_pem([ca.as_str()]), false).is_ok());
+        let port = server("server.pem", "server.key");
+        let t = connect_with(port, "localhost", Trust::from_pem([ca.as_str()]), true).unwrap();
+        assert!(matches!(t.security(), Security::Tls { protocol, .. } if protocol == "TLSv1_3"));
     }
 
     #[test]

@@ -10,9 +10,12 @@ authors.workspace = true
 [dependencies]
 ipc.workspace = true
 qap-proto.workspace = true
+qsa-net.workspace = true
+thiserror.workspace = true
 
 [dev-dependencies]
 qapd.workspace = true
+rustls.workspace = true
 
 [lints]
 workspace = true

@@ -535,6 +535,7 @@ impl PrinterWindow {
             trust: trust::for_system(&system),
             system_roots: true,
             timeout: CONNECT_TIMEOUT,
+            tls13_only: false,
         });
         // --record applies to the next session opened, of either kind.
         let record = self.state.borrow_mut().record_next.take();

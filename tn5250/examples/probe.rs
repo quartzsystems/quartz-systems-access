@@ -42,6 +42,7 @@ fn main() {
             trust: Trust::default(),
             system_roots: true,
             timeout: tn5250::telnet::CONNECT_TIMEOUT,
+            tls13_only: false,
         }),
     };
     let mut s = match Session::connect(&target, Request::display(size, device.as_deref(), 37)) {

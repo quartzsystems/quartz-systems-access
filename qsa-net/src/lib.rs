@@ -3,7 +3,7 @@
 // root directory of this project.
 
 //! The network layer every QS/400 Access for Desktop protocol shares: 5250
-//! Telnet and the host servers.
+//! Telnet and QAP.
 //!
 //! - [`transport`]: plain TCP, with connect and write timeouts.
 //! - [`tls`]: TLS over it (rustls), and the one certificate-trust path:

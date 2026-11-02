@@ -1557,6 +1557,9 @@ dependencies = [
  "ipc",
  "qap-proto",
  "qapd",
+ "qsa-net",
+ "rustls",
+ "thiserror",
 ]
 
 [[package]]

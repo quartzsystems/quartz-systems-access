@@ -1,0 +1,75 @@
+// Copyright (C), 2026 Quartz Systems. Some rights reserved. This work is
+// licensed under the terms of the MIT license which can be found in the
+// root directory of this project.
+
+//! What can go wrong.
+
+use qap_proto::{ServerMessage, Status};
+
+use crate::conn::Closed;
+
+/// Why a request or a connection failed.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    /// The connection could not be opened: the name, TCP, or TLS
+    /// (including [`qsa_net::TlsError::Untrusted`] for the trust flow).
+    #[error(transparent)]
+    Connect(#[from] qsa_net::ConnectError),
+    /// The server answered with a status other than `Ok`, and the message
+    /// it sent with it, if any.
+    #[error("{}", status_text(*status, message.as_ref()))]
+    Status {
+        status: Status,
+        message: Option<ServerMessage>,
+    },
+    /// The connection closed before the reply came.
+    #[error("connection closed ({0})")]
+    Closed(Closed),
+    /// No reply in time; the request was cancelled.
+    #[error("no reply in time")]
+    TimedOut,
+    /// A request that does not fit in one frame.
+    #[error("request of {0} bytes exceeds the 1 MiB frame limit")]
+    TooLarge(usize),
+    /// A reply this client cannot read.
+    #[error("{0}")]
+    Protocol(String),
+    /// A sign-on or resume asked for while signed on.
+    #[error("already signed on")]
+    AlreadySignedOn,
+    /// A password change for another profile while signed on: a session
+    /// changes only its own profile's password.
+    #[error("a signed-on session changes only its own password, not {0}'s")]
+    OtherProfile(String),
+}
+
+impl Error {
+    /// The status, when the server refused.
+    pub fn status(&self) -> Option<Status> {
+        match self {
+            Error::Status { status, .. } => Some(*status),
+            _ => None,
+        }
+    }
+
+    /// The server's message, when it sent one.
+    pub fn server_message(&self) -> Option<&ServerMessage> {
+        match self {
+            Error::Status { message, .. } => message.as_ref(),
+            _ => None,
+        }
+    }
+
+    /// `Busy`: too many requests outstanding; retry later.
+    pub fn is_busy(&self) -> bool {
+        self.status() == Some(Status::Busy)
+    }
+}
+
+fn status_text(status: Status, message: Option<&ServerMessage>) -> String {
+    match message {
+        Some(m) if !m.id.is_empty() => format!("{}: {}", m.id, m.text),
+        Some(m) if !m.text.is_empty() => m.text.clone(),
+        _ => format!("{status:?}"),
+    }
+}

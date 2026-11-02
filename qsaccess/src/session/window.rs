@@ -1178,6 +1178,7 @@ impl SessionWindow {
             trust: trust::for_system(&system),
             system_roots: true,
             timeout: CONNECT_TIMEOUT,
+            tls13_only: false,
         });
         let request = Request::display(size, Some(&device), opts.ccsid);
         st.worker = Some(Worker::spawn(Target { host, port, tls }, request));
