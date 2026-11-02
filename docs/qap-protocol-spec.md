@@ -1,7 +1,7 @@
-<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit 8306ec412b4d8634bda5d3f0201bf0d465a680c3. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
+<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit 3134e9ead985a74d89fa53008a13b6ef2fbd3d8d. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
 # QAP: Quartz Access Protocol, version 1 (draft)
 
-QAP is how QS/400 Access talks to QS/400 for everything except 5250 and printer sessions, which stay on TN5250E (RFC 4777). It replaces the plan to clone the host-server protocol. It is an original Quartz design: nothing in it is taken from IBM host-server protocols, JTOpen or any IBM-authored source.
+QAP is how QS/400 Access talks to QS/400 for everything except 5250 and printer sessions, which stay on TN5250E (RFC 4777). It is an original Quartz design: it takes nothing from any other access protocol or from any other protocol's sources.
 
 This draft settles the decisions below. Anything it leaves open is listed under Open questions; the first agent to reach one stops and asks Cody.
 
@@ -13,7 +13,7 @@ This draft settles the decisions below. Anything it leaves open is listed under 
 | Security | TLS 1.3 only, no plaintext mode. Server certificate from the QS/400 certificate manager, application ID `QS400_ACCESS_SERVER`. The client validates it with its existing untrusted-certificate trust flow |
 | Framing and encoding | Wire, from the QS/400 repository's `ipc` crate, the same framing and serialization QSI uses. Types below are Wire types; enums use `wire_enum!`. If Wire cannot express something below, stop and ask; do not invent a second encoding |
 | Where the code lives | `qap-proto` (envelope and message types) lives in the QS/400 repository beside `ipc`. QS/400 Access pins both by commit |
-| Multiplexing | One connection carries many concurrent requests. Every request has a service ID and a request ID; replies carry the request ID. No port mapper and no per-service ports |
+| Multiplexing | One connection carries many concurrent requests. Every request has a service ID and a request ID; replies carry the request ID, in the order operations finish, not the order requests came. No port mapper and no per-service ports. Lanes: `Command` requests run one at a time, in arrival order, in the connection job, because they share its job state (library list, `QTEMP`, job attributes); `Sql` (version 4) joins them in that lane. Every other operation runs concurrently, up to the outstanding limit, as the signed-on profile, without waiting for a command. `Ping` and `Cancel` are never queued behind anything |
 | Versioning | Client hello sends the range of protocol versions it supports; server picks one or refuses. Version 1 is this document |
 | Server jobs | Listener job `QAPD` in subsystem `QSYSWRK`; one job per connection in `QUSRWRK`, running as `QUSER` until sign-on and as the signed-on user profile after it |
 | Server control | `STRTCPSVR SERVER(*QAP)`, `ENDTCPSVR SERVER(*QAP)`, autostart attribute; shown on Navigator's Servers page |
@@ -68,11 +68,11 @@ Every frame is one Wire-encoded `Envelope`. The envelope layout never changes be
 
 ## Later phases (spec now, build later)
 
-The client agent inventories which host-server functions QS/400 Access was going to use, and adds each as a QAP service with its requests and replies to this document before building it. Expected, in this order: remote command (run CL, return messages and the job), spooled files (list, read as SCS, text or PDF, hold, release, delete, move), SQL, IFS files, message queues. Optional: a one-time `TelnetTicket` from a signed-on session that the Telnet server accepts for 5250 auto sign-on, which would remove the need for password substitution on Telnet.
+The client agent inventories which system functions QS/400 Access uses, and adds each as a QAP service with its requests and replies to this document before building it. Expected, in this order: remote command (run CL, return messages and the job), spooled files (list, read as SCS, text or PDF, hold, release, delete, move), SQL, IFS files, message queues. Optional: a one-time `TelnetTicket` from a signed-on session that the Telnet server accepts for 5250 auto sign-on, which would remove the need for password substitution on Telnet.
 
 ### Inventory
 
-What QS/400 Access was going to reach through the host servers, from its task pane, README and messages, and the service each becomes:
+What QS/400 Access needs of the system besides 5250, from its task pane, README and messages, and the service each becomes:
 
 | Function in QS/400 Access | Service |
 | --- | --- |
@@ -84,7 +84,7 @@ What QS/400 Access was going to reach through the host servers, from its task pa
 | Password expiry warning (`QAD4031`), which the phase 0 `SignOnReply` cannot give | `SignOn` op 6 `PasswordStatus` |
 | 5250 automatic sign-on without a password on Telnet (the optional ticket) | `SignOn` op 5 `TelnetTicket` |
 
-Not host-server functions, so not in QAP: 5250 display and printer sessions (Telnet), the printer session's message queue (named in the TN5250E startup), the 5250 Console and Control Panel tasks (the service console), and Key and Certificate Management (this computer's trust store).
+Not in QAP: 5250 display and printer sessions (Telnet), the printer session's message queue (named in the TN5250E startup), the 5250 Console and Control Panel tasks (the service console), and Key and Certificate Management (this computer's trust store).
 
 ### Rules for these additions
 
@@ -103,7 +103,7 @@ Not host-server functions, so not in QAP: 5250 display and printer sessions (Tel
 - `JobId` = { `name` String, `user` String, `number` String (six digits) }.
 - `ObjectName` = { `library` String, `name` String }. `library` may be `*LIBL` or `*CURLIB` where a library list search applies.
 
-### Service 3 `Command`: run CL commands (planned version 2)
+### Service 3 `Command`: run CL commands (version 2)
 
 Commands run in the connection job, as the signed-on profile, with its job description's library list. A command that only runs interactively ends with `Error` and its escape message.
 
@@ -115,7 +115,7 @@ Commands run in the connection job, as the signed-on profile, with its job descr
 
 | Op | Statuses |
 | --- | --- |
-| `RunCommand` | `Ok`; `Error` when the command ended with an escape message (the message is that one, and the body is still `CommandReply`); `NotFound` (no such command); `NotAuthorized` (to the command or what it names); `Cancelled` (the command was ended) |
+| `RunCommand` | `Ok`; `Error` when the command ended with an escape message (the message is that one, and the body is still `CommandReply`); `NotFound` (no such command); `NotAuthorized` (to the command or what it names); `Cancelled` (the command was ended; the body is still `CommandReply`, the message the one the end caused) |
 | `CheckCommand` | `Ok`; `Error` when the check found errors (the body is still the messages); `NotFound` |
 | `DescribeCommand` | `Ok`; `NotFound`; `NotAuthorized` |
 
@@ -123,7 +123,7 @@ Commands run in the connection job, as the signed-on profile, with its job descr
 
 `ParmNode` = { `index` u16, `parent` Option of u16, `role` enum (`Parameter` 0, `Element` 1, `Qualifier` 2), `keyword` String (empty for elements and qualifiers), `prompt` String, `help` String, `kind` enum (`Name` 0, `Character` 1, `Decimal` 2, `Integer` 3, `Logical` 4, `Date` 5, `Time` 6, `Generic` 7, `Path` 8, `Command` 9), `length` u32, `decimals` u16, `required` flag, `min_values` u16, `max_values` u16 (more than 1 = a list), `default` Option of String, `special_values` list of String, `values` list of String (when only listed values are valid), `range` Option of { `low` String, `high` String }, `show` enum (`Always` 0, `Additional` 1, `Never` 2) }.
 
-### Service 4 `Spool`: spooled files and output queues (planned version 3)
+### Service 4 `Spool`: spooled files and output queues (version 3)
 
 - `SpooledFileId` = { `job` JobId, `file` String, `number` u32 }.
 - `SpoolStatus` enum: `Ready` 0, `Held` 1, `Open` 2, `Closed` 3, `Writing` 4, `Printing` 5, `Message` 6 (waiting for a reply), `Pending` 7, `Saved` 8.
@@ -146,6 +146,15 @@ Commands run in the connection job, as the signed-on profile, with its job descr
 | `ListSpooledFiles`, `ListOutputQueues` | `Ok`; `NotFound` (the queue or library); `NotAuthorized` |
 | `ReadSpooledFile` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` (still `Open` or `Writing`); `Error` (the format cannot be made from this file's device type, for example `Scs` from `Afp`) |
 | `HoldSpooledFile`, `ReleaseSpooledFile`, `DeleteSpooledFile`, `MoveSpooledFile` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` (printing, for delete and move) |
+
+**Reading pages.**
+
+- `ReadSpooledFile` with `first_page` and `last_page` returns exactly those pages, and `pages` is how many the whole file has. A `first_page` of 0 or past the last page gets `InvalidRequest`. A `last_page` of 0, or past the last page, reads to the end. A file with no pages answers `first_page` 1 with no data.
+- For `Scs`, the data is the data stream from the start of `first_page` to the end of `last_page`, as it was spooled.
+  - A range starting after page 1 is preceded by the state that applies at that point: the page format, pitch, line density and font settings in effect at `first_page`. That state is sent as SCS controls, so the range renders exactly as it would inside the whole file.
+  - The ranges of consecutive reads join, byte for byte after their leading state, into the whole file.
+- Clients read large files in page batches.
+- The `Text` and `Pdf` formats are optional per device type. A file whose format cannot be made gets `Error`, with a message saying so.
 
 ### Service 5 `Sql`: SQL, the catalog and data transfer (planned version 4)
 
@@ -230,7 +239,9 @@ Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`).
 
 **Event (`request_id` 0).** `Messages` op 100 `MessageArrived` (status `Ok`; body `queue` Queue, `message` QueuedMessage), for each queue watched on the connection. A watch ends with its connection.
 
-### `SignOn` additions (planned version 2)
+**Spool events (planned for a later version).** Spool change events are planned for a later version: a watch on an output queue, like `WatchQueue`, with an event when a file arrives, changes status or leaves. Version 3 has none; version 3 clients poll with `ListSpooledFiles`.
+
+### `SignOn` additions (version 2)
 
 | Service | Op | Request body | Reply body | Allowed before sign-on |
 | --- | --- | --- | --- | --- |
@@ -258,7 +269,11 @@ This keeps Wire and the envelope as they are; the cost is that the server encode
 
 ### Version 2 (fixed)
 
-Version 2 is: `Command` (service 3) operations 1 `RunCommand`, 2 `CheckCommand` and 3 `DescribeCommand`; `SignOn` operations 5 `TelnetTicket` and 6 `PasswordStatus`; and the new status values those operations use, which are none: every status they answer exists in version 1. `Exists`, `InUse` and `SqlError` belong to the versions whose operations first use them. The server accepts versions 1 and 2 and picks the highest both sides support.
+Version 2 is: `Command` (service 3) operations 1 `RunCommand`, 2 `CheckCommand` and 3 `DescribeCommand`; `SignOn` operations 5 `TelnetTicket` and 6 `PasswordStatus`; and the new status values those operations use, which are none: every status they answer exists in version 1. `Exists`, `InUse` and `SqlError` belong to the versions whose operations first use them.
+
+### Version 3 (fixed)
+
+Version 3 is: `Spool` (service 4) operations 1 `ListSpooledFiles` to 7 `ListOutputQueues`, as above, with the reading rules above; and the status `InUse` (14), which version 3 introduces. A version 1 or 2 peer never receives `InUse`, the `Spool` service or any `Spool` body. The server accepts versions 1 to 3 and picks the highest both sides support.
 
 ## Open questions
 
@@ -281,9 +296,14 @@ to points the draft above leaves open:
 - A split reply cuts the encoded body: the client joins the bodies of
   its frames in order and decodes once. Every frame carries the
   status; the message rides on the last.
-- `Cancel` gets no reply of its own. A request still outstanding ends
-  with `Cancelled` and an empty body; a cancel naming nothing
+- `Cancel` gets no reply of its own; a cancel naming nothing
   outstanding is ignored. The server reads only its `request_id`.
+- A request cancelled before it started ends with `Cancelled` and an
+  empty body.
+- A request cancelled once started ends with `Cancelled` and the
+  operation's own body and message, as far as it got: `RunCommand`'s
+  is its `CommandReply`, every message included, the one the cancel
+  caused too.
 - A first request other than `Hello` gets `InvalidRequest` and the
   connection closes. `SignOn` or `Resume` on a signed-on connection
   gets `InvalidRequest`; the connection and session stay.
@@ -327,6 +347,9 @@ Version 2, settled with Cody on 2026-11-02:
   password, password expired).
 - A ticket is checked only on a TLS connection, with the seed variable
   present and empty; it is used up by its first use, accepted or not.
+  At its use, as at its issue, `QRMTSIGN` and the profile are checked
+  again: a ticket for a profile since disabled, or whose password has
+  expired, signs nothing on.
   A plain-text password through automatic sign-on is never accepted.
   Issue and use are audited (`PS` entries `P` and `V`); ticket values
   are never logged.
@@ -334,7 +357,61 @@ Version 2, settled with Cody on 2026-11-02:
   panel groups for commands yet, and the 5250 prompter shows none
   either. Elements and qualifiers have the prompt text their
   definitions give.
+- The lanes: `Command` requests run on the connection job's own
+  thread. Every other operation runs on a secondary thread of the same
+  job, made when none is free. Each secondary thread has its own link
+  to the storage service (`hello_thread`). The link shares the job's
+  security session, so a sign-on on any thread swaps the profile for
+  all of them, and the job's runtime follows before its next command.
+  `Hello` and `Ping` are answered where requests are routed.
 - `RunCommand` and `CheckCommand` run in the connection job through
   the same analyzer as Command Entry. `Cancel` of a running command
   ends its request as System Request option 2 does (`CPF1907`), and
-  the reply is `Cancelled`.
+  the reply is `Cancelled` with the command's `CommandReply`.
+
+Version 3, as built on 2026-11-02 (decisions made in the build, for Cody to review):
+
+- The server accepts versions 1 to 3. `Spool` runs on the connection
+  job's secondary threads, as the signed-on profile, through the
+  storage service (`stgsvc/qap/spool.rs`). Each operation calls the
+  same functions as the spooled-file command it stands for, with that
+  command's authority checks and `SF` audit entries:
+  - `ListSpooledFiles` lists as `WRKSPLF` does, or as `WRKOUTQ` does
+    for one queue;
+  - `ReadSpooledFile` reads as `DSPSPLF` (`SF` `R`);
+  - `HoldSpooledFile` holds as `HLDSPLF` (`H`);
+  - `ReleaseSpooledFile` releases as `RLSSPLF` (`L`);
+  - `DeleteSpooledFile` deletes as `DLTSPLF` (`D`);
+  - `MoveSpooledFile` moves as `CHGSPLFA OUTQ` (`A`);
+  - `ListOutputQueues` lists as `WRKOUTQ`.
+- Status values from QS/400's: `RDY` `Ready`, `HLD` `Held`, `OPN`
+  `Open`, `CLO` `Closed`, `WTR` `Printing`, `MSGW` `Message`, `PND`
+  and `DFR` `Pending`, `SAV` `Saved`. QS/400 has no separate state
+  for a file being written, so it never sends `Writing`. Device types
+  come from `DEVTYPE`: `*SCS` is `Scs`; `*AFPDS`, `*AFPDSLINE` and
+  `*IPDS` are `Afp`; `*USERASCII` is `Ascii`; `*LINE` is `Line`.
+- The page index is computed from the data stream at each read; the
+  `*SPLF` object keeps none and its layout is unchanged. Pages start
+  where the SCS reader behind `DSPSPLF` starts them: at a form feed, a
+  line past the page length, or a move up the page.
+  - A range's leading state is the last format command of each kind
+    before the page (`SHF`, `SVF`, `SLD`, the `X'2BD1'` and `X'2BD2'`
+    commands by their first byte, any other by class), then an
+    absolute move to the line and column before the page's first
+    command.
+  - `pages` in the reply is how many pages that reader finds.
+- Only SCS files are read. `Text` and `Pdf` are the views `DSPSPLF`
+  and Navigator use (`spool::view::text`, `spool::pdf::render`), made
+  from the whole file's pages, so a range reads as those pages do in
+  the whole. Any format of a file of another device type is `Error`
+  with `TCP1A56`. A file still open is `InUse` with `TCP1A57`. Pages
+  out of range are `InvalidRequest` with `CPD0084`.
+- `HoldSpooledFile` `immediately` 0 is `HLDSPLF OPTION(*PAGEEND)`, 1 is
+  `*IMMED`. A writer hands a file to its device whole, so the two
+  hold alike: the file prints no more until released.
+- `MoveSpooledFile` `first` 1 puts the file at the top of the queue,
+  also on the queue it is already on. A printing file is not moved
+  (`InUse`), by `CHGSPLFA OUTQ` either: that command now refuses it as
+  `DLTSPLF` refuses deleting one (`CPF3330`).
+- `ListOutputQueues` `*LIBL` is the connection job's library list;
+  libraries in it that do not exist are passed over.

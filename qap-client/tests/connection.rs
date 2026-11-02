@@ -5,19 +5,23 @@
 //! The connection against QS/400's engine: TLS 1.3 only and the trust
 //! flow, Hello as request 1, version mismatch, `NotSignedOn`, 64
 //! outstanding requests and `Busy` at the 65th, replies over 1 MiB split
-//! with `More`, requests over 1 MiB refused, `Cancel`, `Ping` after a quiet
-//! spell, and `ServerEnding`.
+//! with `More`, requests over 1 MiB refused, `Cancel` before and after a
+//! request started, replies matched by ID whatever order they come in,
+//! `Ping` after a quiet spell, and `ServerEnding`.
 
 mod common;
 
 use std::time::Duration;
 
 use common::{cfg, start, start_with, until};
+use qap_client::proto::ops::command::CommandText;
 use qap_client::proto::ops::connection::PingReply;
 use qap_client::proto::ops::signon::SignOn;
 use qap_client::proto::ops::system::SystemInfo;
 use qap_client::proto::{MAX_FRAME, MAX_OUTSTANDING, Op, Service};
-use qap_client::{Client, Closed, Connection, Error, Notice, Reply, Secret, Status};
+use qap_client::{
+    Client, Closed, CommandOutcome, Connection, Error, Notice, Reply, Secret, Status,
+};
 use qapd::{Config, Ending};
 
 #[test]
@@ -25,7 +29,7 @@ fn hello_over_tls13() {
     let s = start(cfg());
     let c = Connection::open(&s.target()).unwrap();
     let h = c.hello();
-    assert_eq!(h.version, 2);
+    assert_eq!(h.version, 3);
     assert_eq!(h.system_name, "QSHQ400");
     assert_eq!(h.release, "V1R0M0");
     assert_eq!(h.services, Service::ALL.to_vec());
@@ -71,8 +75,8 @@ fn an_untrusted_certificate_goes_to_the_trust_flow() {
 fn version_mismatch() {
     let s = start(cfg());
     let mut t = s.target();
-    // The server speaks versions 1 and 2.
-    t.options.min_version = 3;
+    // The server speaks versions 1 to 3.
+    t.options.min_version = 4;
     t.options.max_version = 9;
     let e = Connection::open(&t).unwrap_err();
     assert_eq!(e.status(), Some(Status::VersionUnsupported), "{e:?}");
@@ -96,18 +100,19 @@ fn signed_on_operations_need_a_sign_on() {
 #[test]
 fn busy_at_the_65th_request() {
     let s = start(cfg());
-    let c = Connection::open(&s.target()).unwrap();
+    let c = s.signed_on();
+    // The gate holds SystemInfo; each runs on a thread of its own.
     s.c.gate.set(false);
     let held: Vec<_> = (0..MAX_OUTSTANDING)
-        .map(|_| c.request(Op::Ping, &()).unwrap())
+        .map(|_| c.request(Op::SystemInfo, &()).unwrap())
         .collect();
     let r = c
-        .request(Op::Ping, &())
+        .request(Op::SystemInfo, &())
         .unwrap()
         .wait(Duration::from_secs(5))
         .unwrap();
     assert_eq!(r.status, Status::Busy);
-    let e = r.decode::<PingReply>().unwrap_err();
+    let e = r.decode::<SystemInfo>().unwrap_err();
     assert!(e.is_busy(), "{e:?}");
 
     // call() waits and tries again until there is room.
@@ -118,8 +123,8 @@ fn busy_at_the_65th_request() {
             c.gate.set(true);
         }
     });
-    let ping: PingReply = c.call(Op::Ping, &()).unwrap();
-    assert_eq!(ping.server_time, 1_793_000_000_000);
+    let info: SystemInfo = c.call(Op::SystemInfo, &()).unwrap();
+    assert_eq!(info.system_name, "QSHQ400");
     gate.join().unwrap();
     for p in held {
         assert_eq!(p.wait(Duration::from_secs(5)).unwrap().status, Status::Ok);
@@ -156,24 +161,34 @@ fn a_request_over_1_mib_is_refused_here() {
     let _: PingReply = c.call(Op::Ping, &()).unwrap();
 }
 
+fn dlyjob(secs: u32) -> CommandText {
+    CommandText {
+        command: format!("DLYJOB DLY({secs})"),
+    }
+}
+
 #[test]
 fn cancel() {
     let s = start(cfg());
-    let c = Connection::open(&s.target()).unwrap();
-    s.c.gate.set(false);
-    // The first runs and waits at the gate; the second waits behind it.
-    let running = c.request(Op::Ping, &()).unwrap();
-    let queued = c.request(Op::SystemInfo, &()).unwrap();
-    std::thread::sleep(Duration::from_millis(100));
+    let c = s.signed_on();
+    // Commands run one at a time: the first runs, the second waits behind
+    // it and has not started.
+    let running = c.request(Op::RunCommand, &dlyjob(30)).unwrap();
+    let queued = c.request(Op::RunCommand, &dlyjob(30)).unwrap();
+    std::thread::sleep(Duration::from_millis(200));
     queued.cancel();
     running.cancel();
-    std::thread::sleep(Duration::from_millis(100));
-    s.c.gate.set(true);
-    for p in [running, queued] {
-        let r = p.wait(Duration::from_secs(5)).unwrap();
-        assert_eq!(r.status, Status::Cancelled);
-        assert!(r.body.is_empty());
-    }
+    // Cancelled before it started: no body.
+    let r = queued.wait(Duration::from_secs(5)).unwrap();
+    assert_eq!(r.status, Status::Cancelled);
+    assert!(r.body.is_empty());
+    // Cancelled once started: the command's own reply, the cancel's
+    // message in it.
+    let o = CommandOutcome::from_reply(running.wait(Duration::from_secs(5)).unwrap()).unwrap();
+    assert_eq!(o.status, Status::Cancelled);
+    assert_eq!(o.job.unwrap().name, "QAPCNN");
+    assert_eq!(o.messages.last().unwrap().id, "CPF1907");
+    assert_eq!(o.escape.unwrap().id, "CPF1907");
     // A cancel naming nothing outstanding is ignored.
     let done = c.request(Op::Ping, &()).unwrap();
     std::thread::sleep(Duration::from_millis(100));
@@ -184,15 +199,40 @@ fn cancel() {
 #[test]
 fn a_reply_too_slow_is_cancelled() {
     let s = start(cfg());
-    let c = Connection::open(&s.target()).unwrap();
+    let c = s.signed_on();
     s.c.gate.set(false);
-    let p = c.request(Op::Ping, &()).unwrap();
+    let p = c.request(Op::SystemInfo, &()).unwrap();
     assert!(matches!(
         p.wait(Duration::from_millis(100)),
         Err(Error::TimedOut)
     ));
     s.c.gate.set(true);
-    let _: PingReply = c.call(Op::Ping, &()).unwrap();
+    let _: SystemInfo = c.call(Op::SystemInfo, &()).unwrap();
+}
+
+#[test]
+fn replies_are_matched_by_id_not_by_order() {
+    let s = start(cfg());
+    let c = s.signed_on();
+    // The first is held at the gate; the second runs beside it and its
+    // reply comes back first.
+    s.c.gate.set(false);
+    let first = c.request(Op::SystemInfo, &()).unwrap();
+    let second = c.request(Op::Ping, &()).unwrap();
+    let ping: PingReply = second
+        .wait(Duration::from_secs(5))
+        .unwrap()
+        .decode()
+        .unwrap();
+    assert_eq!(ping.server_time, 1_793_000_000_000);
+    assert!(first.try_wait().is_none(), "the first is still held");
+    s.c.gate.set(true);
+    let info: SystemInfo = first
+        .wait(Duration::from_secs(5))
+        .unwrap()
+        .decode()
+        .unwrap();
+    assert_eq!(info.system_name, "QSHQ400");
 }
 
 #[test]
@@ -277,4 +317,37 @@ fn a_raw_reply_keeps_status_and_message() {
     assert_eq!(r.message.as_ref().unwrap().id, "CPF1107");
     let e = r.decode::<SystemInfo>().unwrap_err();
     assert_eq!(e.server_message().unwrap().id, "CPF1107");
+}
+
+#[test]
+fn a_long_request_is_never_cancelled_by_a_timeout() {
+    let s = start(cfg());
+    let c = s.signed_on();
+    let body = CommandText {
+        command: "DLYJOB DLY(1)".into(),
+    };
+    // The wait runs out; the command does not end with it.
+    let p = c.request(Op::RunCommand, &body).unwrap();
+    assert!(p.wait_for(Duration::from_millis(100)).is_none());
+    assert!(matches!(
+        p.wait(Duration::from_millis(100)),
+        Err(Error::TimedOut)
+    ));
+    // Had it been cancelled, the next command would end Cancelled or wait
+    // for nothing; it runs after the first, which ran to its end.
+    let at = std::time::Instant::now();
+    let next = c.request(Op::RunCommand, &body).unwrap();
+    let o = CommandOutcome::from_reply(next.wait_done().unwrap()).unwrap();
+    assert_eq!(o.status, Status::Ok);
+    assert!(
+        at.elapsed() >= Duration::from_millis(1700),
+        "it waited behind the first"
+    );
+    // call() waits for a long one however long it takes.
+    let mut short = s.target();
+    short.options.reply_timeout = Duration::from_millis(100);
+    let mut cl = Client::new(short);
+    cl.sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    let r: qap_client::proto::ops::command::CommandReply = cl.call(Op::RunCommand, &body).unwrap();
+    assert_eq!(r.job.name, "QAPCNN");
 }

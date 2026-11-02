@@ -49,11 +49,11 @@ fn name(lib: &str, n: &str) -> ObjectName {
 }
 
 #[test]
-fn version_2_is_agreed_with_the_command_service() {
+fn the_command_service_is_there_from_version_2() {
     let s = start(cfg());
     let mut c = Client::new(s.target());
     c.connect().unwrap();
-    assert_eq!(c.version(), Some(2));
+    assert_eq!(c.version(), Some(3));
     assert!(c.hello().unwrap().services.contains(&Service::Command));
     // Not before sign-on.
     let e = c.check_command("CRTLIB LIB(X)").unwrap_err();
@@ -125,8 +125,11 @@ fn cancel_ends_a_running_command() {
     let o = CommandOutcome::from_reply(p.wait(Duration::from_secs(10)).unwrap()).unwrap();
     assert_eq!(o.status, Status::Cancelled);
     assert!(at.elapsed() < Duration::from_secs(5), "ended where it was");
-    // QS/400 answers a cancelled request with an empty body.
-    assert!(o.job.is_none() && o.messages.is_empty());
+    // Cancelled once running, the reply is still the command's: its job and
+    // every message, the one the cancel caused last.
+    assert_eq!(ids(&o), ["CPF1907"]);
+    assert_eq!(o.job.unwrap().name, "QAPCNN");
+    assert_eq!(o.escape.unwrap().id, "CPF1907");
     // The session and connection go on.
     assert_eq!(run(&mut c, "DLYJOB DLY(1)").status, Status::Ok);
 }

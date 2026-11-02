@@ -9,9 +9,11 @@
 //! workspace manifest.
 //!
 //! - [`conn`]: one connection. TLS 1.3 over [`qsa_net`], `Hello` first with
-//!   request ID 1, then many requests at once, each with its own ID; split
-//!   replies joined, `Ping` after a quiet minute, `Cancel`, and the server's
-//!   events.
+//!   request ID 1, then many requests at once, each with its own ID and
+//!   its reply matched by it, whatever order replies come in; split replies
+//!   joined, `Ping` after a quiet minute, `Cancel`, and the server's events.
+//!   Short operations time out; a command or a spooled file read runs until
+//!   it ends or is cancelled ([`runs_long`]).
 //! - [`session`]: a [`Client`] signs on, changes passwords, resumes its
 //!   session on a new connection when the server closed the old one
 //!   quietly, and signs off; from version 2 it also asks when the password
@@ -20,7 +22,7 @@
 //!   commands, with every status they answer.
 //!
 //! `Hello` offers versions [`proto::MIN_VERSION`] to [`proto::VERSION`] (1
-//! and 2) and the server picks the highest both speak. An operation is sent
+//! to 3) and the server picks the highest both speak. An operation is sent
 //! only when the connection's version defines it ([`proto::Op::since`]) and
 //! `Hello`'s `services` lists its service; otherwise it is refused here with
 //! [`Error::Unsupported`] and nothing is sent ([`Connection::supports`]).
@@ -40,7 +42,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 pub use command::{CheckOutcome, CommandOutcome};
-pub use conn::{Closed, Connection, Event, Pending, Reply};
+pub use conn::{Closed, Connection, Event, Pending, Reply, runs_long};
 pub use error::Error;
 pub use qap_proto as proto;
 pub use qap_proto::{Secret, ServerMessage, Status, Token};
@@ -106,7 +108,8 @@ impl std::fmt::Debug for Target {
 pub struct Options {
     /// TCP connect and TLS handshake together.
     pub connect_timeout: Duration,
-    /// How long a request may wait for its reply before it is cancelled.
+    /// How long a short request may wait for its reply before it is
+    /// cancelled. [`conn::runs_long`] operations have no such limit.
     pub reply_timeout: Duration,
     /// `Ping` after this long without traffic either way.
     pub ping_after: Duration,

@@ -4,18 +4,21 @@
 
 //! QS/400's QAP connection engine (`qapd`, pinned with the protocol crates)
 //! in this process, over loopback TLS 1.3, with QS/400's own test system:
-//! `qapd::testing`'s [`System`] (profiles `BOB` and `WARN`, sessions, Telnet
-//! tickets, the test commands, a clock) and a [`MemHost`] per connection.
+//! `qapd::testing`'s [`System`] (profiles `BOB`, `WARN` and `ANN`, sessions,
+//! Telnet tickets, the test commands, output queues and spooled files, a
+//! clock) and a [`MemHost`] per connection.
 //!
 //! `qapd::testing::serve_loopback` serves one plain TCP connection; QS/400
 //! Access speaks only TLS 1.3 and reconnects to resume, so the listener
 //! here stays: it takes any number of connections over TLS, each a new
 //! connection job of the same system. [`listen`] is generic over the engine,
-//! so [`v1`] puts the version-1 engine behind it too.
+//! so [`v1`] and [`v2`] put the version-1 and version-2 engines behind it
+//! too.
 
 #![allow(dead_code)]
 
 pub mod v1;
+pub mod v2;
 
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};
@@ -23,7 +26,9 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use qap_client::Target;
+use qap_client::proto::Op;
+use qap_client::proto::ops::signon::{SignOn, SignOnReply};
+use qap_client::{Connection, Secret, Target};
 use qapd::testing::{MemHost, System};
 use qapd::{Closed, Config};
 use rustls::pki_types::PrivateKeyDer;
@@ -163,6 +168,17 @@ impl Server {
     /// A client target for this server, trusting the test CA only.
     pub fn target(&self) -> Target {
         target(self.port)
+    }
+
+    /// A connection signed on as `BOB`.
+    pub fn signed_on(&self) -> Connection {
+        let c = Connection::open(&self.target()).unwrap();
+        let body = SignOn {
+            user: "BOB".into(),
+            password: Secret::from("SECRET1"),
+        };
+        let _: SignOnReply = c.call(Op::SignOn, &body).unwrap();
+        c
     }
 
     /// Connections that have ended so far.

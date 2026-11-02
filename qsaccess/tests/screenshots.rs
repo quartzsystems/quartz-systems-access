@@ -356,7 +356,9 @@ fn sent(id: &str, severity: u8, text: &str) -> qap_client::ServerMessage {
     }
 }
 
-/// Run Command after two runs of CRTLIB: created, then already there.
+/// Run Command after two runs of CRTLIB (created, then already there), a
+/// check, and CHGAUT and CPYFRMSTMF with the test system's severities 10
+/// and 20.
 fn run_command_results() -> Window {
     use qsaccess::runcmd::{self, Line};
     let job = qap_client::proto::types::JobId {
@@ -372,6 +374,10 @@ fn run_command_results() -> Window {
         Line::Checked("DSPOBJD OBJ(QGPL/X)".into()),
         Line::Message(sent("CPD0071", 30, "Value for parameter OBJTYPE required.")),
         Line::Message(sent("CPF0006", 30, "Errors occurred in command.")),
+        Line::Ran("CHGAUT OBJ('/home/BOB') USER(ANN) DTAAUT(*RWXA)".into()),
+        Line::Message(sent("CPDA091", 10, "Value for DTAAUT not valid.")),
+        Line::Ran("CPYFRMSTMF FROMSTMF('/home/BOB/long.txt') TOMBR(X)".into()),
+        Line::Message(sent("CPFA096", 20, "Data in record 3 truncated at 80.")),
     ];
     let m = qsa_msg::message(qsa_msg::id::COMMAND_FAILED, &["CRTLIB"]);
     runcmd::build(

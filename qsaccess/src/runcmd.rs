@@ -13,8 +13,11 @@
 //!   Check checks it without running it; Run runs it; Cancel ends it while
 //!   it runs (QAP `Cancel`); Clear empties the results.
 //! - Each run adds to the results: the command, then the job it ran in and
-//!   every message it sent, as the system sent them. A message's ID opens
-//!   its second-level text. The status line says how it ended (`QAD5010` to
+//!   every message it sent, as the system sent them, in the order it sent
+//!   them (the list does not sort). Severity shows as the system's two
+//!   digits; from 20, an error on the system's scale, the ID is red. A
+//!   cancelled command's results are what it sent before it ended, the
+//!   cancel's message last. A message's ID opens its second-level text. The status line says how it ended (`QAD5010` to
 //!   `QAD5013`); not authorized shows the system's escape message.
 //! - Against a system whose QAP version has no `Command` service, the window
 //!   opens with everything but Close disabled and `QAD5001` saying why.
@@ -112,6 +115,9 @@ impl RunCommandWindow {
     }
 }
 
+/// From this severity a message is an error, and its ID is red.
+pub const ERROR_SEVERITY: u8 = 20;
+
 /// The results as table rows.
 pub fn rows(lines: &[Line]) -> Vec<Vec<Cell>> {
     lines
@@ -124,7 +130,7 @@ pub fn rows(lines: &[Line]) -> Vec<Vec<Cell>> {
                 Cell::from(format!("Check: {c}")),
             ],
             Line::Message(m) => {
-                let status = if m.severity >= 30 {
+                let status = if m.severity >= ERROR_SEVERITY {
                     Status::Error
                 } else {
                     Status::Neutral
@@ -591,6 +597,8 @@ mod tests {
             Line::Ran("CRTLIB LIB(X)".into()),
             Line::Message(msg("CPC2102", 0, "Library X created.")),
             Line::Message(msg("CPF2111", 40, "Library X already exists.")),
+            Line::Message(msg("CPDA091", 10, "Value for DTAAUT not valid.")),
+            Line::Message(msg("CPFA096", 20, "Data truncated.")),
         ]);
         assert_eq!(r[0][2].text, "> CRTLIB LIB(X)");
         assert_eq!(
@@ -599,6 +607,14 @@ mod tests {
         );
         assert_eq!(r[2][0].status, Status::Error);
         assert_eq!(r[2][2].text, "Library X already exists.");
+        assert_eq!(
+            (r[3][1].text.as_str(), r[3][0].status),
+            ("10", Status::Neutral)
+        );
+        assert_eq!(
+            (r[4][1].text.as_str(), r[4][0].status),
+            ("20", Status::Error)
+        );
         assert_eq!(job_text(None), "Job:");
     }
 }

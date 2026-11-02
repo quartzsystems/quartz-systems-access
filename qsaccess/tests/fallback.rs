@@ -81,8 +81,8 @@ fn every_version_2_function_is_qad5001_and_sign_on_still_works() {
 
 #[test]
 fn a_version_2_system_offers_them() {
-    let s = common::start(common::cfg());
-    let sys = system(s.port);
+    let (port, _, _) = common::v2::start_v2();
+    let sys = system(port);
     let st = state(&sys);
     assert_eq!(qap::version_of(&st, "127.0.0.1", true), Some(2));
     assert!(auto_sign_on_blocked("127.0.0.1", true, Some(2)).is_none());

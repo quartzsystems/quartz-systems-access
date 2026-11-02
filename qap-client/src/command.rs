@@ -11,9 +11,10 @@
 //! - `RunCommand`: `Ok`; `Error` with the escape message as the reply's
 //!   message (an interactive-only command ends this way, with the system's
 //!   escape); `NotFound` and `NotAuthorized` (to the command or to what it
-//!   names); `Cancelled`, when [`crate::Pending::cancel`] ended it. QS/400
-//!   answers a cancelled request with an empty body, so a cancelled
-//!   outcome may have no job and no messages.
+//!   names); `Cancelled`, when [`crate::Pending::cancel`] ended it. A
+//!   command cancelled once it started still answers its `CommandReply`,
+//!   the message the cancel caused included; one cancelled while it waited
+//!   behind another has an empty body, so no job and no messages.
 //! - `CheckCommand`: `Ok` with no messages when the command is valid,
 //!   otherwise `Error` or `NotFound` with the check's messages.
 //!

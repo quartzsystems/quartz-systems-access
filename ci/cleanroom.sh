@@ -9,13 +9,12 @@
 #   and NEW-ENVIRON variable names). Those values live in the crate's wire.rs
 #   and nowhere else; code elsewhere uses their constants by name. A new
 #   protocol crate adds its wire.rs to this list.
-# - docs/qap-protocol-spec.md, a read-only copy of QS/400's docs/QAP.md that
-#   ci/spec-mirror.sh holds byte-identical to QS/400's file at the pinned
-#   commit; nothing in it is written here.
+#
+# docs/qap-protocol-spec.md, the read-only copy of QS/400's docs/QAP.md, is
+# checked like any other file.
 set -euo pipefail
 allowed=(
   tn5250/src/wire.rs
-  docs/qap-protocol-spec.md
 )
 cd "$(dirname "$0")/.."
 patterns="$(mktemp)"

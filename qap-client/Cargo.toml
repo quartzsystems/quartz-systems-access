@@ -17,6 +17,8 @@ thiserror.workspace = true
 qapd.workspace = true
 qapd_v1.workspace = true
 qap_proto_v1.workspace = true
+qapd_v2.workspace = true
+qap_proto_v2.workspace = true
 rustls.workspace = true
 
 [lints]

@@ -34,14 +34,22 @@ commit. It is never edited here: a change goes to QS/400 first, and the copy
 is refreshed in the same commit as the re-pin (`ci/spec-mirror.sh` checks
 both).
 
-- **Versions.** The program offers QAP versions 1 and 2, and the server
+- **Versions.** The program offers QAP versions 1 to 3, and the server
   picks the highest both speak. Version 2 adds Run Command (the `Command`
   service: run, check and describe CL commands), the password expiry
   warning (`PasswordStatus`) and 5250 automatic sign-on by ticket
   (`TelnetTicket`). On a system whose QAP server speaks only version 1,
   those are disabled, with `QAD5001` saying which version they need and
   which the system has; nothing of version 2 is ever sent to it, and
-  sign-on and everything else work as before.
+  sign-on and everything else work as before. Version 3 adds Printer
+  Output (the `Spool` service), likewise disabled with `QAD5001` on a
+  system that speaks only version 1 or 2.
+- **Requests side by side.** One connection carries every request of a
+  system's session. The server runs commands one at a time, in the order
+  they came, and everything else beside them, so a reply can come back
+  before one asked earlier: each is matched to its request by ID. Short
+  requests time out; a command that runs and a spooled file being read run
+  until they end or are cancelled, and nothing cancels them by itself.
 - **TLS 1.3 only.** QAP has no plain mode and no older TLS version. A
   connection that cannot agree on TLS 1.3 fails with `QAD4054`.
 - **The server's certificate.** The QAP server presents the certificate

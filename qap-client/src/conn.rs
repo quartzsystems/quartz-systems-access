@@ -15,6 +15,16 @@
 //! a longer request is refused here ([`Error::TooLarge`]) and a longer
 //! frame from the server ends the connection.
 //!
+//! Replies come back in the order the server finishes them, not the order
+//! they were asked: each goes to the request whose ID it carries, and a
+//! split reply is joined per ID, so the frames of two replies may
+//! interleave.
+//!
+//! Short operations have a reply timeout ([`Options::reply_timeout`]):
+//! past it the request is cancelled. [`runs_long`] operations (a command
+//! that runs, a spooled file read) have none: they run until they are done
+//! or the caller cancels them, and nothing here cancels them by itself.
+//!
 //! Request and reply bytes are wiped once used, since they may hold a
 //! password or a session token.
 
@@ -218,21 +228,50 @@ impl Pending {
         }
     }
 
-    /// The reply, waiting at most `timeout`; after that the request is
-    /// cancelled and [`Error::TimedOut`] returned.
+    /// The operation asked for.
+    pub fn op(&self) -> Op {
+        self.op
+    }
+
+    /// The reply, waiting at most `timeout`; after that
+    /// [`Error::TimedOut`]. A short operation is cancelled then; a
+    /// [`runs_long`] one is left to run, its reply no longer waited for.
     pub fn wait(self, timeout: Duration) -> Result<Reply, Error> {
         match self.rx.recv_timeout(timeout) {
             Ok(env) => Ok(self.finish(env)),
             Err(RecvTimeoutError::Timeout) => {
-                self.cancel();
-                qsa_net::debug!(
-                    "qap: {:?} {}: no reply in time; cancelled",
-                    self.op,
-                    self.id
-                );
+                if runs_long(self.op) {
+                    qsa_net::debug!("qap: {:?} {}: no reply in time", self.op, self.id);
+                } else {
+                    self.cancel();
+                    qsa_net::debug!(
+                        "qap: {:?} {}: no reply in time; cancelled",
+                        self.op,
+                        self.id
+                    );
+                }
                 Err(Error::TimedOut)
             }
             Err(RecvTimeoutError::Disconnected) => Err(self.gone()),
+        }
+    }
+
+    /// The reply if it comes within `timeout`, else `None` and the request
+    /// left as it is: for a caller that waits in steps, looking for a
+    /// cancel in between.
+    pub fn wait_for(&self, timeout: Duration) -> Option<Result<Reply, Error>> {
+        match self.rx.recv_timeout(timeout) {
+            Ok(env) => Some(Ok(self.finish(env))),
+            Err(RecvTimeoutError::Timeout) => None,
+            Err(RecvTimeoutError::Disconnected) => Some(Err(self.gone())),
+        }
+    }
+
+    /// The reply, however long it takes (until the connection closes).
+    pub fn wait_done(self) -> Result<Reply, Error> {
+        match self.rx.recv() {
+            Ok(env) => Ok(self.finish(env)),
+            Err(_) => Err(self.gone()),
         }
     }
 
@@ -257,6 +296,13 @@ impl Pending {
     fn gone(&self) -> Error {
         Error::Closed(lock(&self.shared).closed.clone().unwrap_or(Closed::Quietly))
     }
+}
+
+/// Whether `op` runs until it is done or cancelled, with no reply timeout:
+/// `RunCommand` and `ReadSpooledFile`. A wait on one that runs out of time
+/// leaves it running; only [`Pending::cancel`] ends it.
+pub fn runs_long(op: Op) -> bool {
+    matches!(op, Op::RunCommand | Op::ReadSpooledFile)
 }
 
 /// Whether a connection whose `Hello` answered `hello` may send `op`.
@@ -420,8 +466,12 @@ impl Connection {
     }
 
     /// Sends a request and waits for its reply, decoded. `Busy` is tried
-    /// again after a pause, for as long as [`Options::reply_timeout`].
+    /// again after a pause, for as long as [`Options::reply_timeout`]. A
+    /// [`runs_long`] operation is waited for until it ends.
     pub fn call<B: Wire, R: Wire>(&self, op: Op, body: &B) -> Result<R, Error> {
+        if runs_long(op) {
+            return self.request(op, body)?.wait_done().and_then(Reply::decode);
+        }
         let deadline = Instant::now() + self.options.reply_timeout;
         let mut pause = Duration::from_millis(20);
         loop {

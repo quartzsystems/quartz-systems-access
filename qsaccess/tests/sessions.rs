@@ -67,16 +67,19 @@ fn a_running_command_and_another_tool_share_the_connection() {
     // The command tool holds the client only to send.
     let pending = lock(&h).run_command("DLYJOB DLY(2)").unwrap();
     let at = Instant::now();
-    // Another tool, meanwhile, on the same client and connection. The test
-    // system's connection job runs one operation at a time, as QS/400's
-    // does, so this one answers once the delay ends; it went out at once,
-    // with its own request ID, while the command was outstanding.
-    let other = lock(&h).request(qap_client::proto::Op::Ping, &()).unwrap();
+    // Another tool, meanwhile, on the same client and connection. QS/400
+    // runs commands one at a time and everything else beside them, so this
+    // one answers while the command still runs.
+    let other = lock(&h)
+        .request(qap_client::proto::Op::SystemInfo, &())
+        .unwrap();
     assert_ne!(other.id(), pending.id());
+    other.wait(Duration::from_secs(10)).unwrap();
+    assert!(at.elapsed() < Duration::from_secs(2), "did not wait for it");
+    assert!(pending.try_wait().is_none(), "the command still runs");
     let done = CommandOutcome::from_reply(pending.wait(Duration::from_secs(10)).unwrap()).unwrap();
     assert_eq!(done.status, Status::Ok);
     assert!(at.elapsed() >= Duration::from_secs(2));
-    other.wait(Duration::from_secs(10)).unwrap();
     assert_eq!(s.ended(), [], "one connection, still open");
 }
 

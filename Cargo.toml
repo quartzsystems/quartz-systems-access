@@ -45,14 +45,18 @@ qap-client = { path = "qap-client" }
 # QAP from the QS/400 repository, pinned to one commit. docs/qap-protocol-spec.md
 # is QS/400's docs/QAP.md at that commit and moves with it (ci/spec-mirror.sh).
 # qapd, the server's connection engine, is for tests only.
-ipc = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "8306ec412b4d8634bda5d3f0201bf0d465a680c3", package = "ipc" }
-qap-proto = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "8306ec412b4d8634bda5d3f0201bf0d465a680c3", package = "qap-proto" }
-qapd = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "8306ec412b4d8634bda5d3f0201bf0d465a680c3", package = "qapd" }
+ipc = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "3134e9ead985a74d89fa53008a13b6ef2fbd3d8d", package = "ipc" }
+qap-proto = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "3134e9ead985a74d89fa53008a13b6ef2fbd3d8d", package = "qap-proto" }
+qapd = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "3134e9ead985a74d89fa53008a13b6ef2fbd3d8d", package = "qapd" }
 # QAP version 1 only, for the fallback tests: qapd as it was before version 2,
 # and the qap-proto its Host is written in. They meet the current crates only
 # over loopback.
 qapd_v1 = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "58a7e6d3a95a498d50ce3ff40e4969f2351fc813", package = "qapd" }
 qap_proto_v1 = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "58a7e6d3a95a498d50ce3ff40e4969f2351fc813", package = "qap-proto" }
+# QAP version 2 only, for the same: qapd and qap-proto as they were before
+# version 3.
+qapd_v2 = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "8306ec412b4d8634bda5d3f0201bf0d465a680c3", package = "qapd" }
+qap_proto_v2 = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "8306ec412b4d8634bda5d3f0201bf0d465a680c3", package = "qap-proto" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
