@@ -335,6 +335,45 @@ fn printer_session(state: &Shared) -> Window {
     w
 }
 
+/// A system's message as the test system sends one.
+fn sent(id: &str, severity: u8, text: &str) -> qap_client::ServerMessage {
+    qap_client::ServerMessage {
+        id: id.into(),
+        severity,
+        data: Vec::new(),
+        text: text.into(),
+        help: format!("Cause . . . . . :   {text}"),
+    }
+}
+
+/// Run Command after two runs of CRTLIB: created, then already there.
+fn run_command_results() -> Window {
+    use qsaccess::runcmd::{self, Line};
+    let job = qap_client::proto::types::JobId {
+        name: "QAPCNN".into(),
+        user: "QUSER".into(),
+        number: "004217".into(),
+    };
+    let lines = [
+        Line::Ran("CRTLIB LIB(QATESTLIB)".into()),
+        Line::Message(sent("CPC2102", 0, "Library QATESTLIB created.")),
+        Line::Ran("CRTLIB LIB(QATESTLIB)".into()),
+        Line::Message(sent("CPF2111", 40, "Library QATESTLIB already exists.")),
+        Line::Checked("DSPOBJD OBJ(QGPL/X)".into()),
+        Line::Message(sent("CPD0071", 30, "Value for parameter OBJTYPE required.")),
+        Line::Message(sent("CPF0006", 30, "Errors occurred in command.")),
+    ];
+    let m = qsa_msg::message(qsa_msg::id::COMMAND_FAILED, &["CRTLIB"]);
+    runcmd::build(
+        "sys1.example.net",
+        "CRTLIB LIB(QATESTLIB)",
+        Some(&job),
+        &lines,
+        Some(&m),
+    )
+    .window
+}
+
 fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Window)> {
     let mut out = Vec::new();
     let (ui, _rx) = mainwin::build(state.clone());
@@ -418,6 +457,11 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     ));
     out.push(("message-system".to_owned(), system_message()));
     out.push(("verify-connection".to_owned(), verify(state)));
+    out.push((
+        "run-command".to_owned(),
+        qsaccess::runcmd::build("sys1.example.net", "", None, &[], None).window,
+    ));
+    out.push(("run-command-results".to_owned(), run_command_results()));
     out.push((
         "run-macro".to_owned(),
         qsaccess::macros::build_run(

@@ -90,6 +90,37 @@ bar shows *system: Signed on as PROFILE* once signed on.
   and any left can be removed with the desktop's password manager (service
   *Quartz Systems QS/400 Access*).
 
+## Run Command
+
+**Run Command** in the task pane's General group opens a window for the
+selected system, signing on first if this program has no session on it.
+It needs QAP version 2; on an older system the window says so (`QAD5001`)
+and only Close works.
+
+- **Command line.** Type a CL command, in the system-output font. Up and
+  Down recall the last 50 commands run on that system (kept in
+  `settings.toml`); a command that gives a password parameter
+  (`PASSWORD(...)`, `NEWPWD(...)` and the like) is never kept, and the log
+  shows such values as `*`. Enter runs the command.
+- **Run** runs it in the session's connection job, `QAPCNN` in `QUSRWRK`,
+  as the signed-on profile with its job description's library list. The
+  results show the command, then every message it sent, oldest first, as
+  the system sent them; the job line shows the job's name, user (the job's
+  own, `QUSER`) and number. Each run adds to the results until **Clear**.
+  Select a message's ID for its second-level text.
+- **How it ended**, on the status line: `QAD5010` completed, `QAD5011`
+  ended with an error (the escape message is the last one listed),
+  `QAD5012` cancelled, `QAD5013` not found. Not authorized shows the
+  system's escape message itself. A command that can only run
+  interactively ends with an error and the system's escape message.
+- **Cancel** ends the command while it runs (a program or `DLYJOB` ends
+  where it is; a command the system carries out in one piece finishes
+  first). QS/400 answers a cancelled request without the command's
+  messages, so none are listed for it.
+- **Check** checks the command without running it and lists the check's
+  messages; `QAD5020` when it has errors.
+- **Prompt** (F4) builds the command from its definition: see below.
+
 ## Changing a password
 
 **Actions > Change Password...** changes the password of the signed-on profile

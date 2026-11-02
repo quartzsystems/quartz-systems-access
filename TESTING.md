@@ -99,6 +99,7 @@ on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 | `start-5250-printer`, `printer-session`, `printer-settings` | New with the printer session. No golden yet. |
 | `sign-on`, `change-password`, `message-system` | New: the QAP Sign On and Change Password dialogs, and a system's message shown as sent. No golden yet. |
 | `verify-connection` | New: Verify Connection. No golden yet. |
+| `run-command`, `run-command-results` | New: Run Command, empty and after runs and a check. No golden yet. |
 | `qsa-install`: `wizard-0-welcome`, `wizard-1-licence`, `wizard-2-install-for`, `wizard-3-location`, `wizard-4-options`, `wizard-5-ready`, `wizard-7-finish`, `uninstall`, `repair` | The licence text, the check box control, and no saved passwords in the Welcome, Uninstall and Repair text. |
 
 ## PDF goldens

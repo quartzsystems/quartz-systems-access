@@ -96,6 +96,11 @@ pub mod id {
     pub const QAP_VERSION_UNSUPPORTED: &str = "QAD4055";
     pub const UNEXPECTED_REPLY: &str = "QAD4060";
     pub const QAP_VERSION_NEEDED: &str = "QAD5001";
+    pub const COMMAND_COMPLETED: &str = "QAD5010";
+    pub const COMMAND_FAILED: &str = "QAD5011";
+    pub const COMMAND_CANCELLED: &str = "QAD5012";
+    pub const COMMAND_NOT_FOUND: &str = "QAD5013";
+    pub const COMMAND_HAS_ERRORS: &str = "QAD5020";
 }
 
 /// Errors in the catalogue itself.
@@ -265,7 +270,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 69] = [
+    const SEEDS: [&str; 74] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -335,6 +340,11 @@ mod tests {
         id::QAP_VERSION_UNSUPPORTED,
         id::UNEXPECTED_REPLY,
         id::QAP_VERSION_NEEDED,
+        id::COMMAND_COMPLETED,
+        id::COMMAND_FAILED,
+        id::COMMAND_CANCELLED,
+        id::COMMAND_NOT_FOUND,
+        id::COMMAND_HAS_ERRORS,
     ];
 
     #[test]

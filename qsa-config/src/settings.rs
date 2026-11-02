@@ -136,6 +136,76 @@ pub struct Settings {
     /// built-in defaults. `None`: the defaults.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub new_session_keymap: Option<crate::qsd::KeymapOverrides>,
+    /// Commands run with Run Command, by system name in lower case, oldest
+    /// first, at most [`COMMAND_HISTORY_MAX`] each. A command that names a
+    /// password is never kept ([`Settings::add_command`]).
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub command_history: std::collections::BTreeMap<String, Vec<String>>,
+}
+
+/// Commands Run Command keeps per system.
+pub const COMMAND_HISTORY_MAX: usize = 50;
+
+/// Whether a CL command string gives a parameter that holds a password
+/// (`PASSWORD(...)`, `PWD(...)`, `NEWPWD(...)`, `CURPWD(...)`, ...): its
+/// keyword contains `PASSWORD` or ends in `PWD` or `PW`.
+pub fn names_password(command: &str) -> bool {
+    password_keywords(command).next().is_some()
+}
+
+/// The byte ranges of the values of `command`'s password parameters.
+fn password_keywords(command: &str) -> impl Iterator<Item = (usize, usize)> + '_ {
+    let b = command.as_bytes();
+    let mut i = 0;
+    std::iter::from_fn(move || {
+        while i < b.len() {
+            if b[i] == b'(' {
+                let mut k = i;
+                while k > 0 && (b[k - 1].is_ascii_alphanumeric() || b[k - 1] == b'_') {
+                    k -= 1;
+                }
+                let kwd = command[k..i].to_ascii_uppercase();
+                let open = i;
+                // The value ends at the matching parenthesis, quotes kept.
+                let (mut depth, mut quoted, mut j) = (0usize, false, i);
+                while j < b.len() {
+                    match b[j] {
+                        b'\'' => quoted = !quoted,
+                        b'(' if !quoted => depth += 1,
+                        b')' if !quoted => {
+                            depth -= 1;
+                            if depth == 0 {
+                                break;
+                            }
+                        }
+                        _ => {}
+                    }
+                    j += 1;
+                }
+                i = j + 1;
+                if kwd.contains("PASSWORD") || kwd.ends_with("PWD") || kwd.ends_with("PW") {
+                    return Some((open + 1, j.min(b.len())));
+                }
+            } else {
+                i += 1;
+            }
+        }
+        None
+    })
+}
+
+/// `command` with the values of its password parameters replaced by `*`,
+/// for logs.
+pub fn redact_command(command: &str) -> String {
+    let mut out = String::with_capacity(command.len());
+    let mut at = 0;
+    for (from, to) in password_keywords(command) {
+        out.push_str(&command[at..from]);
+        out.push('*');
+        at = to;
+    }
+    out.push_str(&command[at..]);
+    out
 }
 
 impl Default for Settings {
@@ -149,6 +219,7 @@ impl Default for Settings {
             session_folders: Vec::new(),
             last_used: Default::default(),
             new_session_keymap: None,
+            command_history: Default::default(),
         }
     }
 }
@@ -171,6 +242,32 @@ pub fn same_path(a: &Path, b: &Path) -> bool {
 }
 
 impl Settings {
+    /// `system`'s Run Command history, oldest first.
+    pub fn commands(&self, system: &str) -> &[String] {
+        self.command_history
+            .get(&system.to_ascii_lowercase())
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// Keeps `command` as `system`'s newest, once, dropping the oldest past
+    /// [`COMMAND_HISTORY_MAX`]. A command that names a password is not kept.
+    /// False when nothing was kept.
+    pub fn add_command(&mut self, system: &str, command: &str) -> bool {
+        let command = command.trim();
+        if command.is_empty() || names_password(command) {
+            return false;
+        }
+        let list = self
+            .command_history
+            .entry(system.to_ascii_lowercase())
+            .or_default();
+        list.retain(|c| c != command);
+        list.push(command.to_owned());
+        let over = list.len().saturating_sub(COMMAND_HISTORY_MAX);
+        list.drain(..over);
+        true
+    }
+
     /// Puts `path` at the top of the recent sessions, keeping at most
     /// [`RECENT_MAX`].
     pub fn add_recent(&mut self, path: &Path) {
@@ -353,5 +450,43 @@ mod tests {
         assert!(check_device("1DSP").is_err());
         assert!(check_device("BAD.NAME").is_err());
         assert!(check_device("ELEVENCHARS").is_err());
+    }
+
+    #[test]
+    fn command_history_per_system() {
+        let mut s = Settings::default();
+        assert!(s.add_command("SYS1", "CRTLIB LIB(A)"));
+        assert!(s.add_command("sys1", "DSPLIB A"));
+        assert!(s.add_command("SYS1", "CRTLIB LIB(A)"));
+        assert_eq!(s.commands("Sys1"), ["DSPLIB A", "CRTLIB LIB(A)"]);
+        assert!(s.commands("other").is_empty());
+        for i in 0..60 {
+            s.add_command("SYS1", &format!("DLYJOB DLY({i})"));
+        }
+        assert_eq!(s.commands("SYS1").len(), COMMAND_HISTORY_MAX);
+        assert_eq!(s.commands("SYS1")[49], "DLYJOB DLY(59)");
+        assert_eq!(s.commands("SYS1")[0], "DLYJOB DLY(10)");
+        let text = toml::to_string(&s).unwrap();
+        let back: Settings = toml::from_str(&text).unwrap();
+        assert_eq!(back.commands("sys1"), s.commands("sys1"));
+    }
+
+    #[test]
+    fn a_command_that_names_a_password_is_not_kept_and_is_redacted() {
+        let mut s = Settings::default();
+        assert!(!s.add_command("SYS1", "CHGUSRPRF USRPRF(BOB) PASSWORD(SECRET1)"));
+        assert!(!s.add_command("SYS1", "CHGPWD CURPWD(A) NEWPWD(B)"));
+        assert!(!s.add_command("SYS1", "  "));
+        assert!(s.commands("SYS1").is_empty());
+        assert_eq!(
+            redact_command("CHGUSRPRF USRPRF(BOB) PASSWORD('a (b)') TEXT('x')"),
+            "CHGUSRPRF USRPRF(BOB) PASSWORD(*) TEXT('x')"
+        );
+        assert_eq!(
+            redact_command("chgpwd curpwd(A) newpwd(B)"),
+            "chgpwd curpwd(*) newpwd(*)"
+        );
+        assert_eq!(redact_command("CRTLIB LIB(QPWD)"), "CRTLIB LIB(QPWD)");
+        assert!(!names_password("CRTLIB LIB(QPWD)"));
     }
 }

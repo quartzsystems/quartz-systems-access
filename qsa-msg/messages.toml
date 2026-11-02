@@ -429,3 +429,33 @@ severity = 20
 text = "&1 needs QAP version &2; system &3 has version &4."
 cause = "&1 uses a QAP operation that QAP version &2 introduced. The QAP server on system &3 speaks version &4, so this program does not offer &1 for that system; nothing was sent to it."
 recovery = "Ask for system &3 to be upgraded to a QS/400 release whose QAP server speaks version &2 or later. Everything else works as before."
+
+[QAD5010]
+severity = 0
+text = "Command &1 completed."
+cause = "The system ran command &1 and it ended normally. Its messages are listed in Run Command's results, as the system sent them."
+recovery = "None needed."
+
+[QAD5011]
+severity = 30
+text = "Command &1 ended with an error."
+cause = "Command &1 ended with an escape message, the last of its messages in Run Command's results. A command that can run only interactively ends this way too: QAP runs commands in a batch connection job."
+recovery = "Select the escape message's ID to see its second-level text, correct the command and run it again. Run a command that can run only interactively from a 5250 display session."
+
+[QAD5012]
+severity = 10
+text = "Command &1 was cancelled."
+cause = "Cancel was selected while command &1 ran, and the system ended it. A command the system carries out in one piece finishes before it ends, so what it did may be done."
+recovery = "Check whether the command's work was done before running it again."
+
+[QAD5013]
+severity = 30
+text = "Command &1 not found."
+cause = "The system found no command &1 in the library list of the signed-on profile's job, or in the library named with it."
+recovery = "Check the command's name and library. Commands run with the library list of the signed-on profile's job description."
+
+[QAD5020]
+severity = 30
+text = "Command &1 has errors; see the messages."
+cause = "The system checked command &1 without running it and found errors. Its messages are listed as the system sent them."
+recovery = "Correct the parameters the messages name, then check or run the command again. Select a message's ID for its second-level text."

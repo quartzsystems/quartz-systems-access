@@ -8,8 +8,8 @@ QS/400 Access for Desktop is the native desktop client for QS/400, the operating
   from a fixed palette on every platform; the desktop theme is never read.
 - **UI text.** On Windows, the system's own Segoe UI. Elsewhere, the bundled
   Selawik.
-- **System output** (certificate fingerprints and PEM text): the bundled
-  Cascadia Mono, everywhere.
+- **System output** (certificate fingerprints and PEM text, Run Command's
+  command line): the bundled Cascadia Mono, everywhere.
 - **The 5250 grid** of display sessions: the QS/400 service console's font and
   palette, everywhere.
 
@@ -52,6 +52,11 @@ has ended or expired, or an operator ended it, and when the QAP server ends it
 says so and offers to reconnect. Releases before systems file version 4 could
 save passwords in the platform credential store; the first start after the
 upgrade deletes them.
+
+**Run Command** (General) runs CL commands on the selected system over its
+QAP session and lists every message each sent, as the system sent it, with
+the job it ran in; Prompt (F4), Check, Cancel and a per-system history are
+there too. `docs/connecting.md` has the details.
 
 **System Configurations > Verify...** checks the name lookup, the Telnet port
 (and its TLS when used), the QAP port, the TLS 1.3 handshake and certificate,
