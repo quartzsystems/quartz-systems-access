@@ -387,6 +387,29 @@ fn printer_output(
     p.window().clone()
 }
 
+/// The viewer on page `page` of the test system's file `name`, finding
+/// `find`.
+fn viewer(state: &Shared, name: &str, page: usize, find: &str) -> Window {
+    use qsaccess::splf::{model, viewer};
+    let data = {
+        let sys = qapd::testing::System::new();
+        let sp = sys.spool.lock().unwrap();
+        sp.files
+            .values()
+            .find(|f| f.id.file == name)
+            .expect("a test system file")
+            .data
+            .clone()
+    };
+    let options = model::scs_options(37, qsa_config::qsp::Paper::Letter);
+    let doc = scs::parse(&data, &options);
+    let st = state.borrow();
+    let system = st.systems.get("sys1.example.net").expect("fixture system");
+    let v = viewer::Viewer::build(system, name, options);
+    v.show_doc(doc, page, viewer::Zoom::FitWidth, find);
+    v.window.clone()
+}
+
 /// Output Queues on sys1.example.net: the test system's queues.
 fn output_queues(state: &Shared) -> Window {
     let sys = qapd::testing::System::new();
@@ -513,6 +536,15 @@ fn printer_output_views(state: &Shared) -> Vec<(String, Window)> {
             dialogs::build_summary(&done).window,
         ),
         ("output-queues".to_owned(), output_queues(state)),
+        ("viewer".to_owned(), viewer(state, "QSYSPRT", 0, "")),
+        (
+            "viewer-landscape".to_owned(),
+            viewer(state, "LANDSCAPE", 1, ""),
+        ),
+        (
+            "viewer-find".to_owned(),
+            viewer(state, "QPJOBLOG", 0, "TEST0"),
+        ),
     ]
 }
 

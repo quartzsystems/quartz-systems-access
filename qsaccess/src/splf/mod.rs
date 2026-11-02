@@ -22,6 +22,9 @@
 //!   and every refusal's message as the system sent it.
 //! - Reading runs on its own thread, a batch of pages at a time, with
 //!   progress in the status bar and Cancel beside it.
+//! - Open shows an SCS file in the viewer ([`viewer`]), its pages as they
+//!   arrive; another kind of file in the system's PDF viewer, from the
+//!   server's PDF in a temporary file.
 //! - Output Queues ([`queues`]): the system's queues; a double-click opens
 //!   this window on one.
 //! - Refresh, and Auto-refresh (Off, 15, 30 or 60 seconds): only while the
@@ -36,6 +39,7 @@ pub mod dialogs;
 pub mod model;
 pub mod output;
 pub mod queues;
+pub mod viewer;
 
 use std::cell::{Cell as StdCell, RefCell};
 use std::rc::Rc;
@@ -970,6 +974,16 @@ impl PrinterOutput {
         let Some(h) = self.handle() else { return };
         let format = purpose.format(&f);
         match Reading::start(&h, f, format) {
+            Ok(r)
+                if purpose == Purpose::Open
+                    && format == qap_client::proto::ops::spool::ReadFormat::Scs =>
+            {
+                let (sys, options) = {
+                    let st = self.st.borrow();
+                    (st.system.clone(), st.scs.clone())
+                };
+                viewer::open(self.parent(), &sys, options, r);
+            }
             Ok(r) => {
                 self.report(&r.line());
                 self.st.borrow_mut().reads.push((r, purpose));
@@ -1182,6 +1196,7 @@ pub fn pump() {
     let windows: Vec<Rc<PrinterOutput>> = WINDOWS.with(|v| v.borrow().clone());
     let open: Vec<bool> = windows.iter().map(|p| p.pump()).collect();
     queues::pump();
+    viewer::pump();
     WINDOWS.with(|v| {
         let mut v = v.borrow_mut();
         let mut i = 0;
@@ -1196,5 +1211,7 @@ pub fn pump() {
 
 /// Whether any Printer Output or Output Queues window is open.
 pub fn any_open() -> bool {
-    WINDOWS.with(|v| v.borrow().iter().any(|p| p.w.window.shown())) || queues::any_open()
+    WINDOWS.with(|v| v.borrow().iter().any(|p| p.w.window.shown()))
+        || queues::any_open()
+        || viewer::any_open()
 }

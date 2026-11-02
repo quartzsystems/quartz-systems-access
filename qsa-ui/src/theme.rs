@@ -529,30 +529,58 @@ fn font_dir() -> PathBuf {
     std::env::temp_dir().join(format!("quartz-access-fonts-{stamp:x}"))
 }
 
-fn load_fonts() -> Result<(), String> {
+/// Writes `data` to `file` in the font folder (once) and registers it with
+/// the process.
+fn register(file: &str, data: &[u8]) -> Result<(), String> {
     let dir = font_dir();
     std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
-    let mut failed = Vec::new();
-    for font in FONTS {
-        let path = dir.join(font.file);
-        let fresh = std::fs::metadata(&path)
-            .map(|m| m.len() == font.data.len() as u64)
-            .unwrap_or(false);
-        if !fresh {
-            // Write beside, then rename, so a second process never reads half a file.
-            let tmp = path.with_extension(format!("{}.tmp", std::process::id()));
-            if let Err(e) =
-                std::fs::write(&tmp, font.data).and_then(|()| std::fs::rename(&tmp, &path))
-            {
-                let _ = std::fs::remove_file(&tmp);
-                if !path.exists() {
-                    failed.push(format!("{}: {e}", font.file));
-                    continue;
-                }
+    let path = dir.join(file);
+    let fresh = std::fs::metadata(&path)
+        .map(|m| m.len() == data.len() as u64)
+        .unwrap_or(false);
+    if !fresh {
+        // Write beside, then rename, so a second process never reads half a file.
+        let tmp = path.with_extension(format!("{}.tmp", std::process::id()));
+        if let Err(e) = std::fs::write(&tmp, data).and_then(|()| std::fs::rename(&tmp, &path)) {
+            let _ = std::fs::remove_file(&tmp);
+            if !path.exists() {
+                return Err(format!("{file}: {e}"));
             }
         }
-        if let Err(e) = Font::load_font(&path) {
-            failed.push(format!("{}: {e}", font.file));
+    }
+    Font::load_font(&path)
+        .map(|_| ())
+        .map_err(|e| format!("{file}: {e}"))
+}
+
+/// Registers another bundled face with the process, as the UI faces are,
+/// and puts it in FLTK's font slot `slot`. `gdi_name` is its name on Windows
+/// (a style letter, then the family: `" Face"`, `"BFace"`, `"IFace"`),
+/// `pango_name` elsewhere (`"Face"`, `"Face Bold"`).
+pub fn load_face(
+    file: &str,
+    data: &[u8],
+    slot: Font,
+    gdi_name: &str,
+    pango_name: &str,
+) -> Result<(), String> {
+    register(file, data)?;
+    #[cfg(windows)]
+    let _ = pango_name;
+    #[cfg(windows)]
+    Font::set_font(slot, gdi_name);
+    #[cfg(not(windows))]
+    let _ = gdi_name;
+    #[cfg(not(windows))]
+    Font::set_font(slot, pango_name);
+    Ok(())
+}
+
+fn load_fonts() -> Result<(), String> {
+    let mut failed = Vec::new();
+    for font in FONTS {
+        if let Err(e) = register(font.file, font.data) {
+            failed.push(e);
             continue;
         }
         #[cfg(windows)]

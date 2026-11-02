@@ -30,7 +30,6 @@ use qsa_ui::{Status, StatusBar, controls};
 use crate::app::Shared;
 use crate::qap::{self, Handle};
 
-
 /// Window width and height.
 pub const W: i32 = 640;
 pub const H: i32 = 420;
