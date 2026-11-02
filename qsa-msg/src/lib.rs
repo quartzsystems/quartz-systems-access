@@ -102,6 +102,19 @@ pub mod id {
     pub const COMMAND_NOT_FOUND: &str = "QAD5013";
     pub const COMMAND_HAS_ERRORS: &str = "QAD5020";
     pub const AUTO_SIGNON_NEEDS_TLS: &str = "QAD5030";
+    pub const SPOOLED_FILES_LISTED: &str = "QAD6001";
+    pub const SPOOLED_FILE_HELD: &str = "QAD6002";
+    pub const SPOOLED_FILE_RELEASED: &str = "QAD6003";
+    pub const SPOOLED_FILE_DELETED: &str = "QAD6004";
+    pub const SPOOLED_FILE_MOVED: &str = "QAD6005";
+    pub const SPOOL_ACTIONS_FAILED: &str = "QAD6006";
+    pub const SPOOL_READING: &str = "QAD6010";
+    pub const SPOOL_READ_CANCELLED: &str = "QAD6011";
+    pub const SPOOLED_FILE_OPEN: &str = "QAD6012";
+    pub const SPOOL_FORMAT_NOT_POSSIBLE: &str = "QAD6013";
+    pub const REPLY_TOO_LARGE: &str = "QAD6014";
+    pub const SPOOL_SAVED: &str = "QAD6020";
+    pub const SPOOL_PRINTED: &str = "QAD6021";
 }
 
 /// Errors in the catalogue itself.
@@ -271,7 +284,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 75] = [
+    const SEEDS: [&str; 88] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -347,7 +360,131 @@ mod tests {
         id::COMMAND_NOT_FOUND,
         id::COMMAND_HAS_ERRORS,
         id::AUTO_SIGNON_NEEDS_TLS,
+        id::SPOOLED_FILES_LISTED,
+        id::SPOOLED_FILE_HELD,
+        id::SPOOLED_FILE_RELEASED,
+        id::SPOOLED_FILE_DELETED,
+        id::SPOOLED_FILE_MOVED,
+        id::SPOOL_ACTIONS_FAILED,
+        id::SPOOL_READING,
+        id::SPOOL_READ_CANCELLED,
+        id::SPOOLED_FILE_OPEN,
+        id::SPOOL_FORMAT_NOT_POSSIBLE,
+        id::REPLY_TOO_LARGE,
+        id::SPOOL_SAVED,
+        id::SPOOL_PRINTED,
     ];
+
+    #[test]
+    fn phase_6_texts() {
+        let t = |id: &str, args: &[&str]| message(id, args).text;
+        for (id, args, want) in [
+            (
+                id::SPOOLED_FILES_LISTED,
+                &["60", "SYS"][..],
+                "60 spooled files on SYS.",
+            ),
+            (
+                id::SPOOLED_FILE_HELD,
+                &["QSYSPRT"],
+                "Spooled file QSYSPRT held.",
+            ),
+            (
+                id::SPOOLED_FILE_RELEASED,
+                &["QSYSPRT"],
+                "Spooled file QSYSPRT released.",
+            ),
+            (
+                id::SPOOLED_FILE_DELETED,
+                &["QSYSPRT"],
+                "Spooled file QSYSPRT deleted.",
+            ),
+            (
+                id::SPOOLED_FILE_MOVED,
+                &["QSYSPRT", "QGPL/PRT01"],
+                "Spooled file QSYSPRT moved to QGPL/PRT01.",
+            ),
+            (
+                id::SPOOL_ACTIONS_FAILED,
+                &["2", "5"],
+                "2 of 5 actions failed; see the details.",
+            ),
+            (
+                id::SPOOL_READING,
+                &["QSYSPRT", "25", "30"],
+                "Reading QSYSPRT: page 25 of 30.",
+            ),
+            (
+                id::SPOOL_READ_CANCELLED,
+                &["QSYSPRT"],
+                "Reading QSYSPRT cancelled.",
+            ),
+            (
+                id::SPOOLED_FILE_OPEN,
+                &["OPENFILE"],
+                "Spooled file OPENFILE is still being written.",
+            ),
+            (
+                id::SPOOL_FORMAT_NOT_POSSIBLE,
+                &["AFPINV", "PDF"],
+                "Spooled file AFPINV cannot be shown as PDF.",
+            ),
+            (
+                id::REPLY_TOO_LARGE,
+                &["SYS"],
+                "Reply from SYS was larger than the program allows.",
+            ),
+            (
+                id::SPOOL_SAVED,
+                &["QSYSPRT", "C:\\out\\QSYSPRT.pdf"],
+                "QSYSPRT saved to C:\\out\\QSYSPRT.pdf.",
+            ),
+            (
+                id::SPOOL_PRINTED,
+                &["QSYSPRT", "Office"],
+                "QSYSPRT sent to printer Office.",
+            ),
+        ] {
+            assert_eq!(t(id, args), want, "{id}");
+            let m = message(id, args);
+            assert!(!m.cause.is_empty() && !m.recovery.is_empty(), "{id}");
+            // Every variable the text has is filled.
+            assert!(!m.text.contains('&'), "{id}");
+        }
+        // The second-level texts say what the case is.
+        let m = |id: &str, args: &[&str]| message(id, args);
+        assert!(
+            m(id::SPOOLED_FILES_LISTED, &["1", "S"])
+                .cause
+                .contains("page shown")
+        );
+        assert!(
+            m(id::SPOOL_ACTIONS_FAILED, &["1", "2"])
+                .cause
+                .contains("as it sent it")
+        );
+        assert!(
+            m(id::SPOOL_READ_CANCELLED, &["F"])
+                .cause
+                .contains("discarded")
+        );
+        assert!(m(id::REPLY_TOO_LARGE, &["S"]).cause.contains("64 MiB"));
+        assert!(m(id::REPLY_TOO_LARGE, &["S"]).cause.contains("resumes"));
+        assert!(
+            m(id::SPOOLED_FILE_OPEN, &["F"])
+                .recovery
+                .contains("Refresh")
+        );
+        assert!(
+            m(id::SPOOLED_FILE_HELD, &["F"])
+                .recovery
+                .contains("Release")
+        );
+        for id in [id::SPOOL_ACTIONS_FAILED, id::REPLY_TOO_LARGE] {
+            assert_eq!(m(id, &["1", "2"]).kind(), Kind::Error, "{id}");
+        }
+        assert_eq!(m(id::SPOOL_READ_CANCELLED, &["F"]).kind(), Kind::Warning);
+    }
 
     #[test]
     fn phase_5_texts() {

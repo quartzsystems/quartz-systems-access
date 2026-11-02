@@ -338,8 +338,8 @@ pub fn session(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) -> 
     state.borrow_mut().qap.signed_on_client(system)
 }
 
-/// What a version-2 function is called where the user sees it, for
-/// `QAD5001`.
+/// What a version-2 or version-3 function is called where the user sees
+/// it, for `QAD5001`.
 pub fn function_name(op: Op) -> &'static str {
     match op {
         Op::RunCommand => "Run Command",
@@ -347,6 +347,13 @@ pub fn function_name(op: Op) -> &'static str {
         Op::DescribeCommand => "Prompt",
         Op::PasswordStatus => "The password expiry warning",
         Op::TelnetTicket => "Automatic sign-on",
+        Op::ListSpooledFiles
+        | Op::ReadSpooledFile
+        | Op::HoldSpooledFile
+        | Op::ReleaseSpooledFile
+        | Op::DeleteSpooledFile
+        | Op::MoveSpooledFile
+        | Op::ListOutputQueues => "Printer Output",
         _ => "This function",
     }
 }
@@ -446,6 +453,9 @@ pub fn explain(system: &System, e: &Error) -> Explained {
         Error::Closed(Closed::Quietly) => m(id::SESSION_ENDED, &[sys]),
         Error::Closed(Closed::ByClient) => m(id::DISCONNECTED, &[sys]),
         Error::TimedOut => m(id::CONNECT_TIMED_OUT, &[sys]),
+        Error::ReplyTooLarge | Error::Closed(Closed::ReplyTooLarge(_)) => {
+            m(id::REPLY_TOO_LARGE, &[sys])
+        }
         e => m(id::UNEXPECTED_REPLY, &["QAP", sys, &e.to_string()]),
     };
     Explained {
@@ -748,6 +758,12 @@ mod tests {
             ids(Error::Closed(Closed::ServerEnding)),
             id::QAP_SERVER_ENDING
         );
+        assert_eq!(ids(Error::ReplyTooLarge), id::REPLY_TOO_LARGE);
+        assert_eq!(
+            explain(&s, &Error::ReplyTooLarge).message.text,
+            "Reply from qs400.example.net was larger than the program allows."
+        );
+        assert_eq!(function_name(Op::ReadSpooledFile), "Printer Output");
         assert_eq!(
             ids(Error::Status {
                 status: Status::SessionExpired,

@@ -465,3 +465,81 @@ severity = 10
 text = "Automatic sign-on needs Telnet over TLS."
 cause = "Automatic sign-on sends a one-time QAP ticket, and QS/400 accepts one only over a Telnet connection that uses TLS. This session does not use TLS, so it shows the system's sign-on display."
 recovery = "To sign on automatically, select Use TLS in Session Properties; the system's Telnet server must have a certificate this computer trusts."
+
+[QAD6001]
+severity = 0
+text = "&1 spooled files on &2."
+cause = "The Printer Output list shows the spooled files on system &2 that match the filter: &1 in all, a page at a time. Clicking a column heading sorts the page shown, not the whole list."
+recovery = "None needed. Change the filter and select Go to list other files. Select Refresh, or set Auto-refresh, to see files that arrived since."
+
+[QAD6002]
+severity = 0
+text = "Spooled file &1 held."
+cause = "Spooled file &1 was held on the system: it is not printed until it is released. A file being printed when it was held stops immediately or at the end of the current page, as chosen."
+recovery = "To print it, select it and select Release."
+
+[QAD6003]
+severity = 0
+text = "Spooled file &1 released."
+cause = "Spooled file &1 was released: it prints when a writer for its output queue reaches it."
+recovery = "None needed. If it does not print, check in Output Queues that a writer is attached to its queue and that the queue is not held."
+
+[QAD6004]
+severity = 0
+text = "Spooled file &1 deleted."
+cause = "Spooled file &1 was deleted from the system, with its data."
+recovery = "None needed. A deleted spooled file cannot be brought back; run the job that made it again to make it again."
+
+[QAD6005]
+severity = 0
+text = "Spooled file &1 moved to &2."
+cause = "Spooled file &1 is now on output queue &2, at the end of the queue or at its top, as chosen. It prints when a writer for that queue reaches it."
+recovery = "None needed."
+
+[QAD6006]
+severity = 30
+text = "&1 of &2 actions failed; see the details."
+cause = "An action was asked for on &2 spooled files, one request each, and the system refused &1 of them. The summary lists every file, and for each refusal the system's message as it sent it."
+recovery = "Select a refusal's message ID for its second-level text, correct what it names, refresh the list, then try the action again on those files."
+
+[QAD6010]
+severity = 0
+text = "Reading &1: page &2 of &3."
+cause = "Spooled file &1 is being read from the system a batch of pages at a time: &2 of its &3 pages have arrived. The pages that have arrived can be looked at while the rest arrive."
+recovery = "None needed. Select Cancel to stop reading; the pages read so far stay."
+
+[QAD6011]
+severity = 10
+text = "Reading &1 cancelled."
+cause = "Cancel was selected while spooled file &1 was being read. The system was asked to stop the batch it was reading, and what it sent for that batch was discarded. Pages read before it stay."
+recovery = "Open or save the file again to read all of it."
+
+[QAD6012]
+severity = 20
+text = "Spooled file &1 is still being written."
+cause = "Spooled file &1 is still open: the program making it has not closed it, so its pages cannot be read yet. The system sent no message of its own for this."
+recovery = "Wait for the job that makes the file to close it, select Refresh, and open the file again."
+
+[QAD6013]
+severity = 20
+text = "Spooled file &1 cannot be shown as &2."
+cause = "The system cannot make &2 of spooled file &1 from the kind of data the file holds, and sent no message of its own saying why."
+recovery = "Look at the file from a 5250 display session (WRKSPLF, option 5), or print it on a printer device that takes its kind of data."
+
+[QAD6014]
+severity = 30
+text = "Reply from &1 was larger than the program allows."
+cause = "A reply from system &1 grew past 64 MiB, more than this program joins into one reply. It was discarded and the connection was closed; the session resumes on the next connection."
+recovery = "Ask for less at a time. Spooled files are read a batch of pages at a time; if one batch is this large, keep the program's log and report the problem."
+
+[QAD6020]
+severity = 0
+text = "&1 saved to &2."
+cause = "Spooled file &1 was read from the system and written to &2."
+recovery = "None needed."
+
+[QAD6021]
+severity = 0
+text = "&1 sent to printer &2."
+cause = "Spooled file &1 was read from the system and sent to printer &2 on this computer, laid out as a 5250 printer session prints it."
+recovery = "None needed. If it does not print, check printer &2 on this computer."
