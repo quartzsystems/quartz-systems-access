@@ -9,7 +9,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use fltk::app;
-use fltk::enums::{Align, FrameType};
+use fltk::enums::Align;
 use fltk::frame::Frame;
 use fltk::input::{Input, SecretInput};
 use fltk::prelude::*;
@@ -83,11 +83,7 @@ impl InputBox {
         text.set_label_size(theme::UI_SIZE);
         let fy = m + 24;
         let field = if self.hidden {
-            let mut i = SecretInput::new(m, fy, w - 2 * m, theme::FIELD_H, None);
-            i.set_frame(FrameType::DownBox);
-            i.set_color(colors::WINDOW);
-            i.set_text_size(theme::UI_SIZE);
-            i.set_selection_color(colors::SELECTION);
+            let mut i = controls::secret_field(m, fy, w - 2 * m, theme::FIELD_H);
             i.set_value(&self.value);
             Field::Hidden(i)
         } else {

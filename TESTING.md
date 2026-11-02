@@ -64,6 +64,7 @@ blessed.
 | View | Changed by |
 |---|---|
 | `properties-ports` (Windows, X11, Wayland) | Systems file version 3: Telnet and QAP ports replace the host-server ports and Port lookup. |
+| `sign-on`, `change-password`, `message-system` (Windows, X11, Wayland) | New: the QAP Sign On and Change Password dialogs, and a system's message shown as sent. No golden yet. |
 
 ## PDF goldens
 

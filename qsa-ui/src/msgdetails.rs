@@ -4,6 +4,10 @@
 
 //! Showing `QAD` messages: a small message box with a Details... button, and
 //! the message details dialog with Message, Cause and Recovery, in that order.
+//!
+//! A message the system sent ([`SystemMessage`]) is shown as it came: its
+//! first-level text in the box, its second-level text in the details dialog,
+//! neither reworded nor split.
 
 use fltk::app;
 use fltk::draw;
@@ -33,6 +37,42 @@ pub fn glyph_for(m: &Message) -> Option<Glyph> {
 
 /// Builds the details dialog for `m`. It is not shown.
 pub fn details_window(m: &Message) -> Window {
+    details(
+        &m.id,
+        m.severity,
+        &[
+            ("Message", &m.text),
+            ("Cause", &m.cause),
+            ("Recovery", &m.recovery),
+        ],
+    )
+}
+
+/// A message from the system (a QS/400 message ID such as `CPF1107`), with
+/// its text already substituted by the system.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct SystemMessage<'a> {
+    pub id: &'a str,
+    pub severity: u8,
+    /// First level.
+    pub text: &'a str,
+    /// Second level, as the system sent it.
+    pub help: &'a str,
+}
+
+/// Builds the details dialog for a system's message: its first and second
+/// level as sent. It is not shown.
+pub fn system_details_window(m: &SystemMessage) -> Window {
+    let help = if m.help.trim().is_empty() {
+        "The system sent no second-level text."
+    } else {
+        m.help
+    };
+    details(m.id, m.severity, &[("Message", m.text), ("Help", help)])
+}
+
+/// The details dialog: the ID and severity, then each section in a group.
+fn details(id: &str, severity: u8, sections: &[(&str, &str)]) -> Window {
     let w = DETAILS_W;
     let margin = 10;
     let inner = w - 2 * margin - 2 * CONTENT_SIDE;
@@ -41,11 +81,7 @@ pub fn details_window(m: &Message) -> Window {
     draw::set_font(theme::UI_FONT, theme::UI_SIZE);
     let section_h = |text: &str| draw::wrap_measure(text, wrap, false).1.max(14);
     let fit = |t: &str| crate::msgbox::break_long_words(t, wrap, draw::width);
-    let sections = [
-        ("Message", fit(&m.text)),
-        ("Cause", fit(&m.cause)),
-        ("Recovery", fit(&m.recovery)),
-    ];
+    let sections: Vec<(&str, String)> = sections.iter().map(|(t, s)| (*t, fit(s))).collect();
     let heights: Vec<i32> = sections.iter().map(|(_, t)| section_h(t)).collect();
     let mut h = margin + 20 + 6;
     for sh in &heights {
@@ -54,16 +90,16 @@ pub fn details_window(m: &Message) -> Window {
     h += theme::BUTTON_H + margin;
 
     let mut win = Window::new(0, 0, w, h, None);
-    win.set_label(&format!("Message Details - {}", m.id));
+    win.set_label(&format!("Message Details - {id}"));
     win.set_color(colors::FACE);
     win.make_modal(true);
 
     let mut y = margin;
     controls::label(margin, y, 70, 20, "Message ID:");
-    let mut id = controls::label(margin + 70, y, 90, 20, &m.id);
+    let mut id = controls::label(margin + 70, y, 90, 20, id);
     id.set_label_font(theme::UI_FONT_BOLD);
     controls::label(margin + 180, y, 60, 20, "Severity:");
-    controls::label(margin + 240, y, 40, 20, &format!("{:02}", m.severity));
+    controls::label(margin + 240, y, 40, 20, &format!("{severity:02}"));
     y += 20 + 6;
 
     for ((title, text), sh) in sections.iter().zip(&heights) {
@@ -93,7 +129,10 @@ pub fn details_window(m: &Message) -> Window {
 
 /// Shows the details dialog for `m` and waits until it is closed.
 pub fn show_details(parent: Option<&dyn WindowExt>, m: &Message) {
-    let mut win = details_window(m);
+    run_details(parent, details_window(m));
+}
+
+fn run_details(parent: Option<&dyn WindowExt>, mut win: Window) {
     center_on(&mut win, parent);
     crate::propdialog::show_placed(&mut win);
     while win.shown() {
@@ -120,4 +159,91 @@ pub fn show_message(parent: Option<&dyn WindowExt>, m: &Message) {
     while message_box(m).run(parent) == 1 {
         show_details(parent, m);
     }
+}
+
+/// The small message box for `m` with `buttons` and Details... after them,
+/// until one of `buttons` is chosen; its index. Escape chooses the last.
+pub fn ask_message(parent: Option<&dyn WindowExt>, m: &Message, buttons: &[&str]) -> usize {
+    let mut labels: Vec<&str> = buttons.to_vec();
+    labels.push("Details...");
+    let last = buttons.len().saturating_sub(1);
+    loop {
+        let mb = MessageBox::new(
+            "QS/400 Access for Desktop",
+            &format!(
+                "{}
+
+Message ID: {}",
+                m.text, m.id
+            ),
+        )
+        .buttons(&labels, 0, last);
+        let mb = match glyph_for(m) {
+            Some(g) => mb.glyph(g),
+            None => mb,
+        };
+        let i = mb.run(parent);
+        if i < buttons.len() {
+            return i;
+        }
+        show_details(parent, m);
+    }
+}
+
+/// The message box for a system's message: this program's own message about
+/// it first when there is one (`context`), then the system's first-level text
+/// and ID as sent, with `buttons` and Details... after them.
+pub fn system_message_box(
+    context: Option<&Message>,
+    m: &SystemMessage,
+    buttons: &[&str],
+) -> MessageBox {
+    let text = match context {
+        Some(c) => format!(
+            "{} ({})
+
+{}
+
+Message ID: {}",
+            c.text, c.id, m.text, m.id
+        ),
+        None => format!(
+            "{}
+
+Message ID: {}",
+            m.text, m.id
+        ),
+    };
+    let mut labels: Vec<&str> = buttons.to_vec();
+    labels.push("Details...");
+    let last = buttons.len().saturating_sub(1);
+    let mb = MessageBox::new("QS/400 Access for Desktop", &text).buttons(&labels, 0, last);
+    let error = context.map_or(m.severity >= 20, |c| c.kind() == Kind::Error);
+    if error { mb.glyph(Glyph::Cross) } else { mb }
+}
+
+/// Shows [`system_message_box`] until one of `buttons` is chosen (Details...
+/// opens the system's second-level text) and returns its index.
+pub fn ask_system_message(
+    parent: Option<&dyn WindowExt>,
+    context: Option<&Message>,
+    m: &SystemMessage,
+    buttons: &[&str],
+) -> usize {
+    loop {
+        let i = system_message_box(context, m, buttons).run(parent);
+        if i < buttons.len() {
+            return i;
+        }
+        run_details(parent, system_details_window(m));
+    }
+}
+
+/// Shows a system's message with OK.
+pub fn show_system_message(
+    parent: Option<&dyn WindowExt>,
+    context: Option<&Message>,
+    m: &SystemMessage,
+) {
+    ask_system_message(parent, context, m, &["OK"]);
 }

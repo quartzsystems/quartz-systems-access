@@ -3,7 +3,7 @@
 // root directory of this project.
 
 //! Certificate trust for every connection the application makes: 5250
-//! display and printer sessions, and the host servers. What to trust comes
+//! display and printer sessions, and QAP. What to trust comes
 //! from the system configuration ([`for_system`]); a certificate that does
 //! not verify goes through one dialog flow ([`ask_and_trust`]), which adds
 //! it to the system's CA list when the user says so.

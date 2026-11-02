@@ -217,6 +217,19 @@ fn long_path_message() -> Window {
     qsa_ui::msgdetails::message_box(&m).build().0
 }
 
+/// A refusal from the system's password validation program, as sent.
+fn system_message() -> Window {
+    let m = qsa_ui::msgdetails::SystemMessage {
+        id: "CPF22C6",
+        severity: 40,
+        text: "Password validation program PWDVLDPGM in QGPL rejected the new password.",
+        help: "",
+    };
+    qsa_ui::msgdetails::system_message_box(None, &m, &["OK"])
+        .build()
+        .0
+}
+
 /// A printer session on sys1.example.net, device QSAPRT01.
 fn printer_file(state: &Shared) -> qsa_config::qsp::PrinterFile {
     let st = state.borrow();
@@ -353,6 +366,19 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     ));
     out.push(("macro-editor".to_owned(), macro_editor()));
     out.push(("macro-step".to_owned(), macro_step()));
+    out.push((
+        "sign-on".to_owned(),
+        qsaccess::signon::build("sys1.example.net", "QSECOFR")
+            .0
+            .window,
+    ));
+    out.push((
+        "change-password".to_owned(),
+        qsaccess::chgpwd::build("sys1.example.net", "QSECOFR", true)
+            .0
+            .window,
+    ));
+    out.push(("message-system".to_owned(), system_message()));
     out.push((
         "run-macro".to_owned(),
         qsaccess::macros::build_run(

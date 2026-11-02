@@ -173,7 +173,13 @@ impl Ui {
         match index {
             Some(i) => {
                 let name = st.systems.as_slice()[i].name.clone();
-                status.set_status(&format!("{name}: Not connected"), Status::Error);
+                drop(st);
+                match crate::qap::signed_on(&self.state, &name) {
+                    Some(p) => {
+                        status.set_status(&format!("{name}: Signed on as {p}"), Status::Active)
+                    }
+                    None => status.set_status(&format!("{name}: Not connected"), Status::Error),
+                }
             }
             None => status.set_status("No system configured", Status::Neutral),
         }
@@ -276,6 +282,9 @@ pub enum Action {
     About,
     Exit,
     SystemChanged,
+    SignOn,
+    ChangePassword,
+    SignOff,
 }
 
 impl Ui {
@@ -306,7 +315,42 @@ impl Ui {
                 }
                 self.refresh_systems();
             }
+            Action::SignOn | Action::ChangePassword | Action::SignOff => self.qap(action),
         }
+    }
+
+    /// Sign On, Change Password and Sign Off, for the selected system.
+    fn qap(&self, action: Action) {
+        if self.state.borrow().systems.is_empty() {
+            crate::sysconfig::open(self);
+        }
+        let Some(system) = self.selected_system() else {
+            return;
+        };
+        let signed_on = crate::qap::signed_on(&self.state, &system);
+        match action {
+            Action::SignOn => match signed_on {
+                Some(p) => self.report(&qsa_msg::message(qsa_msg::id::SIGNON_OK, &[&system, &p])),
+                None => {
+                    if crate::signon::run(self.parent(), &self.state, &system)
+                        && let Some(p) = crate::qap::signed_on(&self.state, &system)
+                    {
+                        self.report(&qsa_msg::message(qsa_msg::id::SIGNON_OK, &[&system, &p]));
+                    }
+                }
+            },
+            Action::ChangePassword => {
+                if crate::chgpwd::run(self.parent(), &self.state, &system, None, None) {
+                    let user = crate::qap::signed_on(&self.state, &system).unwrap_or_default();
+                    self.report(&qsa_msg::message(
+                        qsa_msg::id::PASSWORD_CHANGED,
+                        &[&user, &system],
+                    ));
+                }
+            }
+            _ => crate::qap::sign_off(self, &system),
+        }
+        self.refresh_systems();
     }
 }
 
@@ -356,6 +400,27 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
         Shortcut::None | Key::F5,
         Action::Refresh,
     );
+    add(
+        &mut menu,
+        "&Actions/Sign &On...",
+        Shortcut::None,
+        Action::SignOn,
+    );
+    add(
+        &mut menu,
+        "&Actions/&Change Password...",
+        Shortcut::None,
+        Action::ChangePassword,
+    );
+    add(
+        &mut menu,
+        "&Actions/Sign O&ff",
+        Shortcut::None,
+        Action::SignOff,
+    );
+    if let Some(mut item) = menu.find_item("&Actions/Sign O&ff") {
+        item.set_flag(MenuFlag::MenuDivider);
+    }
     for task in [
         Task::Display5250,
         Task::Printer5250,

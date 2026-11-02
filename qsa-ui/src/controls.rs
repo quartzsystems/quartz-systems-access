@@ -12,7 +12,7 @@ use fltk::button::{Button, CheckButton, RadioRoundButton};
 use fltk::draw;
 use fltk::enums::{Align, Event, FrameType, Key, Shortcut};
 use fltk::frame::Frame;
-use fltk::input::Input;
+use fltk::input::{Input, SecretInput};
 use fltk::menu::Choice;
 use fltk::prelude::*;
 
@@ -70,6 +70,16 @@ pub fn label(x: i32, y: i32, w: i32, h: i32, text: &str) -> Frame {
 /// A single-line text field: sunken, white.
 pub fn field(x: i32, y: i32, w: i32, h: i32) -> Input {
     let mut i = Input::new(x, y, w, h, None);
+    i.set_frame(FrameType::DownBox);
+    i.set_color(colors::WINDOW);
+    i.set_text_size(theme::UI_SIZE);
+    i.set_selection_color(colors::SELECTION);
+    i
+}
+
+/// A password field: like [`field`], showing dots for what is typed.
+pub fn secret_field(x: i32, y: i32, w: i32, h: i32) -> SecretInput {
+    let mut i = SecretInput::new(x, y, w, h, None);
     i.set_frame(FrameType::DownBox);
     i.set_color(colors::WINDOW);
     i.set_text_size(theme::UI_SIZE);

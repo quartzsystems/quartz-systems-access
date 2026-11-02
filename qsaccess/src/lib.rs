@@ -7,6 +7,7 @@
 
 pub mod about;
 pub mod app;
+pub mod chgpwd;
 pub mod files;
 pub mod ipc;
 pub mod localtime;
@@ -17,10 +18,12 @@ pub mod manager;
 pub mod open;
 pub mod printer;
 pub mod properties;
+pub mod qap;
 pub mod recent;
 pub mod request;
 pub mod session;
 pub mod shell;
+pub mod signon;
 pub mod sysconfig;
 pub mod trust;
 

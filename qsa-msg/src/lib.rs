@@ -82,12 +82,20 @@ pub mod id {
     pub const SIGNON_FAILED: &str = "QAD4021";
     pub const PASSWORD_EXPIRED: &str = "QAD4022";
     pub const PASSWORD_CHANGED: &str = "QAD4023";
+    pub const SESSION_ENDED_BY_OPERATOR: &str = "QAD4024";
+    pub const QAP_SERVER_ENDING: &str = "QAD4025";
+    pub const QAP_SESSION_EXPIRED: &str = "QAD4026";
+    pub const PASSWORDS_DIFFER: &str = "QAD4027";
+    pub const SIGNED_OFF: &str = "QAD4028";
     pub const PASSWORD_NOT_SAVED: &str = "QAD4030";
     pub const PASSWORD_EXPIRES_SOON: &str = "QAD4031";
     pub const AUTO_SIGNON_REFUSED: &str = "QAD4040";
     pub const VERIFIED: &str = "QAD4050";
     pub const VERIFIED_WITH_WARNINGS: &str = "QAD4051";
     pub const VERIFY_FAILED: &str = "QAD4052";
+    pub const QAP_NOT_REACHED: &str = "QAD4053";
+    pub const QAP_TLS_FAILED: &str = "QAD4054";
+    pub const QAP_VERSION_UNSUPPORTED: &str = "QAD4055";
     pub const UNEXPECTED_REPLY: &str = "QAD4060";
 }
 
@@ -258,7 +266,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 62] = [
+    const SEEDS: [&str; 70] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -314,12 +322,20 @@ mod tests {
         id::SIGNON_FAILED,
         id::PASSWORD_EXPIRED,
         id::PASSWORD_CHANGED,
+        id::SESSION_ENDED_BY_OPERATOR,
+        id::QAP_SERVER_ENDING,
+        id::QAP_SESSION_EXPIRED,
+        id::PASSWORDS_DIFFER,
+        id::SIGNED_OFF,
         id::PASSWORD_NOT_SAVED,
         id::PASSWORD_EXPIRES_SOON,
         id::AUTO_SIGNON_REFUSED,
         id::VERIFIED,
         id::VERIFIED_WITH_WARNINGS,
         id::VERIFY_FAILED,
+        id::QAP_NOT_REACHED,
+        id::QAP_TLS_FAILED,
+        id::QAP_VERSION_UNSUPPORTED,
         id::UNEXPECTED_REPLY,
     ];
 

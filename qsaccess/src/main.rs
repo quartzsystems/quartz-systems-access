@@ -166,6 +166,7 @@ fn main() {
         qsaccess::printer::pump();
         qsaccess::manager::pump();
         qsaccess::macros::editor::pump();
+        qsaccess::qap::pump(&ui);
         ui.refresh_recent();
         while let Ok(received) = args_rx.try_recv() {
             qsaccess::log!("request from another instance: {received:?}");
