@@ -9,8 +9,8 @@
 //!   [`qsa_config::settings::COMMAND_HISTORY_MAX`] commands per system (settings.toml) on Up and
 //!   Down. A command that names a password is never kept, and is logged
 //!   with that value masked.
-//! - Prompt (F4) builds the command from its definition; Check checks it
-//!   without running it; Run runs it; Cancel ends it while
+//! - Prompt (F4) builds the command from its definition ([`crate::prompt`]);
+//!   Check checks it without running it; Run runs it; Cancel ends it while
 //!   it runs (QAP `Cancel`); Clear empties the results.
 //! - Each run adds to the results: the command, then the job it ran in and
 //!   every message it sent, as the system sent them. A message's ID opens
@@ -415,8 +415,17 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
                     d.status.set(&m.to_string(), Status::Error);
                     continue;
                 }
-                let m = qsa_msg::message(id::NOT_AVAILABLE, &[]);
-                d.status.set(&m.to_string(), Status::Neutral);
+                let typed = d.command.value();
+                let parent = Some(&d.window as &dyn WindowExt);
+                match crate::prompt::run(parent, state, &sys, &h, &typed) {
+                    crate::prompt::Prompted::Built(command) => {
+                        d.command.set_value(&command);
+                        d.status.set("", Status::Neutral);
+                    }
+                    crate::prompt::Prompted::Cancelled => {}
+                    crate::prompt::Prompted::Failed(text) => d.status.set(&text, Status::Error),
+                }
+                let _ = d.command.take_focus();
             }
             Some(Request::Clear) if running.is_none() => {
                 lines.clear();

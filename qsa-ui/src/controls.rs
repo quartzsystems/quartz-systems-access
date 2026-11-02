@@ -14,6 +14,7 @@ use fltk::enums::{Align, Event, FrameType, Key, Shortcut};
 use fltk::frame::Frame;
 use fltk::input::{Input, SecretInput};
 use fltk::menu::Choice;
+use fltk::misc::InputChoice;
 use fltk::prelude::*;
 
 use crate::theme::{self, colors};
@@ -75,6 +76,26 @@ pub fn field(x: i32, y: i32, w: i32, h: i32) -> Input {
     i.set_text_size(theme::UI_SIZE);
     i.set_selection_color(colors::SELECTION);
     i
+}
+
+/// An editable combo: a field to type in, as [`field`], with a button at
+/// the right that drops down values to pick.
+pub fn editable_combo(x: i32, y: i32, w: i32, h: i32) -> InputChoice {
+    let mut c = InputChoice::new(x, y, w, h, None);
+    c.set_frame(FrameType::DownBox);
+    c.set_color(colors::WINDOW);
+    c.set_text_size(theme::UI_SIZE);
+    c.set_selection_color(colors::SELECTION);
+    let mut i = c.input();
+    i.set_frame(FrameType::FlatBox);
+    i.set_color(colors::WINDOW);
+    i.set_selection_color(colors::SELECTION);
+    let mut b = c.menu_button();
+    b.set_frame(FrameType::FlatBox);
+    b.set_color(colors::BUTTON);
+    b.set_text_size(theme::UI_SIZE);
+    b.set_selection_color(colors::HOVER);
+    c
 }
 
 /// A password field: like [`field`], showing dots for what is typed.

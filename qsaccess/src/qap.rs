@@ -24,6 +24,7 @@ use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fltk::app;
 use fltk::prelude::*;
+use qap_client::proto::ops::command::CommandDefinition;
 use qap_client::proto::{Op, ServerMessage};
 use qap_client::{Client, Closed, Error, Notice, Status, Target};
 use qsa_config::{AddressLookup, System};
@@ -67,6 +68,9 @@ struct Entry {
     /// The signed-on profile as the GUI thread last saw it, for when
     /// another thread holds the client.
     profile: Option<String>,
+    /// Command definitions Prompt asked for in this session, by
+    /// `LIBRARY/NAME` as asked, with the profile they were asked as.
+    definitions: HashMap<String, (String, CommandDefinition)>,
 }
 
 /// Every system's client in this process.
@@ -93,9 +97,30 @@ impl Registry {
             Entry {
                 client: Arc::clone(&client),
                 profile: None,
+                definitions: HashMap::new(),
             },
         );
         client
+    }
+
+    /// A command definition kept for `system`'s session, if this session
+    /// (the same profile, signed on since) asked for it.
+    pub fn definition(&mut self, system: &str, key_: &str) -> Option<CommandDefinition> {
+        let profile = self.profile(system)?;
+        let e = self.map.get(&key(system))?;
+        let (asked_as, def) = e.definitions.get(&key_.to_ascii_uppercase())?;
+        (*asked_as == profile).then(|| def.clone())
+    }
+
+    /// Keeps a command definition for `system`'s session.
+    pub fn keep_definition(&mut self, system: &str, key_: &str, def: CommandDefinition) {
+        let Some(profile) = self.profile(system) else {
+            return;
+        };
+        if let Some(e) = self.map.get_mut(&key(system)) {
+            e.definitions
+                .insert(key_.to_ascii_uppercase(), (profile, def));
+        }
     }
 
     /// The client for `system` if it is signed on. A client busy on

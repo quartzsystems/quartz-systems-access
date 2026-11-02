@@ -96,6 +96,31 @@ fn the_profile_is_what_was_last_seen_while_a_tool_holds_the_client() {
 }
 
 #[test]
+fn command_definitions_are_kept_for_the_session_only() {
+    use qap_client::proto::types::ObjectName;
+    let s = start(cfg());
+    let sys = system(&s);
+    let mut r = Registry::default();
+    assert!(r.definition("127.0.0.1", "*LIBL/CRTLIB").is_none());
+    signed_on(&mut r, &sys);
+    let h = r.signed_on_client("127.0.0.1").unwrap();
+    let def = lock(&h)
+        .describe_command(ObjectName {
+            library: "*LIBL".into(),
+            name: "CRTLIB".into(),
+        })
+        .unwrap();
+    assert_eq!(def.text, "Create Library");
+    r.keep_definition("127.0.0.1", "*libl/crtlib", def.clone());
+    assert_eq!(r.definition("127.0.0.1", "*LIBL/CRTLIB"), Some(def));
+    // A new session starts without them.
+    lock(&h).sign_off().unwrap();
+    assert!(r.definition("127.0.0.1", "*LIBL/CRTLIB").is_none());
+    signed_on(&mut r, &sys);
+    assert!(r.definition("127.0.0.1", "*LIBL/CRTLIB").is_none());
+}
+
+#[test]
 fn a_client_not_signed_on_follows_the_configuration() {
     let s = start(cfg());
     let mut sys = system(&s);

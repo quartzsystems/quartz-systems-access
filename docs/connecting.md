@@ -119,7 +119,38 @@ and only Close works.
   messages, so none are listed for it.
 - **Check** checks the command without running it and lists the check's
   messages; `QAD5020` when it has errors.
-- **Prompt** (F4) builds the command from its definition: see below.
+- **Prompt** (F4) builds the command from its definition, below.
+
+### Prompt
+
+Prompt (F4, or the Prompt button) asks the system for the command's
+definition (`DescribeCommand`, with any `CHGCMDDFT` defaults applied, as F4
+on a 5250 display shows them) and shows it as a form titled with the
+command's text and name. Definitions are kept for the rest of the session.
+Values already typed on the command line are filled in.
+
+- One row per parameter: its prompt text, keyword and a value field as long
+  as the value may be, with the default filled in. Special values and the
+  values allowed are in an editable list. Required parameters are in bold.
+- A qualified name's parts (name, then library) are indented rows under the
+  parameter; a parameter made of elements shows them as a group of rows. A
+  parameter that takes a list shows one value and a **+** button for
+  another, up to the most it takes.
+- **Additional Parameters** (F10) shows the parameters the system keeps
+  out of the first view. Constants are never shown.
+- **?** on a row, or F1 in its field, shows that value's help; **Help** shows
+  the command's. QS/400 ships no help text for commands yet, so these show
+  the prompt text and the values allowed, with a note that no help is
+  available.
+- **Show Command String** writes the command the form makes: only values
+  that differ from their defaults, in the definition's order; a qualified
+  name as `LIB/NAME`, without the library when it is the default `*LIBL`;
+  elements in parentheses; list values separated by blanks; text quoted
+  where CL needs it.
+- **OK** checks the command first (`CheckCommand`). Errors are listed in the
+  dialog with `QAD5020` and it stays open; a command without errors goes to
+  the command line, ready to run. **Cancel** keeps nothing.
+- The parameters scroll inside the dialog; it never grows past the screen.
 
 ## Changing a password
 

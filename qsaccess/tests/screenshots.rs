@@ -374,6 +374,78 @@ fn run_command_results() -> Window {
     .window
 }
 
+/// A Prompt form for one of QS/400's test commands.
+fn prompt_form(name: &str) -> qsaccess::prompt::form::Form {
+    let c = qapd::testing::commands::find(name).expect("a test command");
+    qsaccess::prompt::form::Form::new(qapd::testing::commands::definition(c))
+}
+
+/// Node `kwd`'s index, or its `nth` child's.
+fn node(f: &qsaccess::prompt::form::Form, kwd: &str, nth: Option<usize>) -> u16 {
+    let p = f
+        .parameters()
+        .find(|p| p.keyword == kwd)
+        .expect("a parameter")
+        .index;
+    match nth {
+        Some(n) => f.children(p).nth(n).expect("a child").index,
+        None => p,
+    }
+}
+
+/// The Prompt views: (name, window).
+fn prompt_views() -> Vec<(String, Window)> {
+    use qsaccess::prompt;
+    let mut out = Vec::new();
+    let f = prompt_form("CRTLIB");
+    out.push(("prompt-simple".to_owned(), prompt::build(&f, false).window));
+
+    let mut f = prompt_form("DSPOBJD");
+    f.set(node(&f, "OBJ", Some(0)), 0, "ORDERS");
+    f.set(node(&f, "OBJ", Some(1)), 0, "QGPL");
+    out.push((
+        "prompt-qualifiers".to_owned(),
+        prompt::build(&f, false).window,
+    ));
+
+    let ty = node(&f, "OBJTYPE", None);
+    f.set(ty, 0, "*FILE");
+    f.add_entry(ty);
+    f.set(ty, 1, "*PGM");
+    out.push(("prompt-list".to_owned(), prompt::build(&f, false).window));
+
+    let mut f = prompt_form("CRTPF");
+    f.set(node(&f, "FILE", Some(0)), 0, "ORDERS");
+    out.push((
+        "prompt-additional".to_owned(),
+        prompt::build(&f, true).window,
+    ));
+    f.set(node(&f, "SIZE", Some(0)), 0, "20000");
+    f.set(node(&f, "SIZE", Some(2)), 0, "10");
+    out.push(("prompt-elements".to_owned(), prompt::build(&f, true).window));
+
+    let f = prompt_form("DSPOBJD");
+    out.push((
+        "prompt-checked".to_owned(),
+        prompt::build_checked(
+            &f,
+            &[
+                sent("CPD0071", 30, "Value for parameter OBJ required."),
+                sent("CPF0006", 30, "Errors occurred in command."),
+            ],
+        )
+        .window,
+    ));
+    let lib = node(&f, "OBJ", Some(1));
+    out.push((
+        "prompt-help".to_owned(),
+        prompt::help_box("Help - OBJ", &prompt::node_help(&f, lib))
+            .build()
+            .0,
+    ));
+    out
+}
+
 fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Window)> {
     let mut out = Vec::new();
     let (ui, _rx) = mainwin::build(state.clone());
@@ -462,6 +534,7 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
         qsaccess::runcmd::build("sys1.example.net", "", None, &[], None).window,
     ));
     out.push(("run-command-results".to_owned(), run_command_results()));
+    out.extend(prompt_views());
     out.push((
         "run-macro".to_owned(),
         qsaccess::macros::build_run(

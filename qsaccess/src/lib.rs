@@ -17,6 +17,7 @@ pub mod mainwin;
 pub mod manager;
 pub mod open;
 pub mod printer;
+pub mod prompt;
 pub mod properties;
 pub mod qap;
 pub mod recent;
