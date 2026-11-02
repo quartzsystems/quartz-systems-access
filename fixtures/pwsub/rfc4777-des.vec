@@ -1,9 +1,0 @@
-# RFC 4777 section 5.1, item 9: the DES password substitute example.
-# Published test data; the password is the RFC's, not anyone's.
-kind = substitute
-level = 0
-user = USER123
-password = ABCDEFG
-server_seed = 7D4C2319F28004B2
-client_seed = 08BEF662D851F4B1
-substitute = 5A58BD50E4DD9B5F

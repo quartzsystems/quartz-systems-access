@@ -1,8 +1,8 @@
 # Changelog
 
 Changes to the public API of the crates other projects depend on by git
-(QS/400 pins them to a commit), and of `pwsub`. Breaking changes are marked
-**Breaking**.
+(QS/400 pins them to a commit), and removals of crates that were published
+here. Breaking changes are marked **Breaking**.
 
 ## Unreleased
 
@@ -19,10 +19,13 @@ Changes to the public API of the crates other projects depend on by git
 
 ### pwsub
 
-- **Breaking:** removed `change`, `Change` and the `unverified-change`
-  feature (the unverified change-password forms), and `Secret::from_vec`.
-- Kept for TN5250E automatic sign-on only: `Scheme`, `Seeds`, `Secret`,
-  `substitute`, `telnet`, `user_id`, `Error`.
+- **Breaking:** removed; last at `a5040f5`. 5250 automatic sign-on uses a
+  one-time QAP `TelnetTicket` instead of a password substitute, so the DES
+  and SHA-1 forms have no use. Its fuzz target and RFC 4777 vector fixtures
+  went with it.
+- Before that, in this release: removed `change`, `Change` and the
+  `unverified-change` feature (the unverified change-password forms), and
+  `Secret::from_vec`.
 
 ## Earlier (unreleased)
 

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "qsa-net", "qap-client", "pwsub", "tn5250", "scs", "qsa-print", "xtask"]
+members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "qsa-net", "qap-client", "tn5250", "scs", "qsa-print", "xtask"]
 
 [workspace.package]
 version = "1.0.0"
@@ -22,9 +22,6 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "std"
 rustls-pki-types = { version = "1.12", features = ["std"] }
 rustls-native-certs = "0.8"
 sha2 = "0.10"
-# Protocol-mandated password substitution, only inside pwsub.
-des = "0.8"
-sha1 = "0.10"
 zeroize = "1"
 getrandom = "0.4"
 
@@ -41,7 +38,6 @@ qsa-icons = { path = "qsa-icons" }
 qsa-config = { path = "qsa-config" }
 qsa-msg = { path = "qsa-msg" }
 qsa-net = { path = "qsa-net" }
-pwsub = { path = "pwsub" }
 tn5250 = { path = "tn5250" }
 scs = { path = "scs" }
 qsa-print = { path = "qsa-print" }

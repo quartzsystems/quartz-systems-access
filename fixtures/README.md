@@ -179,24 +179,3 @@ queue is enough):
 If a system's Telnet server refuses printer sessions, keep the probe's
 output (the debug log shows every negotiation step) with the fixture notes
 instead of a recording.
-
-## Password substitute vectors
-
-`pwsub/tests/vectors.rs` checks every `pwsub/*.vec` here (format in that
-file). Three are the RFC 4777 examples (`rfc4777-*.vec`). The others are
-exchanges recorded against real systems with a throwaway test profile whose
-password is in the file, to show that a real system accepted what `pwsub`
-computed; none are recorded yet. Each will start with a comment saying it
-is test-only.
-
-### Recording vectors
-
-Recorded vectors come with 5250 automatic sign-on, which is not built yet:
-it is the only part of the client that sends a password substitute. The
-recording procedure (a throwaway test profile, created for the recording
-and deleted afterwards) will be written here with it. Until then the RFC
-4777 vectors are the only ones.
-
-These are the only files in the repository that hold a seed, a substitute
-or a password together; everything the client records or logs otherwise is
-scrubbed.
