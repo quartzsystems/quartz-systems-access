@@ -27,8 +27,30 @@
   `NotAuthorized`, `Cancelled`, interactive only), `CheckCommand`,
   `DescribeCommand`, `PasswordStatus`, `TelnetTicket` (and the ticket as the
   Telnet server takes it).
+- `qap-client/tests/version3.rs`: every version-3 `Spool` operation and
+  status against the test system's output queues and spooled files
+  (`qapd::testing::fixtures`); batched reads that join byte for byte into
+  a whole-file read once each later batch's leading state is taken off;
+  batches written as received that render the whole file's page model;
+  cancel in a batch and between batches; a read beside a long command; and
+  the 64 MiB limit on a joined reply, the session resumed after it.
+  `tests/connection.rs` also has replies that come back in the reverse
+  order of their requests, both kinds of cancel, and a long request that a
+  timeout never cancels.
+- `qap-client/tests/older.rs`: QS/400's engine at 8306ec41 (`qapd_v2`, its
+  own `qapd::testing`, `tests/common/v2.rs`): version 2 agreed, every
+  `Spool` operation refused before it is sent, version 2 still working.
 - `qsaccess/tests/fallback.rs`: against the version-1 engine, sign-on works
-  and every version-2 function is `QAD5001` (the expiry warning silent).
+  and every version-2 function is `QAD5001` (the expiry warning silent);
+  against version 1 and version 2, Printer Output is `QAD5001` and every
+  earlier function still works.
+- `qsaccess/tests/runcmd.rs`: Run Command's results with the test system's
+  severities 00 to 40, and a cancelled command's reply.
+- `qsaccess/tests/printer_output.rs`: Printer Output's filters, a read on
+  its own thread to a temporary file, Save as PDF and as Text laid out as a
+  printer session lays out the same data, refused reads with the system's
+  message as sent, and a cancelled read.
+- `qsaccess/tests/spool_goldens.rs`: the page-model goldens below.
 - `qsaccess/tests/secrets.rs`: a full run with every trace line in the log
   file, then the log, a session recording and the `Debug` output searched
   for every password, the session token and the Telnet ticket.
@@ -148,6 +170,26 @@ skipped when `pdftoppm` is missing, and `QSA_PDFTOPPM` can name one. Bless with
 spooler to "Microsoft Print to PDF" (skipped when that printer is missing) and
 leaves the PDF in `target/gdi-print/`.
 
+### Spooled file goldens
+
+`qsaccess/tests/spool_goldens.rs` reads QS/400's test system's SCS files
+`QPJOBLOG`, `QSYSPRT`, `LANDSCAPE` and `MIXED` through qap-client in batches
+of 25 pages, written as received, and whole in one request. Both must give
+the same page model and text (checked against
+`qsaccess/tests/goldens/spool/<name>.pages` and `<name>.txt`) and the same
+PDF pages: with `pdftoppm` (required where `QSA_REQUIRE_PDFTOPPM=1`) both
+PDFs are rasterised and compared page for page. The goldens are text, the
+same on every platform; `QSA_BLESS=1` writes them.
+
+A batch that begins on a page started by overflowing the page length,
+rather than by a form feed, does not lay out as the whole file does:
+QS/400's leading state moves to the line with `X'344C'`, which this
+program's SCS reader takes as a relative move (`X'34C4'` is its absolute
+one), so such a page starts a line low. None of the four files has such a
+boundary at 25 pages; `qap-client/tests/version3.rs`
+`one_page_batches_render_the_whole_files_pages` shows it a page at a time
+and is ignored until QS/400 and this program agree on the code.
+
 ## Wayland, by hand
 
 CI runs the Wayland screenshots under Weston's X11 backend. A real compositor
@@ -260,6 +302,79 @@ Against a version-1 server (QS/400 before 8306ec41, if one is at hand; the
 automated tests cover it with QS/400's engine at 58a7e6d3): Run Command
 opens disabled with `QAD5001`, Session Properties' Sign on automatically is
 disabled with `QAD5001`, no expiry warning, and sign-on works.
+
+## Live acceptance (Phase 6: QAP version 3)
+
+On QS/400 at 10.42.70.150, prepared first:
+
+1. a QS/400 build at or after 3134e9ea installed (`STRTCPSVR SERVER(*QAP)`;
+   Verify... says "Version 3");
+2. a second profile, for example `CRTUSRPRF USRPRF(QATEST2) PASSWORD(...)`,
+   and an output queue that does not show its files to others:
+   `CRTOUTQ OUTQ(QGPL/QATESTQ) DSPDTA(*NO)`. Signed on as `QATEST2` in a
+   5250 session: `CHGJOB OUTQ(QGPL/QATESTQ)`, then
+   `DSPOBJD OBJ(QGPL/*ALL) OBJTYPE(*ALL) OUTPUT(*PRINT)`: one of its
+   spooled files on that queue;
+3. as the profile the tests sign on with, a large listing on `QGPL/QPRINT`,
+   for example `DSPOBJD OBJ(QSYS/*ALL) OBJTYPE(*ALL) OUTPUT(*PRINT)` (well
+   over 25 pages), and some small ones (`DSPLIB LIB(QGPL) OUTPUT(*PRINT)`);
+4. a 5250 printer session of this program (device `QSAPRT01`) with its
+   writer started, for the printing case and the comparison below.
+
+Then, with `QSACCESS_LOG=trace`:
+
+- [ ] **List and page `QGPL/QPRINT`.** Printer Output, Output queue
+  `QGPL/QPRINT`, Go: `QAD6001` with the total; Next and Previous page
+  through it, the paging line following. With `rows_per_page = 50` in
+  `settings.toml`'s `[printer_output]`, a page has 50 rows.
+- [ ] **Filter.** Status Held, then User `*ALL`, then a Form type and a
+  User data of one of the files: each Go lists only what matches. A column
+  heading sorts the page, and the status bar says so.
+- [ ] **Open a large listing.** Open the large listing: the viewer shows
+  page 1 while the status bar still counts pages (`QAD6010`) and the page
+  count reads "of N...". Find a word on several pages: matches highlighted,
+  F3 goes on through the pages; Copy puts the page's text on the clipboard.
+- [ ] **Cancel a read.** Open it again and Cancel Reading before it ends:
+  `QAD6011`, the pages read stay, and the trace shows the QAP cancel for
+  the batch in flight.
+- [ ] **Save PDF and text.** Save as PDF... and Save as Text...: `QAD6020`
+  each. Move the same file to the printer session's queue so `QSAPRT01`
+  receives it: its PDF in Received output and the saved one have the same
+  pages and the same layout. Received output itself is as before.
+- [ ] **Print to a local printer.** Print...: the printer list is this
+  computer's; `QAD6021`; the printed copy looks as the printer session
+  prints the file.
+- [ ] **Hold, release, move, delete.** Select several files: Hold (each of
+  Immediately and At End of Page), Release, Move to another queue, then
+  Move with To the top of the queue (the file is first on that queue),
+  Delete (the confirmation lists every file): each ends with the summary,
+  every file's result in it.
+- [ ] **A printing file.** While `QSAPRT01` shows a file Printing, Delete it,
+  then Move it: the system's message (`CPF3330`) as it sent it.
+- [ ] **An unauthorized file.** User `*ALL`, Output queue `QGPL/QATESTQ` (or
+  `*ALL`): `QATEST2`'s file is listed; Open it, and Hold it: the system's
+  message as it sent it (`CPF3303` or what QS/400 sends), Details giving its
+  second-level text.
+- [ ] **Auto-refresh.** Auto-refresh 15 seconds, then spool a new file from
+  a 5250 session (`DSPLIB LIB(QGPL) OUTPUT(*PRINT)`): it is listed within
+  15 seconds, the selection and scroll position kept. Minimised, the trace
+  shows no `ListSpooledFiles`.
+- [ ] **Run Command while a large read runs.** Open the large listing and,
+  while it reads, Run Command `DLYJOB DLY(5)` then `CRTLIB LIB(QATESTLIB)`:
+  both complete, and the read goes on and ends meanwhile.
+- [ ] **Output Queues.** View > Output Queues...: `*ALL`, `*LIBL` and `QGPL`
+  list their queues with files and writers; a double-click opens Printer
+  Output on the queue.
+- [ ] **Other device types.** If the system has an AFP, ASCII or line file:
+  Open shows QS/400's `TCP1A56` as it sent it.
+- [ ] **Nothing secret logged.** Search `qsaccess.log` for the passwords
+  used and for any 64-hexadecimal-character run: none.
+
+Against a version-2 server (QS/400 before 3134e9ea, if one is at hand; the
+automated tests cover it with QS/400's engine at 8306ec41): Printer Output
+is dimmed in the task pane with `QAD5001` as its tip and says the same when
+opened; Run Command, the expiry warning and automatic sign-on work as
+before.
 
 ## Keyboard: Right Ctrl
 
