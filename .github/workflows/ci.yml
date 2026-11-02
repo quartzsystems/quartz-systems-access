@@ -41,6 +41,9 @@ jobs:
       - name: Copyright headers
         run: ci/headers.sh
 
+      - name: QAP spec mirror matches the pinned commit
+        run: ci/spec-mirror.sh
+
       - name: Format
         run: cargo fmt --all --check
 
@@ -125,6 +128,9 @@ jobs:
 
       - name: Copyright headers
         run: ci/headers.sh
+
+      - name: QAP spec mirror matches the pinned commit
+        run: ci/spec-mirror.sh
 
       - name: Format
         run: cargo fmt --all --check

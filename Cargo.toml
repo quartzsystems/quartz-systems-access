@@ -47,7 +47,8 @@ scs = { path = "scs" }
 qsa-print = { path = "qsa-print" }
 qap-client = { path = "qap-client" }
 
-# QAP from the QS/400 repository, pinned to one commit (docs/qap-protocol-spec.md).
+# QAP from the QS/400 repository, pinned to one commit. docs/qap-protocol-spec.md
+# is QS/400's docs/QAP.md at that commit and moves with it (ci/spec-mirror.sh).
 # qapd, the server's connection engine, is for tests only.
 ipc = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "58a7e6d3a95a498d50ce3ff40e4969f2351fc813", package = "ipc" }
 qap-proto = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "58a7e6d3a95a498d50ce3ff40e4969f2351fc813", package = "qap-proto" }

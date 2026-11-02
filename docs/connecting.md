@@ -14,7 +14,11 @@ Edit...):
 
 QAP, the Quartz Access Protocol, is how the program talks to QS/400 for
 everything except 5250 sessions. Its specification is
-[`qap-protocol-spec.md`](qap-protocol-spec.md).
+[`qap-protocol-spec.md`](qap-protocol-spec.md), a read-only copy of QS/400's
+`docs/QAP.md` at the commit the workspace pins; its first line names that
+commit. It is never edited here: a change goes to QS/400 first, and the copy
+is refreshed in the same commit as the re-pin (`ci/spec-mirror.sh` checks
+both).
 
 - **TLS 1.3 only.** QAP has no plain mode and no older TLS version. A
   connection that cannot agree on TLS 1.3 fails with `QAD4054`.

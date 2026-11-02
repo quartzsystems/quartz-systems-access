@@ -3,14 +3,19 @@
 # The list is stored ROT13-encoded in ci/cleanroom.rot13 so that the list itself
 # does not put the terms into the tree.
 #
-# The protocol crates' wire.rs files are exempt, and nothing else. Each
-# protocol requires some exact strings that carry a vendor prefix (the 5250
-# Telnet RFCs' terminal types and NEW-ENVIRON variable names). Those values live in the crate's wire.rs and
-# nowhere else; code elsewhere uses their constants by name. A new protocol
-# crate adds its wire.rs to this list.
+# Exempt, and nothing else:
+# - The protocol crates' wire.rs files. Each protocol requires some exact
+#   strings that carry a vendor prefix (the 5250 Telnet RFCs' terminal types
+#   and NEW-ENVIRON variable names). Those values live in the crate's wire.rs
+#   and nowhere else; code elsewhere uses their constants by name. A new
+#   protocol crate adds its wire.rs to this list.
+# - docs/qap-protocol-spec.md, a read-only copy of QS/400's docs/QAP.md that
+#   ci/spec-mirror.sh holds byte-identical to QS/400's file at the pinned
+#   commit; nothing in it is written here.
 set -euo pipefail
 allowed=(
   tn5250/src/wire.rs
+  docs/qap-protocol-spec.md
 )
 cd "$(dirname "$0")/.."
 patterns="$(mktemp)"
