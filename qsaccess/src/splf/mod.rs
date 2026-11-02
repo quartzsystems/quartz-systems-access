@@ -22,6 +22,8 @@
 //!   and every refusal's message as the system sent it.
 //! - Reading runs on its own thread, a batch of pages at a time, with
 //!   progress in the status bar and Cancel beside it.
+//! - Output Queues ([`queues`]): the system's queues; a double-click opens
+//!   this window on one.
 //! - Refresh, and Auto-refresh (Off, 15, 30 or 60 seconds): only while the
 //!   window is shown and not minimised, only the page in view, keeping the
 //!   selection and the scroll position.
@@ -33,6 +35,7 @@
 pub mod dialogs;
 pub mod model;
 pub mod output;
+pub mod queues;
 
 use std::cell::{Cell as StdCell, RefCell};
 use std::rc::Rc;
@@ -92,6 +95,7 @@ pub enum Cmd {
     Delete,
     Move,
     Properties,
+    OutputQueues,
     AutoRefresh,
     CancelRead,
     Close,
@@ -212,6 +216,12 @@ fn build_widgets(system: &str, rows: u32, refresh_secs: u32) -> (Widgets, chan::
     );
     add("&View/&Refresh", Shortcut::None | Key::F5, Cmd::Refresh, n);
     add(
+        "&View/&Output Queues...",
+        Shortcut::None,
+        Cmd::OutputQueues,
+        n,
+    );
+    add(
         "&Help/&About QS\\/400 Access for Desktop...",
         Shortcut::None,
         Cmd::About,
@@ -242,6 +252,9 @@ fn build_widgets(system: &str, rows: u32, refresh_secs: u32) -> (Widgets, chan::
     tb.separator();
     tb.add(Glyph::System, "Properties", move || {
         tx.send(Cmd::Properties)
+    });
+    tb.add(Glyph::Folder, "Output Queues", move || {
+        tx.send(Cmd::OutputQueues)
     });
     tb.end();
 
@@ -824,6 +837,12 @@ impl PrinterOutput {
                     dialogs::show_properties(self.parent(), &f);
                 }
             }
+            Cmd::OutputQueues => {
+                if let Some(state) = &self.state {
+                    let system = self.system();
+                    queues::open(self.parent(), state, &system);
+                }
+            }
             Cmd::AutoRefresh => {
                 let secs = usize::try_from(self.w.auto_refresh.value())
                     .ok()
@@ -1162,6 +1181,7 @@ pub fn pump() {
     }
     let windows: Vec<Rc<PrinterOutput>> = WINDOWS.with(|v| v.borrow().clone());
     let open: Vec<bool> = windows.iter().map(|p| p.pump()).collect();
+    queues::pump();
     WINDOWS.with(|v| {
         let mut v = v.borrow_mut();
         let mut i = 0;
@@ -1174,7 +1194,7 @@ pub fn pump() {
     PUMPING.with(|p| p.set(false));
 }
 
-/// Whether any Printer Output window is open.
+/// Whether any Printer Output or Output Queues window is open.
 pub fn any_open() -> bool {
-    WINDOWS.with(|v| v.borrow().iter().any(|p| p.w.window.shown()))
+    WINDOWS.with(|v| v.borrow().iter().any(|p| p.w.window.shown())) || queues::any_open()
 }

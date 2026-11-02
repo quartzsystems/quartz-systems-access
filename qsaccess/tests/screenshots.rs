@@ -387,6 +387,30 @@ fn printer_output(
     p.window().clone()
 }
 
+/// Output Queues on sys1.example.net: the test system's queues.
+fn output_queues(state: &Shared) -> Window {
+    let sys = qapd::testing::System::new();
+    let queues: Vec<_> = {
+        let sp = sys.spool.lock().unwrap();
+        sp.queues
+            .iter()
+            .map(|q| qap_client::proto::ops::spool::OutputQueue {
+                outq: q.outq.clone(),
+                text: q.text.clone(),
+                files: q.files.len() as u32,
+                writer: q.writer.clone(),
+                held: q.held,
+            })
+            .collect()
+    };
+    let st = state.borrow();
+    let system = st.systems.get("sys1.example.net").expect("fixture system");
+    let w = qsaccess::splf::queues::QueuesWindow::build(system, 25);
+    let n = queues.len() as u32;
+    w.show_queues("*ALL", queues, n);
+    w.window.clone()
+}
+
 fn printer_output_views(state: &Shared) -> Vec<(String, Window)> {
     use qap_client::proto::ops::spool::SpoolStatus;
     use qsaccess::splf::{dialogs, model};
@@ -488,6 +512,7 @@ fn printer_output_views(state: &Shared) -> Vec<(String, Window)> {
             "printer-output-summary".to_owned(),
             dialogs::build_summary(&done).window,
         ),
+        ("output-queues".to_owned(), output_queues(state)),
     ]
 }
 

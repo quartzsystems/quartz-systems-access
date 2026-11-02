@@ -635,7 +635,10 @@ mod tests {
                 Status::Error
             )
         );
-        assert_eq!(summary_heading(&[ok.clone(), ok.clone()]).0, "All 2 actions were done.");
+        assert_eq!(
+            summary_heading(&[ok.clone(), ok.clone()]).0,
+            "All 2 actions were done."
+        );
         let rows = summary_rows(&[ok, no]);
         assert_eq!(rows[0][3].text, "Spooled file RPT001 released.");
         assert_eq!(
