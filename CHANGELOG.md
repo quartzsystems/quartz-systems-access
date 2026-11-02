@@ -6,6 +6,11 @@ Changes to the public API of the crates other projects depend on by git
 
 ## Unreleased
 
+### qsa-net
+
+- **Breaking:** `TlsOptions` has a new field, `tls13_only`: offer TLS 1.3
+  alone (QAP) instead of TLS 1.2 and 1.3 (Telnet).
+
 ### hostsvr-proto
 
 - **Breaking:** removed. QS/400 Access talks to QS/400 over QAP

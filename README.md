@@ -13,6 +13,35 @@ FILE` (or `QSACCESS_RECORD=FILE`); see `fixtures/README.md`.
 The `tn5250` crate holds the protocol (Telnet, TN5250E, the 5250 data stream,
 the keyboard) and has no UI dependency.
 
+## Connecting to QS/400
+
+5250 display and printer sessions use the system's Telnet port (23, or 992
+with TLS). Everything else (sign-on, password changes, and the functions to
+come) uses QAP, the Quartz Access Protocol (`docs/qap-protocol-spec.md`), on
+one port: **2320** unless changed on the Ports tab. QAP runs over **TLS 1.3
+only**. The system's QAP server presents the certificate assigned to
+application ID **`QS400_ACCESS_SERVER`** in its certificate manager and does
+not start until one is assigned; start it with `STRTCPSVR SERVER(*QAP)`. A
+certificate this computer does not trust goes through the same Certificate Not
+Trusted dialog as TLS 5250 sessions.
+
+**Actions > Sign On...**, **Change Password...** and **Sign Off** work on the
+system selected in the task pane. The system's own messages are shown as it
+sent them. Passwords and session tokens are never saved or logged. A session
+survives a dropped connection and is resumed quietly; if an operator ends it,
+or the QAP server ends, the program says so and offers to sign on or
+reconnect.
+
+**System Configurations > Verify...** checks the name lookup, the Telnet port
+(and its TLS when used), the QAP port, the TLS 1.3 handshake and certificate,
+and QAP Hello, with an optional test sign-on, and shows each as OK, Failed or
+Skipped. A failed test sign-on counts toward `QMAXSIGN` and is audited like
+any sign-on.
+
+`docs/connecting.md` has the details: ports, the server commands, sign-on and
+password rules, what happens when a session or the server ends, and every
+Verify Connection check with its messages.
+
 ## Installing
 
 Each platform has one installer file, built with `cargo xtask dist` (Linux:

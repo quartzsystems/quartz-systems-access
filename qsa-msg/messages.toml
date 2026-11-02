@@ -321,8 +321,8 @@ text = "Reconnecting printer session &1 in &2 seconds."
 cause = "The connection for printer session &1 was lost. The session tries again by itself, waiting longer each time, up to 5 minutes."
 recovery = "None needed. To stop trying, select Disconnect. Received output is never lost."
 
-# Sign-on and connection verification (QAP). QAD4001 to QAD4012 were for
-# the host servers, which are retired; their numbers stay unused.
+# Sign-on and connection verification (QAP). QAD4001 to QAD4012 belonged to
+# a retired design; their numbers stay unused.
 
 [QAD4020]
 severity = 0

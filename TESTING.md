@@ -10,11 +10,17 @@
 - `qsa-ui/tests/console_pixels.rs`: the 5250 grid at 1× matches the QS/400
   service console pixel for pixel (see `fixtures/console/README.md`);
 - `qsaccess/tests/screenshots.rs`: every window and dialog against its golden
-  PNG for the platform (`qsaccess/tests/goldens/{windows,linux,linux-wayland}`).
+  PNG for the platform (`qsaccess/tests/goldens/{windows,linux,linux-wayland}`);
+- `qap-client/tests/`: the QAP client against QS/400's own connection engine
+  (`qapd`, pinned with the protocol crates), in process over loopback TLS 1.3,
+  with the system in memory (`tests/common/mod.rs`): every connection,
+  sign-on and session path of `docs/qap-protocol-spec.md`;
+- `qsaccess/tests/verify.rs`: Verify Connection's checks against the same
+  server.
 
 CI also runs `cargo fmt --check`, `cargo clippy -D warnings`, the clean-room
 check (`ci/cleanroom.sh`), the copyright header check and `ci/deps.sh`
-(`qsa-net`, `tn5250` and `scs` must not depend on FLTK).
+(`qsa-net`, `qap-client`, `tn5250` and `scs` must not depend on FLTK).
 
 The clean-room check allows an explicit list of files and no others: each
 protocol crate's `wire.rs` (today only `tn5250/src/wire.rs`).
@@ -31,7 +37,8 @@ Windows on `windows-2022`, Linux in `ubuntu:24.04` pinned by digest in
 system font removed so only the bundled fonts exist.
 
 Two crates have them: `qsaccess/tests/goldens/` (main window, System
-Configurations, system and Session Properties, Start, sessions, Keyboard Map
+Configurations, system and Session Properties, Sign On, Change Password, a
+system's message, Verify Connection, Start, sessions, Keyboard Map
 with the defaults and with `tests/data/operations.qkm` loaded, Load Keyboard
 Map, certificate, Session Manager, Macro editor and step, Run Macro, a long
 message) and `qsa-install/tests/goldens/` (every wizard page, Uninstall,
@@ -63,7 +70,7 @@ blessed.
 
 | View | Changed by |
 |---|---|
-| `properties-ports` (Windows, X11, Wayland) | Systems file version 3: Telnet and QAP ports replace the host-server ports and Port lookup. |
+| `properties-ports` (Windows, X11, Wayland) | Systems file version 3: the Telnet and QAP ports replace the earlier ports and Port lookup. |
 | `sign-on`, `change-password`, `message-system` (Windows, X11, Wayland) | New: the QAP Sign On and Change Password dialogs, and a system's message shown as sent. No golden yet. |
 | `system-configurations` (Windows, X11, Wayland) | The Verify... button. |
 | `verify-connection` (Windows, X11, Wayland) | New: Verify Connection. No golden yet. |
@@ -124,6 +131,19 @@ it:
 
 Record what failed, with `qsaccess.log` (negotiation is logged at debug
 level; `QSACCESS_LOG=trace` adds every record in hex).
+
+For QAP, on QS/400 with `STRTCPSVR SERVER(*QAP)` and a certificate assigned
+to `QS400_ACCESS_SERVER`:
+
+- System Configurations > Verify... with no user ID: every check but the test
+  sign-on OK (trust the certificate when asked);
+- Actions > Sign On...; a wrong password shows the system's CPF message;
+- a profile with an expired password: Change Password, then signed on;
+- Actions > Change Password... while signed on;
+- `ENDJOB` of the `QAPCNN` job: the session-ended message, then Sign On...;
+- `ENDTCPSVR SERVER(*QAP)`: the server-ending message; Reconnect after
+  `STRTCPSVR`;
+- Actions > Sign Off.
 
 ## Keyboard: Right Ctrl
 
