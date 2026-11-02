@@ -31,10 +31,13 @@ if [ "$named" != "$rev" ]; then
   exit 1
 fi
 
-# cargo's checkout of the pinned commit: qap-proto is work/qap-proto in it.
+# cargo's checkout of the pinned commit: qap-proto is work/qap-proto in it,
+# under a folder named for the commit's first seven digits. Other checkouts
+# (qapd_v1's older qap-proto) are left out.
 manifest="$(cargo metadata --format-version 1 --locked 2>/dev/null \
-  | grep -oE '"manifest_path":"[^"]*qap-proto[\\/]+Cargo\.toml"' | head -n 1 \
-  | sed -e 's/^"manifest_path":"//' -e 's/"$//' | tr -s '\\' '/')"
+  | grep -oE '"manifest_path":"[^"]*qap-proto[\\/]+Cargo\.toml"' \
+  | sed -e 's/^"manifest_path":"//' -e 's/"$//' | tr -s '\\' '/' \
+  | grep -F "/${rev:0:7}/" | head -n 1)"
 if [ -z "$manifest" ]; then
   echo "spec mirror: cargo metadata did not list qap-proto" >&2
   exit 1

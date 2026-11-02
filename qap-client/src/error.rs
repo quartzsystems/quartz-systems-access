@@ -4,7 +4,7 @@
 
 //! What can go wrong.
 
-use qap_proto::{ServerMessage, Status};
+use qap_proto::{Op, ServerMessage, Status};
 
 use crate::conn::Closed;
 
@@ -37,6 +37,11 @@ pub enum Error {
     /// A sign-on or resume asked for while signed on.
     #[error("already signed on")]
     AlreadySignedOn,
+    /// The connection's protocol version does not define the operation, or
+    /// `Hello` did not list its service: nothing was sent. `needs` is the
+    /// version that defines it, `has` the connection's.
+    #[error("{op:?} needs QAP version {needs}; the system has version {has}")]
+    Unsupported { op: Op, needs: u16, has: u16 },
     /// A password change for another profile while signed on: a session
     /// changes only its own profile's password.
     #[error("a signed-on session changes only its own password, not {0}'s")]

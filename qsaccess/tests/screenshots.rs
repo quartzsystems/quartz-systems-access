@@ -246,7 +246,7 @@ fn verify(state: &Shared) -> Window {
             Check::QapTls,
             ok("TLSv1_3, TLS13_AES_256_GCM_SHA384; certificate trusted"),
         ),
-        (Check::Hello, ok("Version 1, system SYS1, release V1R0M0.")),
+        (Check::Hello, ok("Version 2, system SYS1, release V1R0M0.")),
         (
             Check::SignOn,
             Outcome::Skipped("Not tested: no user ID entered.".into()),

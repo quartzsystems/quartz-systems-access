@@ -95,6 +95,7 @@ pub mod id {
     pub const QAP_TLS_FAILED: &str = "QAD4054";
     pub const QAP_VERSION_UNSUPPORTED: &str = "QAD4055";
     pub const UNEXPECTED_REPLY: &str = "QAD4060";
+    pub const QAP_VERSION_NEEDED: &str = "QAD5001";
 }
 
 /// Errors in the catalogue itself.
@@ -264,7 +265,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 68] = [
+    const SEEDS: [&str; 69] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -333,6 +334,7 @@ mod tests {
         id::QAP_TLS_FAILED,
         id::QAP_VERSION_UNSUPPORTED,
         id::UNEXPECTED_REPLY,
+        id::QAP_VERSION_NEEDED,
     ];
 
     #[test]

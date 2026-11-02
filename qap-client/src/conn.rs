@@ -97,6 +97,19 @@ pub struct Reply {
 }
 
 impl Reply {
+    /// The body as `R`, whatever the status: for the operations whose body
+    /// is still sent when they fail (`RunCommand`, `CheckCommand`). `None`
+    /// when the body is empty (a `Cancelled` without one). The body's bytes
+    /// are wiped.
+    pub fn body_as<R: Wire>(&mut self) -> Result<Option<R>, Error> {
+        if self.body.is_empty() {
+            return Ok(None);
+        }
+        let r = ipc::decode(&self.body).map_err(|e| Error::Protocol(e.to_string()));
+        wipe(&mut self.body);
+        r.map(Some)
+    }
+
     /// The body as `R` when the status is `Ok`; otherwise
     /// [`Error::Status`]. The body's bytes are wiped either way.
     pub fn decode<R: Wire>(mut self) -> Result<R, Error> {
@@ -182,6 +195,15 @@ pub struct Pending {
     shared: Link,
 }
 
+impl fmt::Debug for Pending {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Pending")
+            .field("id", &self.id)
+            .field("op", &self.op)
+            .finish_non_exhaustive()
+    }
+}
+
 impl Pending {
     /// The request's ID.
     pub fn id(&self) -> u32 {
@@ -235,6 +257,19 @@ impl Pending {
     fn gone(&self) -> Error {
         Error::Closed(lock(&self.shared).closed.clone().unwrap_or(Closed::Quietly))
     }
+}
+
+/// Whether a connection whose `Hello` answered `hello` may send `op`.
+pub(crate) fn supported(hello: &HelloReply, op: Op) -> Result<(), Error> {
+    let (service, _) = op.code();
+    if hello.version < op.since() || !hello.services.contains(&service) {
+        return Err(Error::Unsupported {
+            op,
+            needs: op.since(),
+            has: hello.version,
+        });
+    }
+    Ok(())
 }
 
 /// Queues a request on a connection's thread.
@@ -361,13 +396,26 @@ impl Connection {
         &self.hello
     }
 
+    /// The protocol version `Hello` agreed.
+    pub fn version(&self) -> u16 {
+        self.hello.version
+    }
+
+    /// Whether this connection may send `op`: its version defines it and
+    /// `Hello` listed its service. [`Error::Unsupported`] otherwise.
+    pub fn supports(&self, op: Op) -> Result<(), Error> {
+        supported(&self.hello, op)
+    }
+
     /// The TLS version and cipher suite.
     pub fn security(&self) -> &Security {
         &self.security
     }
 
-    /// Sends a request and returns at once.
+    /// Sends a request and returns at once. An operation the connection's
+    /// version does not define is refused here and not sent.
     pub fn request<B: Wire>(&self, op: Op, body: &B) -> Result<Pending, Error> {
+        self.supports(op)?;
         send(&self.shared, &self.out, op, body)
     }
 

@@ -11,7 +11,7 @@ mod common;
 use std::net::TcpListener;
 use std::time::Duration;
 
-use common::{Controls, Server, cfg, start, start_with};
+use common::{Server, cfg, start, start_with};
 use qap_client::Secret;
 use qsa_config::System;
 use qsa_msg::id;
@@ -85,7 +85,7 @@ fn everything_passes_with_a_test_sign_on() {
     assert!(result(&r, Check::QapTls).detail().starts_with("TLSv1_3"));
     assert_eq!(
         result(&r, Check::Hello).detail(),
-        "Version 1, system QSHQ400, release V1R0M0."
+        "Version 2, system QSHQ400, release V1R0M0."
     );
     assert_eq!(
         result(&r, Check::SignOn).detail(),
@@ -154,7 +154,7 @@ fn the_qap_server_not_started() {
 #[test]
 fn a_server_without_tls13_is_refused_and_says_so() {
     const TLS12: &[&rustls::SupportedProtocolVersion] = &[&rustls::version::TLS12];
-    let s = start_with(cfg(), Controls::new(), TLS12);
+    let s = start_with(cfg(), qapd::testing::System::new(), TLS12);
     let (_l, port) = telnet();
     let r = run(&plan(&s, port, None));
     let o = result(&r, Check::QapTls);
@@ -220,13 +220,13 @@ fn a_version_the_server_does_not_speak() {
     let s = start(cfg());
     let (_l, port) = telnet();
     let mut p = plan(&s, port, None);
-    p.target.options.min_version = 2;
-    p.target.options.max_version = 3;
+    p.target.options.min_version = 3;
+    p.target.options.max_version = 4;
     let r = run(&p);
     let o = result(&r, Check::Hello);
     assert_eq!(failed_id(o), id::QAP_VERSION_UNSUPPORTED);
     assert_eq!(
         o.detail(),
-        "QAD4055: QAP server on 127.0.0.1 supports none of protocol versions 2 to 3."
+        "QAD4055: QAP server on 127.0.0.1 supports none of protocol versions 3 to 4."
     );
 }

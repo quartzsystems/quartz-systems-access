@@ -10,6 +10,20 @@ Edit...):
 | Telnet (TLS) | 992 | The same, when **Use TLS for all connections** is ticked |
 | QAP | 2320 | Everything else: sign-on, password changes, and the functions to come |
 
+## Phases and QAP versions
+
+Each desktop phase after the first four needs QS/400 to ship a QAP version
+first, so the phases follow the versions:
+
+| Phase | QAP version | What |
+|---|---|---|
+| 5 | 2 | Run Command (`Command`), the password expiry warning (`PasswordStatus`), 5250 automatic sign-on by ticket (`TelnetTicket`) |
+| 6 | 3 | Printer Output (`Spool`) |
+| 7 | 4 | Run SQL, Schemas and Data Transfer (`Sql`) |
+| 8 | 5 | Integrated File System (`Ifs`) |
+| 9 | 6 | Messages (`Messages`) |
+| 10 | none | 5250 Console and Control Panel (the service console, not QAP) |
+
 ## QAP
 
 QAP, the Quartz Access Protocol, is how the program talks to QS/400 for
@@ -20,6 +34,14 @@ commit. It is never edited here: a change goes to QS/400 first, and the copy
 is refreshed in the same commit as the re-pin (`ci/spec-mirror.sh` checks
 both).
 
+- **Versions.** The program offers QAP versions 1 and 2, and the server
+  picks the highest both speak. Version 2 adds Run Command (the `Command`
+  service: run, check and describe CL commands), the password expiry
+  warning (`PasswordStatus`) and 5250 automatic sign-on by ticket
+  (`TelnetTicket`). On a system whose QAP server speaks only version 1,
+  those are disabled, with `QAD5001` saying which version they need and
+  which the system has; nothing of version 2 is ever sent to it, and
+  sign-on and everything else work as before.
 - **TLS 1.3 only.** QAP has no plain mode and no older TLS version. A
   connection that cannot agree on TLS 1.3 fails with `QAD4054`.
 - **The server's certificate.** The QAP server presents the certificate

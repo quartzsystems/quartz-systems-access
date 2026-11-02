@@ -13,8 +13,13 @@
   PNG for the platform (`qsaccess/tests/goldens/{windows,linux,linux-wayland}`);
 - `qap-client/tests/`: the QAP client against QS/400's own connection engine
   (`qapd`, pinned with the protocol crates), in process over loopback TLS 1.3,
-  with the system in memory (`tests/common/mod.rs`): every connection,
-  sign-on and session path of `docs/qap-protocol-spec.md`;
+  with QS/400's own test system (`qapd::testing`: profiles, sessions, Telnet
+  tickets, test commands, a clock) behind a listener that takes any number of
+  connections (`tests/common/mod.rs`): every connection, sign-on and session
+  path of `docs/qap-protocol-spec.md`; and, in `tests/version1.rs`, the
+  version-1 engine (`qapd_v1`, QS/400 at 58a7e6d3) with a small host of this
+  crate's own, for the fallback: version 1 agreed, version-2 operations
+  refused before they are sent;
 - `qsaccess/tests/verify.rs`: Verify Connection's checks against the same
   server.
 

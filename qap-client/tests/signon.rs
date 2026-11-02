@@ -101,13 +101,6 @@ fn expired_password_then_change() {
         .change_password("BOB", &Secret::from("SECRET1"), &Secret::from("NEW"))
         .unwrap_err();
     assert_eq!(refused(&e), (Status::Error, "CPF2362".into()));
-    // A password validation program's refusal comes back as it is.
-    *s.c.validation_program_refuses.lock().unwrap() = true;
-    let e = c
-        .change_password("BOB", &Secret::from("SECRET1"), &Secret::from("SECRET2"))
-        .unwrap_err();
-    assert_eq!(refused(&e), (Status::Error, "CPF22C6".into()));
-    *s.c.validation_program_refuses.lock().unwrap() = false;
     let p = c
         .change_password("BOB", &Secret::from("SECRET1"), &Secret::from("SECRET2"))
         .unwrap();

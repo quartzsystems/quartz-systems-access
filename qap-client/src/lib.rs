@@ -14,12 +14,22 @@
 //!   events.
 //! - [`session`]: a [`Client`] signs on, changes passwords, resumes its
 //!   session on a new connection when the server closed the old one
-//!   quietly, and signs off.
+//!   quietly, and signs off; from version 2 it also asks when the password
+//!   expires and for Telnet tickets.
+//! - [`command`]: version 2's `Command` service: run, check and describe CL
+//!   commands, with every status they answer.
+//!
+//! `Hello` offers versions [`proto::MIN_VERSION`] to [`proto::VERSION`] (1
+//! and 2) and the server picks the highest both speak. An operation is sent
+//! only when the connection's version defines it ([`proto::Op::since`]) and
+//! `Hello`'s `services` lists its service; otherwise it is refused here with
+//! [`Error::Unsupported`] and nothing is sent ([`Connection::supports`]).
 //!
 //! Passwords travel only as [`Secret`] and session tokens only as
 //! [`Token`]: neither prints, both are wiped when dropped, and this crate
 //! logs neither, nor any request or reply body.
 
+pub mod command;
 pub mod conn;
 pub mod session;
 
@@ -29,6 +39,7 @@ mod frames;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub use command::{CheckOutcome, CommandOutcome};
 pub use conn::{Closed, Connection, Event, Pending, Reply};
 pub use error::Error;
 pub use qap_proto as proto;
@@ -110,7 +121,7 @@ impl Default for Options {
             connect_timeout: qsa_net::CONNECT_TIMEOUT,
             reply_timeout: Duration::from_secs(60),
             ping_after: proto::PING_AFTER,
-            min_version: proto::VERSION,
+            min_version: proto::MIN_VERSION,
             max_version: proto::VERSION,
         }
     }

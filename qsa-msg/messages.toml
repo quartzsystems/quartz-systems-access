@@ -423,3 +423,9 @@ severity = 30
 text = "Server &1 on &2 returned an unexpected reply: &3."
 cause = "The &1 server on system &2 sent something this program cannot read: &3. The connection was closed."
 recovery = "Check that the QAP port on the Ports tab is the system's QAP port. If it is, keep the program's log and report the problem."
+
+[QAD5001]
+severity = 20
+text = "&1 needs QAP version &2; system &3 has version &4."
+cause = "&1 uses a QAP operation that QAP version &2 introduced. The QAP server on system &3 speaks version &4, so this program does not offer &1 for that system; nothing was sent to it."
+recovery = "Ask for system &3 to be upgraded to a QS/400 release whose QAP server speaks version &2 or later. Everything else works as before."

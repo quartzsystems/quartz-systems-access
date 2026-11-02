@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use fltk::app;
 use fltk::prelude::*;
-use qap_client::proto::ServerMessage;
+use qap_client::proto::{Op, ServerMessage};
 use qap_client::{Client, Closed, Error, Notice, Status, Target};
 use qsa_config::{AddressLookup, System};
 use qsa_msg::{Message, id};
@@ -79,6 +79,28 @@ pub fn signed_on(state: &Shared, system: &str) -> Option<String> {
     let st = state.borrow();
     let c = st.qap.get(&key(system))?;
     c.profile().map(|p| p.profile.clone())
+}
+
+/// What a version-2 function is called where the user sees it, for
+/// `QAD5001`.
+pub fn function_name(op: Op) -> &'static str {
+    match op {
+        Op::RunCommand => "Run Command",
+        Op::CheckCommand => "Check",
+        Op::DescribeCommand => "Prompt",
+        Op::PasswordStatus => "The password expiry warning",
+        Op::TelnetTicket => "Automatic sign-on",
+        _ => "This function",
+    }
+}
+
+/// `QAD5001`: `function` needs the QAP version that defines `op`, and
+/// `system` speaks `has`.
+pub fn version_needed(function: &str, system: &str, op: Op, has: u16) -> Message {
+    qsa_msg::message(
+        id::QAP_VERSION_NEEDED,
+        &[function, &op.since().to_string(), system, &has.to_string()],
+    )
 }
 
 /// A system's message for showing.
@@ -162,6 +184,7 @@ pub fn explain(system: &System, e: &Error) -> Explained {
         Error::Status { status, .. } => {
             m(id::UNEXPECTED_REPLY, &["QAP", sys, &format!("{status:?}")])
         }
+        Error::Unsupported { op, has, .. } => version_needed(function_name(*op), sys, *op, *has),
         Error::Closed(Closed::ServerEnding) => m(id::QAP_SERVER_ENDING, &[sys]),
         Error::Closed(Closed::Quietly) => m(id::SESSION_ENDED, &[sys]),
         Error::Closed(Closed::ByClient) => m(id::DISCONNECTED, &[sys]),
@@ -379,6 +402,24 @@ mod tests {
         let x = explain(&system(), &e);
         assert_eq!(x.line(), "CPF22C6: Password validation program failed.");
         assert_eq!(x.server.unwrap().id, "CPF22C6");
+    }
+
+    #[test]
+    fn a_version_2_function_on_a_version_1_system_is_qad5001() {
+        let x = explain(
+            &system(),
+            &Error::Unsupported {
+                op: Op::RunCommand,
+                needs: 2,
+                has: 1,
+            },
+        );
+        assert_eq!(x.message.id, id::QAP_VERSION_NEEDED);
+        assert_eq!(
+            x.message.text,
+            "Run Command needs QAP version 2; system qs400.example.net has version 1."
+        );
+        assert!(x.server.is_none());
     }
 
     #[test]

@@ -625,6 +625,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "ipc"
+version = "0.1.0"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3#8306ec412b4d8634bda5d3f0201bf0d465a680c3"
+dependencies = [
+ "thiserror",
+]
+
+[[package]]
 name = "itoa"
 version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -934,9 +942,11 @@ dependencies = [
 name = "qap-client"
 version = "1.0.0"
 dependencies = [
- "ipc",
- "qap-proto",
- "qapd",
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
+ "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
+ "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
+ "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
+ "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
  "qsa-net",
  "rustls",
  "thiserror",
@@ -947,7 +957,16 @@ name = "qap-proto"
 version = "0.1.0"
 source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813#58a7e6d3a95a498d50ce3ff40e4969f2351fc813"
 dependencies = [
- "ipc",
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
+ "thiserror",
+]
+
+[[package]]
+name = "qap-proto"
+version = "0.1.0"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3#8306ec412b4d8634bda5d3f0201bf0d465a680c3"
+dependencies = [
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
  "thiserror",
 ]
 
@@ -956,8 +975,17 @@ name = "qapd"
 version = "0.1.0"
 source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813#58a7e6d3a95a498d50ce3ff40e4969f2351fc813"
 dependencies = [
- "ipc",
- "qap-proto",
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
+ "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
+]
+
+[[package]]
+name = "qapd"
+version = "0.1.0"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3#8306ec412b4d8634bda5d3f0201bf0d465a680c3"
+dependencies = [
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
+ "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
 ]
 
 [[package]]
@@ -1057,7 +1085,7 @@ dependencies = [
  "directories",
  "fltk",
  "qap-client",
- "qapd",
+ "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
  "qsa-config",
  "qsa-glyph",
  "qsa-icons",

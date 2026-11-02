@@ -19,16 +19,28 @@
 //! - [`Client::sign_off`] ends the session. Dropping the client only closes
 //!   the connection; the session can be resumed until its idle timeout.
 //!
+//! - From version 2: [`Client::password_status`], [`Client::telnet_ticket`]
+//!   and the `Command` service ([`Client::run_command`],
+//!   [`Client::check_command`], [`Client::describe_command`]). Each is
+//!   refused here, before anything is sent, when the system's version does
+//!   not define it ([`Client::supports`]).
+//!
 //! The session token is held as a [`Token`] only, and the profile kept for
-//! display has its token zeroed.
+//! display has its token zeroed. A Telnet ticket is handed over as a
+//! [`Token`] too and never kept here.
 
 use ipc::Wire;
+use qap_proto::ops::command::{CommandDefinition, CommandText, DescribeCommand};
 use qap_proto::ops::connection::HelloReply;
-use qap_proto::ops::signon::{ChangePassword, Resume, SignOn, SignOnReply};
+use qap_proto::ops::signon::{
+    ChangePassword, PasswordStatus, Resume, SignOn, SignOnReply, TelnetTicketReply,
+};
 use qap_proto::ops::system::SystemInfo;
+use qap_proto::types::ObjectName;
 use qap_proto::{Op, Secret, ServerMessage, Status, Token};
 
-use crate::conn::{Closed, Connection, Event};
+use crate::command::CheckOutcome;
+use crate::conn::{Closed, Connection, Event, Pending, supported};
 use crate::{Error, Target};
 
 /// What happened to the connection or the session since the last look.
@@ -58,6 +70,8 @@ pub enum Notice {
 pub struct Client {
     target: Target,
     conn: Option<Connection>,
+    /// What the last connection's `Hello` answered, kept after it closes.
+    hello: Option<HelloReply>,
     token: Option<Token>,
     /// The signed-on profile, its token zeroed.
     profile: Option<SignOnReply>,
@@ -77,6 +91,7 @@ impl Client {
         Client {
             target,
             conn: None,
+            hello: None,
             token: None,
             profile: None,
             ending: false,
@@ -93,9 +108,25 @@ impl Client {
         self.conn.as_ref()
     }
 
-    /// What the last `Hello` answered.
+    /// What the last `Hello` answered, also once its connection closed;
+    /// `None` until a connection has been opened.
     pub fn hello(&self) -> Option<&HelloReply> {
-        self.conn.as_ref().map(Connection::hello)
+        self.hello.as_ref()
+    }
+
+    /// The protocol version the last `Hello` agreed.
+    pub fn version(&self) -> Option<u16> {
+        self.hello.as_ref().map(|h| h.version)
+    }
+
+    /// Whether the system's version defines `op` and lists its service, by
+    /// the last `Hello`; opens a connection first when there has been none.
+    /// [`Error::Unsupported`] says which version it needs.
+    pub fn supports(&mut self, op: Op) -> Result<(), Error> {
+        if self.hello.is_none() {
+            self.live()?;
+        }
+        supported(self.hello.as_ref().expect("a connection was opened"), op)
     }
 
     /// The signed-on profile.
@@ -198,6 +229,59 @@ impl Client {
         r
     }
 
+    /// Sends any request on a live connection and returns at once: the
+    /// caller waits on the [`Pending`] (and may cancel it) without holding
+    /// the client.
+    pub fn request<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error> {
+        let r = self.live()?.request(op, body);
+        self.absorb_events();
+        r
+    }
+
+    /// `PasswordStatus` (version 2): when the signed-on profile's password
+    /// expires, and the system's warning period.
+    pub fn password_status(&mut self) -> Result<PasswordStatus, Error> {
+        self.call(Op::PasswordStatus, &())
+    }
+
+    /// `TelnetTicket` (version 2): a one-time ticket for 5250 automatic
+    /// sign-on as the session's profile, good for `expires_secs`. The ticket
+    /// is a [`Token`]: it does not print and is wiped when dropped.
+    /// `NotAuthorized` (`TCP1A55`) when the profile may not sign on
+    /// automatically.
+    pub fn telnet_ticket(&mut self) -> Result<TelnetTicketReply, Error> {
+        self.call(Op::TelnetTicket, &())
+    }
+
+    /// Starts `RunCommand` (version 2). Wait on the [`Pending`] and read it
+    /// with [`crate::CommandOutcome::from_reply`]; [`Pending::cancel`] ends
+    /// the command.
+    pub fn run_command(&mut self, command: &str) -> Result<Pending, Error> {
+        self.request(
+            Op::RunCommand,
+            &CommandText {
+                command: command.to_owned(),
+            },
+        )
+    }
+
+    /// `CheckCommand` (version 2): the command's syntax checked, nothing run.
+    pub fn check_command(&mut self, command: &str) -> Result<CheckOutcome, Error> {
+        let timeout = self.target.options.reply_timeout;
+        let body = CommandText {
+            command: command.to_owned(),
+        };
+        let reply = self.request(Op::CheckCommand, &body)?.wait(timeout);
+        self.absorb_events();
+        CheckOutcome::from_reply(reply?)
+    }
+
+    /// `DescribeCommand` (version 2): the command's definition as the
+    /// prompter has it, defaults as `CHGCMDDFT` left them.
+    pub fn describe_command(&mut self, command: ObjectName) -> Result<CommandDefinition, Error> {
+        self.call(Op::DescribeCommand, &DescribeCommand { command })
+    }
+
     /// Takes in the server's events and, when the server closed the
     /// connection quietly while signed on, reconnects and resumes. What
     /// happened, oldest first.
@@ -228,6 +312,7 @@ impl Client {
                 return Err(Error::Closed(Closed::ServerEnding));
             }
             let c = Connection::open(&self.target)?;
+            self.hello = Some(c.hello().clone());
             if let Some(token) = self.token.clone() {
                 match c.call::<_, SignOnReply>(Op::Resume, &Resume { token }) {
                     Ok(reply) => {

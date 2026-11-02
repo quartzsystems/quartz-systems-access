@@ -12,7 +12,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{Controls, cfg, start, start_with, until};
+use common::{cfg, start, start_with, until};
 use qap_client::proto::ops::connection::PingReply;
 use qap_client::proto::ops::signon::SignOn;
 use qap_client::proto::ops::system::SystemInfo;
@@ -25,7 +25,7 @@ fn hello_over_tls13() {
     let s = start(cfg());
     let c = Connection::open(&s.target()).unwrap();
     let h = c.hello();
-    assert_eq!(h.version, 1);
+    assert_eq!(h.version, 2);
     assert_eq!(h.system_name, "QSHQ400");
     assert_eq!(h.release, "V1R0M0");
     assert_eq!(h.services, Service::ALL.to_vec());
@@ -46,7 +46,7 @@ fn hello_over_tls13() {
 #[test]
 fn a_tls12_server_is_refused() {
     const TLS12: &[&rustls::SupportedProtocolVersion] = &[&rustls::version::TLS12];
-    let s = start_with(cfg(), Controls::new(), TLS12);
+    let s = start_with(cfg(), qapd::testing::System::new(), TLS12);
     match Connection::open(&s.target()) {
         Err(Error::Connect(qsa_net::ConnectError::Tls(qsa_net::TlsError::Handshake(_)))) => {}
         other => panic!("expected a handshake failure, got {other:?}"),
@@ -71,7 +71,8 @@ fn an_untrusted_certificate_goes_to_the_trust_flow() {
 fn version_mismatch() {
     let s = start(cfg());
     let mut t = s.target();
-    t.options.min_version = 2;
+    // The server speaks versions 1 and 2.
+    t.options.min_version = 3;
     t.options.max_version = 9;
     let e = Connection::open(&t).unwrap_err();
     assert_eq!(e.status(), Some(Status::VersionUnsupported), "{e:?}");
