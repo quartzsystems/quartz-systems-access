@@ -76,8 +76,11 @@ bar shows *system: Signed on as PROFILE* once signed on.
   which the Sign On dialog starts with.
 - One sign-on per system per run. The first task that needs a system signs
   on (or **Actions > Sign On...** does), and every task after it shares that
-  QAP session and its connection. A dropped connection resumes the session
-  quietly. The program asks for a sign-on again only when the session is
+  QAP session and its connection, each request with its own ID on it. A
+  dropped connection resumes the session quietly. QS/400 answers a
+  connection's requests in the order they arrive, so while one task's
+  command runs (a `DLYJOB`, say), another task's request on the same system
+  waits for it to end. The program asks for a sign-on again only when the session is
   gone: `SessionExpired` or `TCP1A53` on resume, or `SessionEnded` from the
   system.
 - Releases before systems file version 4 could save passwords in the

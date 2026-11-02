@@ -22,6 +22,10 @@
   refused before they are sent;
 - `qsaccess/tests/verify.rs`: Verify Connection's checks against the same
   server.
+- `qsaccess/tests/sessions.rs`: one QAP session per system per process
+  against the same server: every tool gets the same client, a running
+  command and another request share its connection, and the GUI's look at
+  the signed-on profile never waits on a client in use.
 
 CI also runs `cargo fmt --check`, `cargo clippy -D warnings`, the clean-room
 check (`ci/cleanroom.sh`), the copyright header check and `ci/deps.sh`

@@ -2,13 +2,25 @@
 // licensed under the terms of the MIT license which can be found in the
 // root directory of this project.
 
-//! QAP sessions in the application: one [`Client`] per system, kept in the
-//! application state while signed on; the network calls run off the GUI
-//! thread ([`busy`]); the client's errors as `QAD` messages, with the
-//! system's own message kept as it was sent; and [`pump`], which shows
-//! `SessionEnded` and `ServerEnding` and offers to sign on or reconnect.
+//! QAP sessions in the application: one session per system per process.
+//!
+//! - [`Registry`] holds one [`Client`] per system, shared by every tool as a
+//!   [`Handle`]. A tool asks [`session`] for a signed-on one; it prompts
+//!   Sign On only when there is none, and otherwise every tool uses the same
+//!   session and connection, with requests multiplexed on it and the
+//!   session resumed quietly after a drop.
+//! - Network calls run off the GUI thread ([`busy`]). A call that waits for
+//!   long (a command that runs) holds the client only to send
+//!   ([`Client::request`]) and waits on its [`qap_client::Pending`] without
+//!   it, so other tools go on meanwhile. The GUI thread never blocks on a
+//!   client another thread holds: it looks with `try_lock` and otherwise
+//!   uses what it last saw.
+//! - The client's errors become `QAD` messages, with the system's own
+//!   message kept as it was sent; [`pump`] shows `SessionEnded` and
+//!   `ServerEnding` and offers to sign on or reconnect.
 
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 
 use fltk::app;
 use fltk::prelude::*;
@@ -40,6 +52,85 @@ fn key(system: &str) -> String {
     system.to_ascii_lowercase()
 }
 
+/// A system's client, shared by every tool in the process.
+pub type Handle = Arc<Mutex<Client>>;
+
+/// Locks a client, poisoned or not: a tool that panicked mid-call leaves a
+/// client that is still usable, or that says it is not.
+pub fn lock(h: &Handle) -> MutexGuard<'_, Client> {
+    h.lock().unwrap_or_else(PoisonError::into_inner)
+}
+
+/// One system's entry.
+struct Entry {
+    client: Handle,
+    /// The signed-on profile as the GUI thread last saw it, for when
+    /// another thread holds the client.
+    profile: Option<String>,
+}
+
+/// Every system's client in this process.
+#[derive(Default)]
+pub struct Registry {
+    map: HashMap<String, Entry>,
+}
+
+impl Registry {
+    /// The client for `system`: the one there is, unless it is not signed on
+    /// and free, in which case a new one for the system as it is configured
+    /// now (its address, port and trust may have changed).
+    pub fn client(&mut self, system: &System) -> Handle {
+        let k = key(&system.name);
+        if let Some(e) = self.map.get(&k) {
+            let stale = e.client.try_lock().is_ok_and(|c| !c.is_signed_on());
+            if !stale {
+                return Arc::clone(&e.client);
+            }
+        }
+        let client = Arc::new(Mutex::new(Client::new(target_for(system))));
+        self.map.insert(
+            k,
+            Entry {
+                client: Arc::clone(&client),
+                profile: None,
+            },
+        );
+        client
+    }
+
+    /// The client for `system` if it is signed on. A client busy on
+    /// another thread counts as signed on when it last was.
+    pub fn signed_on_client(&mut self, system: &str) -> Option<Handle> {
+        self.profile(system)?;
+        self.get(&key(system))
+    }
+
+    /// The profile signed on to `system`, if any; what was last seen when
+    /// another thread holds the client.
+    pub fn profile(&mut self, system: &str) -> Option<String> {
+        let e = self.map.get_mut(&key(system))?;
+        if let Ok(c) = e.client.try_lock() {
+            e.profile = c.profile().map(|p| p.profile.clone());
+        }
+        e.profile.clone()
+    }
+
+    /// Takes `system`'s client out (Sign Off).
+    pub fn remove(&mut self, system: &str) -> Option<Handle> {
+        self.map.remove(&key(system)).map(|e| e.client)
+    }
+
+    /// The systems with a client, by key.
+    pub fn keys(&self) -> Vec<String> {
+        self.map.keys().cloned().collect()
+    }
+
+    /// The client kept under `k`.
+    pub fn get(&self, k: &str) -> Option<Handle> {
+        self.map.get(&key(k)).map(|e| Arc::clone(&e.client))
+    }
+}
+
 /// Runs `f` on another thread while the GUI goes on drawing, and returns
 /// what it returned. Windows stay responsive; modal dialogs keep other
 /// windows from starting anything.
@@ -57,28 +148,28 @@ pub fn busy<T: Send>(f: impl FnOnce() -> T + Send) -> T {
     })
 }
 
-/// The system's client, taken out of the state for a call: the signed-on
-/// one, or a new one for the system as it is configured now.
-pub fn take(state: &Shared, system: &System) -> Client {
-    match state.borrow_mut().qap.remove(&key(&system.name)) {
-        Some(c) if c.is_signed_on() => c,
-        _ => Client::new(target_for(system)),
-    }
-}
-
-/// Puts a client back. One that is not signed on is dropped: it holds
-/// nothing worth keeping.
-pub fn keep(state: &Shared, system: &str, client: Client) {
-    if client.is_signed_on() {
-        state.borrow_mut().qap.insert(key(system), client);
-    }
+/// `system`'s client, for a sign-on, a password change or a tool.
+pub fn client(state: &Shared, system: &System) -> Handle {
+    state.borrow_mut().qap.client(system)
 }
 
 /// The profile signed on to `system`, if any.
 pub fn signed_on(state: &Shared, system: &str) -> Option<String> {
-    let st = state.borrow();
-    let c = st.qap.get(&key(system))?;
-    c.profile().map(|p| p.profile.clone())
+    state.borrow_mut().qap.profile(system)
+}
+
+/// A signed-on session on `system` for a tool: the one this process has,
+/// or, when there is none, one the user signs on to now (Sign On is shown
+/// once; `None` when they cancel it).
+pub fn session(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) -> Option<Handle> {
+    let existing = state.borrow_mut().qap.signed_on_client(system);
+    if existing.is_some() {
+        return existing;
+    }
+    if !crate::signon::run(parent, state, system) {
+        return None;
+    }
+    state.borrow_mut().qap.signed_on_client(system)
 }
 
 /// What a version-2 function is called where the user sees it, for
@@ -208,12 +299,13 @@ pub fn show(parent: Option<&dyn WindowExt>, x: &Explained) {
     }
 }
 
-/// Signs off from the selected system, if signed on.
+/// Signs off from the selected system, if signed on. Every tool's session
+/// on it ends with it.
 pub fn sign_off(ui: &Ui, system: &str) {
-    let Some(mut c) = ui.state.borrow_mut().qap.remove(&key(system)) else {
+    let Some(h) = ui.state.borrow_mut().qap.remove(system) else {
         return;
     };
-    let r = busy(|| c.sign_off());
+    let r = busy(|| lock(&h).sign_off());
     if let Err(e) = r {
         crate::log!("sign-off from {system}: {e}");
     }
@@ -226,30 +318,39 @@ fn report(ui: &Ui, m: &Message) {
     ui.report(m);
 }
 
-/// Looks at every signed-on client: takes in the server's events, lets a
-/// quietly closed connection resume, and tells the user what ended.
+/// Looks at every signed-on client no tool is using right now: takes in
+/// the server's events, lets a quietly closed connection resume, and tells
+/// the user what ended. A client in use is looked at next time.
 pub fn pump(ui: &Ui) {
-    let names: Vec<String> = ui.state.borrow().qap.keys().cloned().collect();
-    for k in names {
-        let Some(mut c) = ui.state.borrow_mut().qap.remove(&k) else {
+    let keys = ui.state.borrow().qap.keys();
+    for k in keys {
+        let Some(h) = ui.state.borrow().qap.get(&k) else {
             continue;
         };
+        let (quiet, host) = {
+            let Ok(c) = h.try_lock() else { continue };
+            if !c.is_signed_on() {
+                continue;
+            }
+            let quiet = c.connection().is_none_or(|n| n.closed().is_some());
+            (quiet, c.target().host.clone())
+        };
         // Reconnecting reaches the network; do it off the GUI thread.
-        let quiet = c.connection().is_none_or(|n| n.closed().is_some());
-        let notices = if quiet { busy(|| c.poll()) } else { c.poll() };
+        let notices = if quiet {
+            busy(|| lock(&h).poll())
+        } else {
+            lock(&h).poll()
+        };
         let system = ui
             .state
             .borrow()
             .systems
             .get(&k)
             .cloned()
-            .unwrap_or_else(|| System::new(&c.target().host));
+            .unwrap_or_else(|| System::new(&host));
         let mut offer = None;
         for n in notices {
             offer = offer.or(tell(ui, &system, n));
-        }
-        if c.is_signed_on() {
-            ui.state.borrow_mut().qap.insert(k, c);
         }
         ui.refresh_systems();
         match offer {
@@ -325,8 +426,8 @@ fn tell(ui: &Ui, system: &System, n: Notice) -> Option<Offer> {
 /// After `ServerEnding`: connect again, then sign on (the server's end
 /// ended the session).
 fn reconnect(ui: &Ui, system: &System) -> bool {
-    let mut c = take(&ui.state, system);
-    let r = busy(|| c.reconnect().map(|_| ()));
+    let h = client(&ui.state, system);
+    let r = busy(|| lock(&h).reconnect().map(|_| ()));
     match r {
         Ok(()) => crate::signon::run(Some(&ui.window), &ui.state, &system.name),
         Err(e) => {

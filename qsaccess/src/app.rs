@@ -5,7 +5,6 @@
 //! Application state shared by the windows.
 
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::io;
 use std::rc::Rc;
 
@@ -27,8 +26,8 @@ pub struct AppState {
     /// Moves on whenever the recent sessions change, so that every window
     /// can redraw its Recent Sessions menu.
     pub recent_gen: u64,
-    /// Signed-on QAP sessions, by system name in lower case.
-    pub qap: HashMap<String, qap_client::Client>,
+    /// This process's QAP session per system, shared by every tool.
+    pub qap: crate::qap::Registry,
 }
 
 /// Shared, mutable application state.
@@ -71,7 +70,7 @@ impl AppState {
             record_next: None,
             startup_messages: Vec::new(),
             recent_gen: 0,
-            qap: HashMap::new(),
+            qap: crate::qap::Registry::default(),
         }
     }
 

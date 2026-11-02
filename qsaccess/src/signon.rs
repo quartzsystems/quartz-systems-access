@@ -133,11 +133,14 @@ fn attempt(d: &mut SignOnDialog, state: &Shared, mut sys: System) -> bool {
     let m = qsa_msg::message(id::CONNECTING, &[&sys.name, &port]);
     d.status.set(&m.to_string(), Shown::Neutral);
     loop {
-        let mut c = qap::take(state, &sys);
-        let r = qap::busy(|| c.sign_on(&user, &password).map(|p| p.profile.clone()));
+        let h = qap::client(state, &sys);
+        let r = qap::busy(|| {
+            qap::lock(&h)
+                .sign_on(&user, &password)
+                .map(|p| p.profile.clone())
+        });
         let e = match r {
             Ok(profile) => {
-                qap::keep(state, &sys.name, c);
                 let m = qsa_msg::message(id::SIGNON_OK, &[&sys.name, &profile]);
                 crate::log!("{m}");
                 d.status.set(&m.to_string(), Shown::Neutral);

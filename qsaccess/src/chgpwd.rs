@@ -180,21 +180,17 @@ fn attempt(d: &mut ChangePasswordDialog, state: &Shared, mut sys: System) -> boo
     drop(confirm);
     d.old.set_value("");
     loop {
-        let mut c = qap::take(state, &sys);
-        let r = qap::busy(|| c.change_password(&user, &old, &new).map(|_| ()));
+        let h = qap::client(state, &sys);
+        let r = qap::busy(|| qap::lock(&h).change_password(&user, &old, &new).map(|_| ()));
         let e = match r {
             Ok(()) => {
-                qap::keep(state, &sys.name, c);
                 let m = qsa_msg::message(id::PASSWORD_CHANGED, &[&user, &sys.name]);
                 crate::log!("{m}");
                 d.status.set(&m.to_string(), Shown::Neutral);
                 return true;
             }
-            Err(e) => {
-                // A signed-on session stays signed on whatever the answer.
-                qap::keep(state, &sys.name, c);
-                e
-            }
+            // A signed-on session stays signed on whatever the answer.
+            Err(e) => e,
         };
         let parent = Some(&d.window as &dyn WindowExt);
         match e {
