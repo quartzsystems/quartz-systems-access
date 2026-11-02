@@ -150,8 +150,8 @@ against the goldens for your platform. Goldens are made on CI's pinned runners:
 
 ```
 gh workflow run ci.yml --ref <branch> -f bless=true
-gh run download <run-id> -n goldens-windows -D qsaccess/tests/goldens/windows
-gh run download <run-id> -n goldens-linux -D qsaccess/tests/goldens
+gh run download <run-id> -n goldens-windows -D .
+gh run download <run-id> -n goldens-linux -D .
 ```
 
 The Linux job runs in `ubuntu:24.04` pinned by digest, under Xvfb, with only the

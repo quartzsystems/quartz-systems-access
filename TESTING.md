@@ -45,36 +45,52 @@ message) and `qsa-install/tests/goldens/` (every wizard page, Uninstall,
 Repair). Both use `qsa_ui::goldens`. Locally, the Linux goldens can be made in
 `ci/linux-ci.Dockerfile`, the same image as the CI job.
 
-To regenerate after an intended change:
+To regenerate after an intended change, from a clone with the commits to
+bless (the bless job only writes goldens; it never commits or pushes):
 
-```
-gh workflow run ci.yml --ref <branch> -f bless=true
-gh run watch
-gh run download <run-id> -n goldens-windows -D qsaccess/tests/goldens/windows
-gh run download <run-id> -n goldens-linux -D qsaccess/tests/goldens
-git diff --stat qsaccess/tests/goldens
-```
-
-Look at every changed PNG before committing. The Actions summary also has a
-`screenshot-report` artifact with each view side by side across platforms.
+1. Push the commits to a branch: `git push origin HEAD:refs/heads/<branch>`.
+2. Run the bless workflow on it and wait for both jobs:
+   `gh workflow run ci.yml --ref <branch> -f bless=true`, then
+   `gh run list --workflow ci.yml --branch <branch> --limit 1` for its ID and
+   `gh run watch <run-id>`. The screenshot steps pass in a bless run: they
+   write what they capture.
+3. Download the goldens into the checkout, from its top folder. Each artifact
+   keeps the paths from the repository root:
+   `gh run download <run-id> -n goldens-windows -D .` and
+   `gh run download <run-id> -n goldens-linux -D .`
+   (`goldens-linux` holds X11, Wayland and the PDF goldens).
+4. Review: `git status --short -- '*/tests/goldens/'`, then look at every new
+   and changed PNG, against the `screenshot-report` artifact (each view side
+   by side across platforms) and the list below. Anything changed that is not
+   on the list is a regression to fix, not to bless.
+5. Commit the goldens, take the blessed views off the list below in the same
+   commit, and push.
 
 Locally, `QSA_BLESS=1 cargo test -p qsaccess --test screenshots` writes the
 goldens for the machine you are on; use it to look, not to commit, unless the
 machine matches the runner.
 
+The printer views show job times in the local time zone; the runners are on
+UTC, so a machine elsewhere shows those times differently.
+
 ### Waiting for a bless run
 
-Views changed on purpose since the last bless. Their goldens are stale
-until CI's bless run writes new ones; take each off this list when it is
-blessed.
+Views whose goldens are stale or missing until CI's bless run writes new ones,
+on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 
 | View | Changed by |
 |---|---|
-| `properties-ports` (Windows, X11, Wayland) | Systems file version 3: the Telnet and QAP ports replace the earlier ports and Port lookup. |
-| `sign-on`, `change-password`, `message-system` (Windows, X11, Wayland) | New: the QAP Sign On and Change Password dialogs, and a system's message shown as sent. No golden yet. |
-| `system-configurations` (Windows, X11, Wayland) | The Verify... button. |
-| `verify-connection` (Windows, X11, Wayland) | New: Verify Connection. No golden yet. |
-| `properties-connection` (Windows, X11, Wayland) | Passwords are never saved: one Default user ID field and a note in place of the three sign-on choices. |
+| `main` | The task pane's groups and tasks as they now are, and the status bar's connection field for the selected system. |
+| `system-configurations` | The Verify... button. |
+| `properties-general` | The check box's label position (the check box control changed). |
+| `properties-connection` | Passwords are never saved: one Default user ID field and a note in place of the three sign-on choices. |
+| `properties-ports` | Systems file version 3: the Telnet and QAP ports replace the earlier ports and Port lookup. |
+| `start-5250`, `macro-step`, `session-properties-general`, `session-properties-hotspots` | The check box's label position (the check box control changed), and the session properties' own changes since. |
+| `message-long-path`, `session-manager` | Changed since the last bless; check against the screenshot report. |
+| `start-5250-printer`, `printer-session`, `printer-settings` | New with the printer session. No golden yet. |
+| `sign-on`, `change-password`, `message-system` | New: the QAP Sign On and Change Password dialogs, and a system's message shown as sent. No golden yet. |
+| `verify-connection` | New: Verify Connection. No golden yet. |
+| `qsa-install`: `wizard-0-welcome`, `wizard-1-licence`, `wizard-2-install-for`, `wizard-3-location`, `wizard-4-options`, `wizard-5-ready`, `wizard-7-finish`, `uninstall`, `repair` | The licence text, the check box control, and no saved passwords in the Welcome, Uninstall and Repair text. |
 
 ## PDF goldens
 
