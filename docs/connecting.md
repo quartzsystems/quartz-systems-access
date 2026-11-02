@@ -49,7 +49,21 @@ bar shows *system: Signed on as PROFILE* once signed on.
 - An expired password (`QAD4022`) offers **Change Password...**, which changes
   it and signs on in one step.
 - Passwords are never saved and never written to the log, and neither is the
-  session's token. Password fields are cleared as soon as they are read.
+  session's token. Password fields are cleared as soon as they are read. The
+  Connection tab of a system configuration keeps only a **Default user ID**,
+  which the Sign On dialog starts with.
+- One sign-on per system per run. The first task that needs a system signs
+  on (or **Actions > Sign On...** does), and every task after it shares that
+  QAP session and its connection. A dropped connection resumes the session
+  quietly. The program asks for a sign-on again only when the session is
+  gone: `SessionExpired` or `TCP1A53` on resume, or `SessionEnded` from the
+  system.
+- Releases before systems file version 4 could save passwords in the
+  platform credential store. The first start after the upgrade deletes them
+  and logs how many: on Windows from Credential Manager; on Linux with
+  `secret-tool` (libsecret) when it is installed. Without it the log says so,
+  and any left can be removed with the desktop's password manager (service
+  *Quartz Systems QS/400 Access*).
 
 ## Changing a password
 

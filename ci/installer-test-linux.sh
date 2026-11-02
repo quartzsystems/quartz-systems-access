@@ -105,7 +105,7 @@ if [ "$scope" = user ] && command -v gio >/dev/null; then
     mkdir -p "$settings"
     made_settings=0
     if [ ! -f "$settings/systems.toml" ]; then
-        printf '[[system]]\nname = "10.42.70.150"\ncredential_mode = "prompt-once"\n' >"$settings/systems.toml"
+        printf '[[system]]\nname = "10.42.70.150"\ndefault_user = "QATEST"\n' >"$settings/systems.toml"
         made_settings=1
     fi
     display=()

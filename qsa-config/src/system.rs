@@ -9,19 +9,6 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-/// How a connection gets its user ID and password.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub enum CredentialMode {
-    /// Use the default user ID, shared by every connection to the system.
-    #[default]
-    DefaultUser,
-    /// Prompt once, then reuse the answer (and the saved password).
-    PromptOnce,
-    /// Prompt for every connection; nothing is saved.
-    PromptEveryTime,
-}
-
 /// When the system's address is looked up.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
@@ -119,7 +106,9 @@ impl CaCertificate {
     }
 }
 
-/// One system configuration. Never holds a password.
+/// One system configuration. Never holds a password: passwords are never
+/// saved anywhere. The program signs on to a system once per run, when a
+/// tool first needs it, and keeps that QAP session.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct System {
@@ -127,7 +116,7 @@ pub struct System {
     pub name: String,
     pub description: String,
     pub use_tls: bool,
-    pub credential_mode: CredentialMode,
+    /// The user ID the Sign On dialog starts with; may be empty.
     pub default_user: String,
     pub address_lookup: AddressLookup,
     /// Used when `address_lookup` is `Never`.
@@ -145,8 +134,6 @@ pub enum Invalid {
     NameNotHost,
     #[error("A system named {0} already exists.")]
     NameTaken(String),
-    #[error("Default user is required when the default user is used for sign-on.")]
-    DefaultUserMissing,
     #[error("Default user cannot contain spaces.")]
     DefaultUserSpaces,
     #[error("A fixed IP address is required when address lookup is Never.")]
@@ -204,9 +191,6 @@ impl System {
         check_name(&self.name)?;
         if self.default_user.contains(char::is_whitespace) {
             return Err(Invalid::DefaultUserSpaces);
-        }
-        if self.credential_mode == CredentialMode::DefaultUser && self.default_user.is_empty() {
-            return Err(Invalid::DefaultUserMissing);
         }
         if self.address_lookup == AddressLookup::Never {
             let ip = self.fixed_ip.trim();
@@ -267,7 +251,7 @@ mod tests {
     #[test]
     fn defaults() {
         let s = System::new("sys1");
-        assert_eq!(s.credential_mode, CredentialMode::DefaultUser);
+        assert!(s.default_user.is_empty());
         assert_eq!(s.address_lookup, AddressLookup::Always);
         assert!(!s.use_tls);
         assert_eq!(s.ports, Ports::default());
@@ -293,17 +277,8 @@ mod tests {
         assert_eq!(v(|s| s.name = "-x".into()), Err(Invalid::NameNotHost));
         assert_eq!(v(|s| s.name = "10.0.0.1".into()), Ok(()));
         assert_eq!(v(|s| s.name = "fe80::1".into()), Ok(()));
-        assert_eq!(
-            v(|s| s.default_user.clear()),
-            Err(Invalid::DefaultUserMissing)
-        );
-        assert_eq!(
-            v(|s| {
-                s.default_user.clear();
-                s.credential_mode = CredentialMode::PromptEveryTime;
-            }),
-            Ok(())
-        );
+        // The default user ID is optional.
+        assert_eq!(v(|s| s.default_user.clear()), Ok(()));
         assert_eq!(
             v(|s| s.default_user = "A B".into()),
             Err(Invalid::DefaultUserSpaces)

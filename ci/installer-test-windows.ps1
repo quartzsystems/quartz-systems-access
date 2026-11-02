@@ -121,7 +121,7 @@ if (Test-Path "$settingsDir\systems.toml") {
     if ($m) { $system = $m.Matches[0].Groups[1].Value }
 } else {
     New-Item -ItemType Directory -Force $settingsDir | Out-Null
-    "[[system]]`nname = `"$system`"`ncredential_mode = `"prompt-once`"`n" | Set-Content -Encoding utf8 "$settingsDir\systems.toml"
+    "[[system]]`nname = `"$system`"`ndefault_user = `"QATEST`"`n" | Set-Content -Encoding utf8 "$settingsDir\systems.toml"
     $madeSettings = $true
 }
 $qsd = Join-Path $env:TEMP "qsa-test-$PID.qsd"

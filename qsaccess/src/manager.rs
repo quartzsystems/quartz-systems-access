@@ -1032,7 +1032,6 @@ mod tests {
             None,
             qsa_config::Systems::new(),
             qsa_config::Settings::default(),
-            qsa_config::Credentials::with(Box::new(qsa_config::credentials::Memory::default())),
         )
         .shared();
         let entries = scan(std::slice::from_ref(&dir), &state);

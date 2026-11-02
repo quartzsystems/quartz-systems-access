@@ -96,6 +96,12 @@ macro_rules! trace {
     ($($arg:tt)*) => { $crate::log_at!($crate::log::Level::Trace, $($arg)*) };
 }
 
+/// Logs what a user or an administrator may want to know happened.
+#[macro_export]
+macro_rules! info {
+    ($($arg:tt)*) => { $crate::log_at!($crate::log::Level::Info, $($arg)*) };
+}
+
 /// Logs protocol errors and other things worth a look.
 #[macro_export]
 macro_rules! warn {

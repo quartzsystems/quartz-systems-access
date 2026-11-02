@@ -11,7 +11,6 @@ components below. Each is used under its own licence.
 | fltk-rs (`fltk`, `fltk-sys`) | 1.5 | MIT | Rust bindings to FLTK |
 | `serde` | 1 | MIT OR Apache-2.0 | Serialisation |
 | `toml` | 0.9 | MIT OR Apache-2.0 | Settings and message catalogue format |
-| `keyring` | 3.6 | MIT OR Apache-2.0 | Windows Credential Manager / Secret Service |
 | `directories` | 6 | MIT OR Apache-2.0 | Settings location |
 | `thiserror` | 2 | MIT OR Apache-2.0 | Error types |
 | `windows-sys` | 0.61 | MIT OR Apache-2.0 | Named pipe, SID lookup (Windows only) |

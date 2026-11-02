@@ -9,7 +9,7 @@ use std::collections::HashMap;
 use std::io;
 use std::rc::Rc;
 
-use qsa_config::{ConfigDir, Credentials, ReadError, Settings, Systems, migrate, store};
+use qsa_config::{ConfigDir, ReadError, Settings, Systems, migrate, store};
 use qsa_msg::Message;
 
 /// Everything the windows share.
@@ -18,7 +18,6 @@ pub struct AppState {
     pub dir: Option<ConfigDir>,
     pub systems: Systems,
     pub settings: Settings,
-    pub credentials: Credentials,
     /// Files that could not be read at start-up, to report as `QAD0030`.
     pub startup_errors: Vec<ReadError>,
     /// Record the next 5250 session opened to this file (`--record`).
@@ -36,37 +35,38 @@ pub struct AppState {
 pub type Shared = Rc<RefCell<AppState>>;
 
 impl AppState {
-    /// Loads settings and systems from `dir`.
-    pub fn load(dir: Option<ConfigDir>, credentials: Credentials) -> AppState {
+    /// Loads settings and systems from `dir`. The first start after an
+    /// upgrade from a release that could save passwords (a systems file
+    /// older than version 4) deletes what it saved, and rewrites the file.
+    pub fn load(dir: Option<ConfigDir>) -> AppState {
         let mut startup_errors = Vec::new();
+        let mut upgraded = false;
         let (settings, systems) = match &dir {
             Some(d) => {
                 let (settings, e1) = d.load_settings();
-                let (systems, e2) = d.load_systems();
+                let (systems, version, e2) = d.load_systems_versioned();
+                upgraded = version.is_some_and(|v| v < qsa_config::systems::VERSION);
                 startup_errors.extend(e1);
                 startup_errors.extend(e2);
                 (settings, systems)
             }
             None => (Settings::default(), Systems::new()),
         };
-        let mut st = AppState::new(dir, systems, settings, credentials);
+        let mut st = AppState::new(dir, systems, settings);
         st.startup_errors = startup_errors;
+        if upgraded {
+            st.forget_saved_passwords();
+        }
         st.migrate_keymaps();
         st
     }
 
     /// State from values already in hand (tests, screenshots).
-    pub fn new(
-        dir: Option<ConfigDir>,
-        systems: Systems,
-        settings: Settings,
-        credentials: Credentials,
-    ) -> AppState {
+    pub fn new(dir: Option<ConfigDir>, systems: Systems, settings: Settings) -> AppState {
         AppState {
             dir,
             systems,
             settings,
-            credentials,
             startup_errors: Vec::new(),
             record_next: None,
             startup_messages: Vec::new(),
@@ -97,6 +97,25 @@ impl AppState {
             if let Err(e) = self.save_settings() {
                 crate::log!("settings not saved: {e}");
             }
+        }
+    }
+
+    /// Deletes the passwords earlier releases kept in the platform
+    /// credential store, ignoring errors, and writes the systems file at
+    /// the current version so that this happens once.
+    fn forget_saved_passwords(&mut self) {
+        let f = qsa_config::legacy::forget_saved_passwords();
+        qsa_net::info!(
+            "saved passwords from an earlier release removed from the credential store: {}{}",
+            f.removed,
+            if f.store_unavailable {
+                " (the store could not be searched; any left can be removed with the desktop's password manager)"
+            } else {
+                ""
+            }
+        );
+        if let Err(e) = self.save_systems() {
+            crate::log!("systems not saved after removing saved passwords: {e}");
         }
     }
 

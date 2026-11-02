@@ -8,6 +8,7 @@ here. Breaking changes are marked **Breaking**.
 
 ### qsa-net
 
+- `info!`, beside `debug!`, `trace!` and `warn!`.
 - **Breaking:** `TlsOptions` has a new field, `tls13_only`: offer TLS 1.3
   alone (QAP) instead of TLS 1.2 and 1.3 (Telnet).
 

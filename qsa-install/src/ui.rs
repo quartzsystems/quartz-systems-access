@@ -209,7 +209,7 @@ impl Wizard {
         let upgrade = existing.as_ref().map(|m| {
             format!(
                 "Release {} is installed in {}. Setup will upgrade it to {}. Your settings, \
-                 system configurations, session files and saved passwords are kept.\n\n",
+                 system configurations and session files are kept.\n\n",
                 m.release,
                 m.dir.display(),
                 crate::RELEASE
@@ -772,14 +772,14 @@ pub fn build_uninstall_with(
     let text = if repair {
         format!(
             "Setup will put back the program files, shortcuts and file types of the install in {}.\n\n\
-             Your settings, system configurations, session files and saved passwords are not changed.",
+             Your settings, system configurations and session files are not changed.",
             dir.display()
         )
     } else {
         format!(
             "Setup will remove QS/400 Access for Desktop from {}, with its shortcuts and file types.\n\n\
-             Your session files in {sessions} are kept, and so are your settings, system \
-             configurations and saved passwords unless you tick Also remove my settings.",
+             Your session files in {sessions} are kept, and so are your settings and system \
+             configurations unless you tick Also remove my settings.",
             dir.display()
         )
     };

@@ -127,12 +127,11 @@ impl SystemRef {
     }
 
     /// A new System Configuration from the fallback fields, for "Create
-    /// system from session file". There is no default user to go on, so it
-    /// prompts for one once. It trusts nothing beyond the platform's own
-    /// certificate authorities.
+    /// system from session file". There is no default user to go on, so the
+    /// Sign On dialog starts empty. It trusts nothing beyond the platform's
+    /// own certificate authorities.
     pub fn to_system(&self) -> System {
         let mut s = System::new(&self.name);
-        s.credential_mode = crate::CredentialMode::PromptOnce;
         s.use_tls = self.tls;
         if self.tls {
             s.ports.telnet_tls = self.telnet_port;

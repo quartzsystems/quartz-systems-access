@@ -30,7 +30,7 @@ recovery = "None needed."
 [QAD0012]
 severity = 0
 text = "System &1 deleted."
-cause = "The system configuration named &1 was removed, together with any password saved for it in the credential store."
+cause = "The system configuration named &1 was removed."
 recovery = "None needed. To use the system again, add a new system configuration for it."
 
 [QAD0020]
@@ -50,14 +50,6 @@ severity = 30
 text = "Settings file &1 could not be read."
 cause = "The file &1 could not be opened, or it holds a value that is not valid. The reason given was: &2"
 recovery = "Correct the file and start QS/400 Access for Desktop again, or carry on with default values. If you carry on, the unreadable file is kept as &1.unreadable the first time the program saves."
-
-[QAD0040]
-severity = 10
-text = "Credential store not available; you will be prompted each time."
-cause = "No credential store could be reached. On Windows this is the Windows Credential Manager; on Linux it is a Secret Service provider on the session bus. Passwords are never saved anywhere else."
-recovery = "On Linux, start a Secret Service provider for your session and start QS/400 Access for Desktop again. Until then, enter your password whenever you are prompted."
-
-# 5250 display sessions.
 
 [QAD1001]
 severity = 0
@@ -210,7 +202,7 @@ recovery = "None needed. Start QS/400 Access for Desktop from the applications m
 [QAD2102]
 severity = 0
 text = "Upgrade from &1 to &2 complete."
-cause = "The program files of release &1 were replaced with those of release &2. Settings, system configurations, session files and saved passwords were kept."
+cause = "The program files of release &1 were replaced with those of release &2. Settings, system configurations and session files were kept."
 recovery = "None needed."
 
 [QAD2103]
@@ -228,13 +220,13 @@ recovery = "Run the installer again and allow the change when asked, or select J
 [QAD2105]
 severity = 0
 text = "QS/400 Access for Desktop removed."
-cause = "Every file, folder, shortcut and file type listed in the install manifest was removed. Settings, system configurations and saved passwords were kept unless you asked for your settings to be removed. The Sessions folder is never removed."
+cause = "Every file, folder, shortcut and file type listed in the install manifest was removed. Settings and system configurations were kept unless you asked for your settings to be removed. The Sessions folder is never removed."
 recovery = "None needed."
 
 [QAD2106]
 severity = 0
 text = "Repair complete."
-cause = "The program files, shortcuts and file types recorded in the install manifest were written again. Settings, system configurations, session files and saved passwords were not changed."
+cause = "The program files, shortcuts and file types recorded in the install manifest were written again. Settings, system configurations and session files were not changed."
 recovery = "None needed."
 
 [QAD3001]
@@ -377,12 +369,6 @@ severity = 0
 text = "Signed off from &1."
 cause = "The QAP session on system &1 ended at this program's request."
 recovery = "None needed."
-
-[QAD4030]
-severity = 10
-text = "Credential store not available; password not saved."
-cause = "Save password was selected, but no credential store could be reached. On Windows this is the Windows Credential Manager; on Linux it is a Secret Service provider on the session bus. Passwords are never saved anywhere else."
-recovery = "On Linux, start a Secret Service provider for your session. Until then, enter the password when you are prompted."
 
 [QAD4031]
 severity = 10

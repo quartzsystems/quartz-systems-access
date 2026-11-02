@@ -139,17 +139,10 @@ pub fn merge(
 mod tests {
     use super::*;
     use crate::store::tests::{full_system, temp_dir};
-    use crate::system::CredentialMode;
 
     #[test]
     fn round_trip_without_loss() {
-        let systems = vec![
-            full_system("a.example.net"),
-            System {
-                credential_mode: CredentialMode::PromptEveryTime,
-                ..System::new("b")
-            },
-        ];
+        let systems = vec![full_system("a.example.net"), System::new("b")];
         let dir = temp_dir("qsc");
         let path = dir.join("out.qsc");
         export(&path, &systems).unwrap();

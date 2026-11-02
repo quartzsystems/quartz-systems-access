@@ -15,10 +15,7 @@ directories.workspace = true
 qsa-msg.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-keyring = { workspace = true, features = ["windows-native"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-keyring = { workspace = true, features = ["sync-secret-service", "crypto-rust", "vendored"] }
+windows-sys = { workspace = true, features = ["Win32_Foundation", "Win32_Security_Credentials"] }
 
 [lints]
 workspace = true

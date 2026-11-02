@@ -23,7 +23,12 @@ pub struct Systems {
 ///   and `qap`. Reading an older file keeps its Telnet ports, gives QAP
 ///   its default port, and drops `port_lookup` and the host-server ports,
 ///   which nothing uses any more.
-pub(crate) const VERSION: u32 = 3;
+/// - 4: passwords are never saved, so `credential_mode` is gone and
+///   `default_user` is only what the Sign On dialog starts with. Reading an
+///   older file keeps `default_user` and drops `credential_mode`. A program
+///   that reads a file older than 4 deletes the passwords earlier releases
+///   saved ([`crate::legacy`]).
+pub const VERSION: u32 = 4;
 
 /// On-disk form of `systems.toml`.
 #[derive(Serialize, Deserialize)]
@@ -156,13 +161,8 @@ impl Systems {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::system::CredentialMode;
-
     fn sys(name: &str) -> System {
-        System {
-            credential_mode: CredentialMode::PromptEveryTime,
-            ..System::new(name)
-        }
+        System::new(name)
     }
 
     #[test]
@@ -223,10 +223,34 @@ signon_tls = 19476
         assert_eq!(sys.ports.qap, crate::system::QAP_PORT);
         assert!(sys.use_tls);
         let written = toml::to_string(&s.to_file()).unwrap();
-        assert!(written.starts_with("version = 3"), "{written}");
+        assert!(written.starts_with("version = 4"), "{written}");
         assert!(!written.contains("port_lookup"), "{written}");
         assert!(!written.contains("signon"), "{written}");
         assert!(written.contains("qap = 2320"), "{written}");
+    }
+
+    #[test]
+    fn version_3_files_keep_the_default_user_and_drop_the_credential_mode() {
+        let old = "version = 3
+
+[[system]]
+name = \"v3.example\"
+credential_mode = \"prompt-once\"
+default_user = \"DEVUSR\"
+
+[[system]]
+name = \"every.example\"
+credential_mode = \"prompt-every-time\"
+";
+        let f: SystemsFile = toml::from_str(old).unwrap();
+        assert_eq!(f.version, 3);
+        let s = Systems::from_vec(f.systems);
+        assert_eq!(s.get("v3.example").unwrap().default_user, "DEVUSR");
+        assert_eq!(s.get("every.example").unwrap().default_user, "");
+        let written = toml::to_string(&s.to_file()).unwrap();
+        assert!(written.starts_with("version = 4"), "{written}");
+        assert!(!written.contains("credential_mode"), "{written}");
+        assert!(written.contains("default_user = \"DEVUSR\""), "{written}");
     }
 
     #[test]

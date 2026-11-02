@@ -96,11 +96,19 @@ impl ConfigDir {
     /// Reads `systems.toml`. A missing file gives an empty list; an
     /// unreadable one gives an empty list and the error.
     pub fn load_systems(&self) -> (Systems, Option<ReadError>) {
+        let (systems, _, err) = self.load_systems_versioned();
+        (systems, err)
+    }
+
+    /// [`ConfigDir::load_systems`], and the version of the file read:
+    /// `None` when there was none or it could not be read.
+    pub fn load_systems_versioned(&self) -> (Systems, Option<u32>, Option<ReadError>) {
         let (file, err) = load::<SystemsFile>(&self.systems_path());
+        let version = file.as_ref().map(|f| f.version);
         let systems = file
             .map(|f| Systems::from_vec(f.systems))
             .unwrap_or_default();
-        (systems, err)
+        (systems, version, err)
     }
 
     /// Writes `systems.toml` atomically.
@@ -244,7 +252,7 @@ fn open_private(path: &Path) -> io::Result<fs::File> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use crate::system::{AddressLookup, CaCertificate, CredentialMode, System};
+    use crate::system::{AddressLookup, CaCertificate, System};
 
     /// A fresh, empty directory under the system temp dir.
     pub fn temp_dir(tag: &str) -> PathBuf {
@@ -264,7 +272,6 @@ pub(crate) mod tests {
         let mut s = System::new(name);
         s.description = "Production — main \"site\"".into();
         s.use_tls = true;
-        s.credential_mode = CredentialMode::PromptOnce;
         s.default_user = "QSECOFR".into();
         s.address_lookup = AddressLookup::Never;
         s.fixed_ip = "192.0.2.10".into();

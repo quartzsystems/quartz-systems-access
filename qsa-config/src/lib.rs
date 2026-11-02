@@ -17,11 +17,12 @@
 //!   keyboard map and macro files.
 //! - [`migrate`]: moving the earlier per-system keyboard maps into session
 //!   files.
-//! - [`credentials`]: saved passwords, in the platform credential store only.
+//! - [`legacy`]: removing the passwords earlier releases saved. Passwords
+//!   are never saved.
 
-pub mod credentials;
 pub mod doc;
 pub mod keymap;
+pub mod legacy;
 pub mod migrate;
 pub mod qkm;
 pub mod qsc;
@@ -33,10 +34,9 @@ pub mod store;
 pub mod system;
 pub mod systems;
 
-pub use credentials::{Credentials, Saved, Secret};
 pub use doc::FileError;
 pub use keymap::KeyMap;
 pub use settings::Settings;
 pub use store::{ConfigDir, ReadError};
-pub use system::{AddressLookup, CaCertificate, CredentialMode, Invalid, Ports, System};
+pub use system::{AddressLookup, CaCertificate, Invalid, Ports, System};
 pub use systems::Systems;

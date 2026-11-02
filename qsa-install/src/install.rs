@@ -12,8 +12,8 @@
 //!   undone (its manifest says what it made) and the new one made. User
 //!   data is never part of a manifest, so it is kept.
 //! - Repair undoes the install and makes it again with the same choices.
-//! - Uninstall undoes the install. Settings, system configurations and
-//!   saved passwords go only when asked; the Sessions folder never does.
+//! - Uninstall undoes the install. Settings and system configurations go
+//!   only when asked; the Sessions folder never does.
 
 use std::path::{Path, PathBuf};
 
@@ -208,7 +208,7 @@ pub fn install(installer: &Path, opts: &Options, progress: Progress) -> Result<R
 }
 
 /// Removes the install in `dir`. With `remove_settings`, the user's
-/// settings, system configurations and saved passwords go too.
+/// settings and system configurations go too.
 pub fn uninstall(dir: &Path, remove_settings: bool) -> Result<Vec<String>, Error> {
     let m = Manifest::load(dir).map_err(|_| Error::NotInstalled(dir.to_owned()))?;
     let mut problems = undo(&m);
@@ -235,17 +235,21 @@ pub fn repair(installer: &Path, dir: &Path, progress: Progress) -> Result<Report
     Ok(report)
 }
 
-/// Removes this user's settings, system configurations and saved
-/// passwords. The Sessions folder is never touched.
+/// Removes this user's settings and system configurations. The Sessions
+/// folder is never touched. Passwords an earlier release saved in the
+/// platform credential store, if the program never ran since to remove
+/// them, go as well.
 pub fn remove_user_settings() -> Vec<String> {
     let mut problems = Vec::new();
     let Some(dir) = qsa_config::ConfigDir::default_location() else {
         return problems;
     };
-    let (systems, _) = dir.load_systems();
-    let creds = qsa_config::Credentials::platform();
-    for s in systems.iter() {
-        creds.forget(&s.name);
+    let forgotten = qsa_config::legacy::forget_saved_passwords();
+    if forgotten.removed > 0 {
+        crate::log(&format!(
+            "{} entries of an earlier release removed from the credential store",
+            forgotten.removed
+        ));
     }
     if dir.path().exists()
         && let Err(e) = std::fs::remove_dir_all(dir.path())

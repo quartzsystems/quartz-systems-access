@@ -74,6 +74,7 @@ blessed.
 | `sign-on`, `change-password`, `message-system` (Windows, X11, Wayland) | New: the QAP Sign On and Change Password dialogs, and a system's message shown as sent. No golden yet. |
 | `system-configurations` (Windows, X11, Wayland) | The Verify... button. |
 | `verify-connection` (Windows, X11, Wayland) | New: Verify Connection. No golden yet. |
+| `properties-connection` (Windows, X11, Wayland) | Passwords are never saved: one Default user ID field and a note in place of the three sign-on choices. |
 
 ## PDF goldens
 

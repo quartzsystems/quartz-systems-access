@@ -9,8 +9,8 @@
 use std::path::{Path, PathBuf};
 
 use fltk::{app, prelude::*};
+use qsa_config::ConfigDir;
 use qsa_config::settings::Geometry;
-use qsa_config::{ConfigDir, Credentials};
 use qsaccess::app::{AppState, Shared};
 use qsaccess::mainwin::{self, Task, Ui};
 use qsaccess::request::Request;
@@ -114,7 +114,7 @@ fn main() {
         return;
     }
 
-    let state = AppState::load(dir, Credentials::platform()).shared();
+    let state = AppState::load(dir).shared();
     let (ui, rx) = mainwin::build(state.clone());
     let mut win = ui.window.clone();
     // The main window keeps the size it last had, and always opens in the

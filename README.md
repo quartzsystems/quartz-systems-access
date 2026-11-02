@@ -27,10 +27,15 @@ Trusted dialog as TLS 5250 sessions.
 
 **Actions > Sign On...**, **Change Password...** and **Sign Off** work on the
 system selected in the task pane. The system's own messages are shown as it
-sent them. Passwords and session tokens are never saved or logged. A session
-survives a dropped connection and is resumed quietly; if an operator ends it,
-or the QAP server ends, the program says so and offers to sign on or
-reconnect.
+sent them. Passwords and session tokens are never saved or logged: a system
+configuration keeps only a **Default user ID** for the Sign On dialog. The
+program signs on to a system once per run, when a task first needs it, and
+every task uses that session. A session survives a dropped connection and is
+resumed quietly; the program asks for a sign-on again only when the session
+has ended or expired, or an operator ended it, and when the QAP server ends it
+says so and offers to reconnect. Releases before systems file version 4 could
+save passwords in the platform credential store; the first start after the
+upgrade deletes them.
 
 **System Configurations > Verify...** checks the name lookup, the Telnet port
 (and its TLS when used), the QAP port, the TLS 1.3 handshake and certificate,
@@ -56,8 +61,8 @@ Ready, Progress, Finish. The installer checks its own checksum before it
 changes anything (`QAD2103` if the file is damaged). Every file, folder,
 registry key and desktop entry it makes is listed in `install-manifest.toml`
 in the install folder, and uninstall removes exactly those. Settings, system
-configurations, saved passwords and session files are never removed unless
-you tick **Also remove my settings**, and the Sessions folder never is.
+configurations and session files are never removed unless you tick **Also
+remove my settings**, and the Sessions folder never is.
 
 On Windows, Just me installs to `%LOCALAPPDATA%\Programs\Quartz Systems\Access`
 without administrator rights; All users installs to
@@ -87,9 +92,6 @@ installation has:
 | `libX11.so.6`, `libXinerama.so.1`, `libXcursor.so.1`, `libXfixes.so.3` | X11 |
 | `libfontconfig.so.1`, `libpango-1.0.so.0`, `libpangocairo-1.0.so.0`, `libcairo.so.2`, `libgobject-2.0.so.0` | Text and drawing |
 | `libgcc_s.so.1`, `libc.so.6`, `libm.so.6`, `libdl.so.2`, `libpthread.so.0` | The C runtime |
-
-The saved-password store talks to the Secret Service over D-Bus with its own
-code, so no D-Bus library is needed.
 
 **Windows SmartScreen.** The installer is not code-signed yet, so the first
 time it is run from a download Windows shows *Windows protected your PC*.

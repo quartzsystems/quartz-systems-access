@@ -25,10 +25,9 @@ use std::process::ExitCode;
 
 use fltk::window::Window;
 use qsa_config::KeyMap;
-use qsa_config::credentials::Memory;
 use qsa_config::settings::{ColorMap, ScreenSize};
 use qsa_config::system::CaCertificate;
-use qsa_config::{AddressLookup, CredentialMode, Credentials, Settings, System, Systems};
+use qsa_config::{AddressLookup, Settings, System, Systems};
 use qsa_ui::goldens::Goldens;
 use qsaccess::app::{AppState, Shared};
 use qsaccess::session::start::StartOptions;
@@ -47,7 +46,6 @@ fn fixture() -> Shared {
     });
     systems.upsert(System {
         description: "Development and test".into(),
-        credential_mode: CredentialMode::PromptOnce,
         default_user: "DEVUSR".into(),
         address_lookup: AddressLookup::Never,
         fixed_ip: "192.0.2.20".into(),
@@ -56,7 +54,6 @@ fn fixture() -> Shared {
     });
     systems.upsert(System {
         description: "Backup".into(),
-        credential_mode: CredentialMode::PromptEveryTime,
         ..System::new("10.1.1.7")
     });
     AppState::new(
@@ -66,7 +63,6 @@ fn fixture() -> Shared {
             last_system: "sys1.example.net".into(),
             ..Settings::default()
         },
-        Credentials::with(Box::new(Memory::default())),
     )
     .shared()
 }

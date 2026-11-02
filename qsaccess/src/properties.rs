@@ -7,7 +7,7 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use fltk::button::{CheckButton, RadioRoundButton};
+use fltk::button::CheckButton;
 use fltk::enums::{Align, FrameType};
 use fltk::input::{Input, IntInput};
 use fltk::menu::Choice;
@@ -15,7 +15,7 @@ use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextDisplay};
 use fltk::window::Window;
 use qsa_config::system::{PORT_FIELDS, Ports};
-use qsa_config::{AddressLookup, CaCertificate, CredentialMode, Invalid, System, Systems};
+use qsa_config::{AddressLookup, CaCertificate, Invalid, System, Systems};
 use qsa_ui::controls::{self, Switch};
 use qsa_ui::groupbox::{self, CONTENT_SIDE, CONTENT_TOP};
 use qsa_ui::listtable::{Cell, ListTable};
@@ -41,7 +41,6 @@ pub struct SystemForm {
     name: Input,
     description: Input,
     use_tls: CheckButton,
-    mode: [RadioRoundButton; 3],
     default_user: Input,
     lookup: Choice,
     fixed_ip: Input,
@@ -49,14 +48,10 @@ pub struct SystemForm {
     cas: Rc<RefCell<Vec<CaCertificate>>>,
 }
 
-const MODES: [(CredentialMode, &str); 3] = [
-    (CredentialMode::DefaultUser, "Use the default user ID"),
-    (
-        CredentialMode::PromptOnce,
-        "Prompt for user ID and password once",
-    ),
-    (CredentialMode::PromptEveryTime, "Prompt every time"),
-];
+/// The Connection tab's note under the default user ID.
+pub const SIGN_ON_NOTE: &str = "Passwords are never saved. QS/400 Access signs on to this \
+     system once each time it runs, when a task first needs it, and asks again only \
+     when that session ends.";
 
 const LOOKUPS: [(AddressLookup, &str); 3] = [
     (AddressLookup::Always, "Always"),
@@ -118,22 +113,17 @@ pub fn build(title: &str, system: &System) -> (PropertyDialog, SystemForm) {
     // Connection.
     let mut connection = None;
     d.tabs().add_page("Connection", |r| {
-        let gh = CONTENT_TOP + 3 * 22 + 34 + 8;
+        let gh = CONTENT_TOP + 28 + 3 * 16 + 10;
         let g = groupbox::group_box(r.x, r.y, r.w, gh, "Sign-on");
         let x = r.x + CONTENT_SIDE;
-        let mut y = r.y + CONTENT_TOP;
-        let mut radios = Vec::new();
-        for (m, label) in MODES {
-            let mut rb = controls::radio(x, y, r.w - 2 * CONTENT_SIDE, 20, label);
-            rb.set_value(system.credential_mode == m);
-            radios.push(rb);
-            y += 22;
-        }
-        y += 6;
-        controls::label(x, y, 80, fh, "Default user:");
-        let mut default_user = controls::field(x + 80, y, 150, fh);
+        let y = r.y + CONTENT_TOP;
+        controls::label(x, y, 100, fh, "Default user ID:");
+        let mut default_user = controls::field(x + 100, y, 150, fh);
         default_user.set_value(&system.default_user);
         default_user.set_maximum_size(128);
+        default_user.set_tooltip("The user ID the Sign On dialog starts with");
+        let mut note = controls::label(x, y + 28, r.w - 2 * CONTENT_SIDE, 3 * 16, SIGN_ON_NOTE);
+        note.set_align(Align::Left | Align::Top | Align::Inside | Align::Wrap);
         g.end();
 
         let ay = r.y + gh + 10;
@@ -154,10 +144,9 @@ pub fn build(title: &str, system: &System) -> (PropertyDialog, SystemForm) {
         fixed_ip.set_value(&system.fixed_ip);
         a.end();
 
-        let radios: [RadioRoundButton; 3] = radios.try_into().expect("three modes");
-        connection = Some((radios, default_user, lookup, fixed_ip));
+        connection = Some((default_user, lookup, fixed_ip));
     });
-    let (mode, default_user, mut lookup, mut fixed_ip) = connection.expect("connection page built");
+    let (default_user, mut lookup, mut fixed_ip) = connection.expect("connection page built");
     let ip_switch = Switch::for_input(&mut fixed_ip);
     ip_switch.set_enabled(system.address_lookup == AddressLookup::Never);
     lookup.set_callback(move |c| ip_switch.set_enabled(c.value() == 2));
@@ -289,7 +278,6 @@ when Use TLS for all connections is selected.",
         name,
         description,
         use_tls,
-        mode,
         default_user,
         lookup,
         fixed_ip,
@@ -312,11 +300,6 @@ impl SystemForm {
             ca_certificates: self.cas.borrow().clone(),
             ..System::default()
         };
-        s.credential_mode = MODES
-            .iter()
-            .zip(&self.mode)
-            .find(|(_, r)| r.value())
-            .map_or(CredentialMode::DefaultUser, |((m, _), _)| *m);
         s.address_lookup = LOOKUPS
             .get(self.lookup.value().max(0) as usize)
             .map_or(AddressLookup::Always, |(l, _)| *l);
@@ -335,10 +318,9 @@ impl SystemForm {
 pub fn tab_for(e: &Invalid) -> usize {
     match e {
         Invalid::NameMissing | Invalid::NameNotHost | Invalid::NameTaken(_) => TAB_GENERAL,
-        Invalid::DefaultUserMissing
-        | Invalid::DefaultUserSpaces
-        | Invalid::FixedIpMissing
-        | Invalid::FixedIpBad(_) => TAB_CONNECTION,
+        Invalid::DefaultUserSpaces | Invalid::FixedIpMissing | Invalid::FixedIpBad(_) => {
+            TAB_CONNECTION
+        }
         Invalid::PortZero(_) | Invalid::PortShared(..) => TAB_PORTS,
         Invalid::CaEmpty => TAB_SECURITY,
     }

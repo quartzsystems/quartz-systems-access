@@ -16,7 +16,6 @@ use qsa_config::{System, qsc};
 use qsa_msg::{Message, id};
 use qsa_ui::controls::{self, Switch};
 use qsa_ui::listtable::{Cell, ListTable};
-use qsa_ui::msgdetails;
 use qsa_ui::propdialog::center_on;
 use qsa_ui::statusbar::{Status, StatusLine};
 use qsa_ui::theme::{self, colors};
@@ -272,16 +271,11 @@ fn edit_system(d: &mut ListDialog, ui: &Ui) {
         d.error(&e.to_string());
         return;
     }
-    if !original.name.eq_ignore_ascii_case(&name) {
-        // A saved sign-on belongs to the old name; it does not follow a rename.
-        state.borrow().credentials.forget(&original.name);
-    }
     if save(d, state) {
         d.report(ui, &qsa_msg::message(id::SYSTEM_CHANGED, &[&name]));
     }
     d.fill(state, Some(&name));
     ui.refresh_systems();
-    warn_credentials(d, ui);
 }
 
 fn delete_system(d: &mut ListDialog, ui: &Ui) {
@@ -289,11 +283,7 @@ fn delete_system(d: &mut ListDialog, ui: &Ui) {
     let Some(sys) = d.selected(state) else { return };
     let answer = MessageBox::new(
         "Delete System Configuration",
-        &format!(
-            "Delete the system configuration {}?\n\n\
-             Any password saved for it is also removed.",
-            sys.name
-        ),
+        &format!("Delete the system configuration {}?", sys.name),
     )
     .buttons(&["Delete", "Cancel"], 1, 1)
     .run(Some(&d.window));
@@ -301,23 +291,11 @@ fn delete_system(d: &mut ListDialog, ui: &Ui) {
         return;
     }
     state.borrow_mut().systems.remove(&sys.name);
-    state.borrow().credentials.forget(&sys.name);
     if save(d, state) {
         d.report(ui, &qsa_msg::message(id::SYSTEM_DELETED, &[&sys.name]));
     }
     d.fill(state, None);
     ui.refresh_systems();
-    warn_credentials(d, ui);
-}
-
-/// Shows `QAD0040` the first time the credential store is found missing.
-fn warn_credentials(d: &mut ListDialog, ui: &Ui) {
-    let warning = ui.state.borrow().credentials.take_warning();
-    if let Some(m) = warning {
-        crate::log!("{m}");
-        d.report(ui, &m);
-        msgdetails::show_message(Some(&d.window), &m);
-    }
 }
 
 const QSC_PATTERN: &str = "System configurations (*.qsc)\tAll Files (*)";

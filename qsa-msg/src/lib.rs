@@ -34,7 +34,6 @@ pub mod id {
     pub const SYSTEMS_IMPORTED: &str = "QAD0020";
     pub const SYSTEMS_EXPORTED: &str = "QAD0021";
     pub const SETTINGS_UNREADABLE: &str = "QAD0030";
-    pub const NO_CREDENTIAL_STORE: &str = "QAD0040";
     pub const CONNECTING: &str = "QAD1001";
     pub const CONNECTION_REFUSED: &str = "QAD1002";
     pub const HOST_NOT_FOUND: &str = "QAD1003";
@@ -87,7 +86,6 @@ pub mod id {
     pub const QAP_SESSION_EXPIRED: &str = "QAD4026";
     pub const PASSWORDS_DIFFER: &str = "QAD4027";
     pub const SIGNED_OFF: &str = "QAD4028";
-    pub const PASSWORD_NOT_SAVED: &str = "QAD4030";
     pub const PASSWORD_EXPIRES_SOON: &str = "QAD4031";
     pub const AUTO_SIGNON_REFUSED: &str = "QAD4040";
     pub const VERIFIED: &str = "QAD4050";
@@ -266,7 +264,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 70] = [
+    const SEEDS: [&str; 68] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -274,7 +272,6 @@ mod tests {
         id::SYSTEMS_IMPORTED,
         id::SYSTEMS_EXPORTED,
         id::SETTINGS_UNREADABLE,
-        id::NO_CREDENTIAL_STORE,
         id::CONNECTING,
         id::CONNECTION_REFUSED,
         id::HOST_NOT_FOUND,
@@ -327,7 +324,6 @@ mod tests {
         id::QAP_SESSION_EXPIRED,
         id::PASSWORDS_DIFFER,
         id::SIGNED_OFF,
-        id::PASSWORD_NOT_SAVED,
         id::PASSWORD_EXPIRES_SOON,
         id::AUTO_SIGNON_REFUSED,
         id::VERIFIED,
@@ -575,10 +571,6 @@ mod tests {
         assert_eq!(
             message(id::SETTINGS_UNREADABLE, &["s.toml", "bad"]).text,
             "Settings file s.toml could not be read."
-        );
-        assert_eq!(
-            message(id::NO_CREDENTIAL_STORE, &[]).text,
-            "Credential store not available; you will be prompted each time."
         );
     }
 

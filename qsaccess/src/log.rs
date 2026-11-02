@@ -3,8 +3,9 @@
 // root directory of this project.
 
 //! A small append-only log, `qsaccess.log` in the settings directory, also
-//! echoed to standard error. Callers must never pass a password; the types
-//! that hold one ([`qsa_config::Secret`]) print as `***`.
+//! echoed to standard error. Callers must never pass a password, a session
+//! token or a Telnet ticket; the types that hold one ([`qap_client::Secret`],
+//! [`qap_client::Token`]) print only that a value is there.
 
 use std::io::Write;
 use std::path::PathBuf;
