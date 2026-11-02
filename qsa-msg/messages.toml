@@ -373,8 +373,8 @@ recovery = "None needed."
 [QAD4031]
 severity = 10
 text = "Password for &1 on &2 expires in &3 days."
-cause = "The password of user &1 on system &2 expires in &3 days, within the system's warning period."
-recovery = "Select Change password to change it now, or change it before it expires."
+cause = "The password of user profile &1 on system &2 expires in &3 days, within the system's password expiration warning period (system value QPWDEXPWRN). It is counted on the system's clock from the password's last change and its expiration interval. This warning is shown once per session."
+recovery = "Select Change Password... to change it now, or change it later with Actions > Change Password... before it expires. Once it has expired, sign-on asks for a new one."
 
 [QAD4040]
 severity = 20

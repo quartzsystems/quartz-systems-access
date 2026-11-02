@@ -350,6 +350,72 @@ mod tests {
     ];
 
     #[test]
+    fn phase_5_texts() {
+        let t = |id: &str, args: &[&str]| message(id, args).text;
+        for (id, args, want) in [
+            (
+                id::QAP_VERSION_NEEDED,
+                &["Run Command", "2", "SYS", "1"][..],
+                "Run Command needs QAP version 2; system SYS has version 1.",
+            ),
+            (
+                id::COMMAND_COMPLETED,
+                &["CRTLIB"],
+                "Command CRTLIB completed.",
+            ),
+            (
+                id::COMMAND_FAILED,
+                &["CRTLIB"],
+                "Command CRTLIB ended with an error.",
+            ),
+            (
+                id::COMMAND_CANCELLED,
+                &["DLYJOB"],
+                "Command DLYJOB was cancelled.",
+            ),
+            (
+                id::COMMAND_NOT_FOUND,
+                &["NOSUCH"],
+                "Command NOSUCH not found.",
+            ),
+            (
+                id::COMMAND_HAS_ERRORS,
+                &["DSPOBJD"],
+                "Command DSPOBJD has errors; see the messages.",
+            ),
+            (
+                id::AUTO_SIGNON_NEEDS_TLS,
+                &[],
+                "Automatic sign-on needs Telnet over TLS.",
+            ),
+            (
+                id::PASSWORD_EXPIRES_SOON,
+                &["QATEST", "SYS", "3"],
+                "Password for QATEST on SYS expires in 3 days.",
+            ),
+            (
+                id::AUTO_SIGNON_REFUSED,
+                &["SYS"],
+                "Automatic sign-on to SYS was not accepted.",
+            ),
+        ] {
+            assert_eq!(t(id, args), want, "{id}");
+            let m = message(id, args);
+            assert!(!m.cause.is_empty() && !m.recovery.is_empty(), "{id}");
+        }
+        let r = message(id::AUTO_SIGNON_REFUSED, &["SYS"]).recovery;
+        assert!(
+            r.contains("QRMTSIGN") && r.contains("*VERIFY") && r.contains("TLS"),
+            "{r}"
+        );
+        assert!(
+            message(id::PASSWORD_EXPIRES_SOON, &["U", "S", "1"])
+                .recovery
+                .contains("Change Password...")
+        );
+    }
+
+    #[test]
     fn phase_3_texts() {
         let t = |id: &str, args: &[&str]| message(id, args).text;
         for (id, args, want) in [
