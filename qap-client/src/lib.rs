@@ -49,6 +49,7 @@ use std::time::Duration;
 pub use command::{CheckOutcome, CommandOutcome};
 pub use conn::{Closed, Connection, Event, Pending, Reply, runs_long};
 pub use error::Error;
+pub use ipc::Wire;
 pub use qap_proto as proto;
 pub use qap_proto::{Secret, ServerMessage, Status, Token};
 pub use session::{Client, Notice};

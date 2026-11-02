@@ -164,6 +164,7 @@ fn main() {
         }
         qsaccess::session::pump();
         qsaccess::printer::pump();
+        qsaccess::splf::pump();
         qsaccess::manager::pump();
         qsaccess::macros::editor::pump();
         qsaccess::qap::pump(&ui);
@@ -176,6 +177,7 @@ fn main() {
         if !win.shown()
             && !qsaccess::session::any_open()
             && !qsaccess::printer::any_open()
+            && !qsaccess::splf::any_open()
             && !qsaccess::manager::shown()
             && !qsaccess::macros::editor::any_open()
         {
@@ -183,6 +185,7 @@ fn main() {
         }
     }
 
+    qsaccess::splf::output::remove_temporary();
     let mut st = state.borrow_mut();
     if main_shown {
         st.settings.window = Some(Geometry {

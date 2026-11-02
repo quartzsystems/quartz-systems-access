@@ -117,7 +117,9 @@ on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 | `start-5250-printer`, `printer-session`, `printer-settings` | New with the printer session. No golden yet. |
 | `sign-on`, `change-password`, `message-system` | New: the QAP Sign On and Change Password dialogs, and a system's message shown as sent. No golden yet. |
 | `verify-connection` | New: Verify Connection. No golden yet. |
-| `run-command`, `run-command-results` | New: Run Command, empty and after runs and a check. No golden yet. |
+| `run-command`, `run-command-results` | New: Run Command, empty and after runs and a check; `run-command-results` also shows CHGAUT and CPYFRMSTMF with the test system's severities 10 and 20 (red from 20). No golden yet. |
+| `printer-output`, `printer-output-held`, `printer-output-empty` | New: Printer Output with the default filter (page one of BOB's files on QS/400's test system), with a status filter, and with nothing matching. Times are shown in UTC here, so they match on every machine. No golden yet. |
+| `printer-output-hold`, `printer-output-move`, `printer-output-delete`, `printer-output-properties`, `printer-output-summary` | New: the hold choice, Move, the delete confirmation listing every file, Properties, and the summary of actions on several files with a refusal as the system sent it. No golden yet. |
 | `session-properties-auto-sign-on`, `session-properties-auto-sign-on-disabled` | New: Session Properties with automatic sign-on enabled (TLS, QAP version 2) and disabled without TLS (`QAD5030`). `session-properties-general` changes with them. No golden yet. |
 | `password-expiry` | New: the password expiry warning, `QAD4031` with Change Password.... No golden yet. |
 | `prompt-simple`, `prompt-qualifiers`, `prompt-list`, `prompt-additional`, `prompt-elements`, `prompt-checked`, `prompt-help` | New: Prompt for QS/400's test commands (`qapd::testing`): CRTLIB; DSPOBJD with a qualified name, then a list with "+"; CRTPF with its additional parameters shown, then its element list changed; DSPOBJD after a failed check; a qualifier's help. No golden yet. |

@@ -26,6 +26,7 @@ pub mod runcmd;
 pub mod session;
 pub mod shell;
 pub mod signon;
+pub mod splf;
 pub mod sysconfig;
 pub mod trust;
 pub mod verify;

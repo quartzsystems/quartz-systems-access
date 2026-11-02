@@ -356,6 +356,141 @@ fn sent(id: &str, severity: u8, text: &str) -> qap_client::ServerMessage {
     }
 }
 
+/// QS/400's test system's spooled files (`qapd::testing::fixtures`), in
+/// the order the system keeps them.
+fn spooled_files() -> Vec<qap_client::proto::ops::spool::SpooledFile> {
+    let sys = qapd::testing::System::new();
+    let sp = sys.spool.lock().unwrap();
+    sp.files.values().map(|f| f.info()).collect()
+}
+
+fn spooled(name: &str) -> qap_client::proto::ops::spool::SpooledFile {
+    spooled_files()
+        .into_iter()
+        .find(|f| f.id.file == name)
+        .expect("a test system file")
+}
+
+/// Printer Output on sys1.example.net with `filter`, showing page one of
+/// the files it matches.
+fn printer_output(
+    state: &Shared,
+    filter: qsaccess::splf::model::Filter,
+    files: Vec<qap_client::proto::ops::spool::SpooledFile>,
+    total: u32,
+) -> Window {
+    use qsaccess::splf::{PrinterOutput, model};
+    let st = state.borrow();
+    let sys = st.systems.get("sys1.example.net").expect("fixture system");
+    let p = PrinterOutput::build(sys, &st.settings.printer_output);
+    p.show_files(&filter, files, total, &model::utc_time);
+    p.window().clone()
+}
+
+fn printer_output_views(state: &Shared) -> Vec<(String, Window)> {
+    use qap_client::proto::ops::spool::SpoolStatus;
+    use qsaccess::splf::{dialogs, model};
+    let bobs: Vec<_> = spooled_files()
+        .into_iter()
+        .filter(|f| f.user == "BOB")
+        .collect();
+    let total = bobs.len() as u32;
+    let first: Vec<_> = bobs.iter().take(25).cloned().collect();
+    let held_filter = model::Filter {
+        user: "*ALL".into(),
+        status: Some(SpoolStatus::Held),
+        ..model::Filter::default()
+    };
+    let held: Vec<_> = bobs
+        .iter()
+        .filter(|f| f.status == SpoolStatus::Held)
+        .cloned()
+        .collect();
+    let empty_filter = model::Filter {
+        user_data: "PAYROLL".into(),
+        ..model::Filter::default()
+    };
+    let picked: Vec<_> = ["RPT001", "RPT002", "STS5"]
+        .iter()
+        .map(|n| spooled(n))
+        .collect();
+    let queues = vec![
+        qap_client::proto::ops::spool::OutputQueue {
+            outq: model::object_named("QGPL/QPRINT").unwrap(),
+            text: "Default printer output".into(),
+            files: 60,
+            writer: String::new(),
+            held: false,
+        },
+        qap_client::proto::ops::spool::OutputQueue {
+            outq: model::object_named("QGPL/PRT01").unwrap(),
+            text: "Printer PRT01".into(),
+            files: 2,
+            writer: "PRT01".into(),
+            held: false,
+        },
+    ];
+    let sent = |id: &str, text: &str| qap_client::proto::ServerMessage {
+        id: id.into(),
+        severity: 40,
+        data: Vec::new(),
+        text: text.into(),
+        help: String::new(),
+    };
+    let done: Vec<model::Done> = picked
+        .iter()
+        .map(|f| model::Done {
+            file: f.clone(),
+            action: qap_client::spool::Action::Delete(f.id.clone()),
+            outcome: if f.id.file == "STS5" {
+                model::Outcome::Refused {
+                    server: Some(sent(
+                        "CPF3330",
+                        "Spooled file STS5 is printing; it cannot be deleted.",
+                    )),
+                    line: String::new(),
+                }
+            } else {
+                model::Outcome::Done
+            },
+        })
+        .collect();
+    vec![
+        (
+            "printer-output".to_owned(),
+            printer_output(state, model::Filter::default(), first, total),
+        ),
+        (
+            "printer-output-held".to_owned(),
+            printer_output(state, held_filter, held, 1),
+        ),
+        (
+            "printer-output-empty".to_owned(),
+            printer_output(state, empty_filter, Vec::new(), 0),
+        ),
+        (
+            "printer-output-hold".to_owned(),
+            dialogs::hold_box(&picked).build().0,
+        ),
+        (
+            "printer-output-move".to_owned(),
+            dialogs::build_move(&picked[..1], &queues, "QGPL/QPRINT").window,
+        ),
+        (
+            "printer-output-delete".to_owned(),
+            dialogs::build_delete(&picked).window,
+        ),
+        (
+            "printer-output-properties".to_owned(),
+            dialogs::build_properties(&spooled("QSYSPRT"), &model::utc_time).0,
+        ),
+        (
+            "printer-output-summary".to_owned(),
+            dialogs::build_summary(&done).window,
+        ),
+    ]
+}
+
 /// Run Command after two runs of CRTLIB (created, then already there), a
 /// check, and CHGAUT and CPYFRMSTMF with the test system's severities 10
 /// and 20.
@@ -558,6 +693,7 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
         qsaccess::runcmd::build("sys1.example.net", "", None, &[], None).window,
     ));
     out.push(("run-command-results".to_owned(), run_command_results()));
+    out.extend(printer_output_views(state));
     out.extend(prompt_views());
     out.push((
         "password-expiry".to_owned(),

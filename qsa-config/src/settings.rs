@@ -141,6 +141,60 @@ pub struct Settings {
     /// password is never kept ([`Settings::add_command`]).
     #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
     pub command_history: std::collections::BTreeMap<String, Vec<String>>,
+    /// Printer Output's list and output.
+    pub printer_output: PrinterOutput,
+}
+
+/// Rows a page of Printer Output's lists may show.
+pub const ROWS_PER_PAGE: [u32; 3] = [25, 50, 100];
+
+/// Printer Output's auto-refresh choices, in seconds; 0 is off.
+pub const AUTO_REFRESH: [u32; 4] = [0, 15, 30, 60];
+
+/// `[printer_output]`: how Printer Output lists spooled files and lays
+/// them out.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PrinterOutput {
+    /// Rows a page of the list shows: one of [`ROWS_PER_PAGE`].
+    pub rows_per_page: u32,
+    /// Seconds between refreshes of the page shown while the window is
+    /// visible: one of [`AUTO_REFRESH`], 0 for off.
+    pub auto_refresh_secs: u32,
+    /// Paper for files whose data sets no page size, as a 5250 printer
+    /// session's `[output] paper`.
+    pub paper: crate::qsp::Paper,
+}
+
+impl Default for PrinterOutput {
+    fn default() -> PrinterOutput {
+        PrinterOutput {
+            rows_per_page: 25,
+            auto_refresh_secs: 30,
+            paper: crate::qsp::Paper::Letter,
+        }
+    }
+}
+
+impl PrinterOutput {
+    /// Rows per page, the nearest allowed value to what the file says.
+    pub fn rows(&self) -> u32 {
+        nearest(&ROWS_PER_PAGE, self.rows_per_page)
+    }
+
+    /// The auto-refresh interval, the nearest allowed value; 0 for off.
+    pub fn refresh_secs(&self) -> u32 {
+        nearest(&AUTO_REFRESH, self.auto_refresh_secs)
+    }
+}
+
+/// The value of `allowed` nearest to `v`, the smaller on a tie.
+fn nearest(allowed: &[u32], v: u32) -> u32 {
+    allowed
+        .iter()
+        .copied()
+        .min_by_key(|a| a.abs_diff(v))
+        .unwrap_or(v)
 }
 
 /// Commands Run Command keeps per system.
@@ -220,6 +274,7 @@ impl Default for Settings {
             last_used: Default::default(),
             new_session_keymap: None,
             command_history: Default::default(),
+            printer_output: PrinterOutput::default(),
         }
     }
 }
@@ -347,6 +402,41 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn printer_output_settings() {
+        let d = Settings::default();
+        assert_eq!(
+            (d.printer_output.rows(), d.printer_output.refresh_secs()),
+            (25, 30)
+        );
+        let s: Settings = toml::from_str(
+            "[printer_output]
+rows_per_page = 100
+auto_refresh_secs = 0
+",
+        )
+        .unwrap();
+        assert_eq!(
+            (s.printer_output.rows(), s.printer_output.refresh_secs()),
+            (100, 0)
+        );
+        assert_eq!(s.printer_output.paper, crate::qsp::Paper::Letter);
+        let odd = PrinterOutput {
+            rows_per_page: 60,
+            auto_refresh_secs: 20,
+            paper: crate::qsp::Paper::A4,
+        };
+        assert_eq!((odd.rows(), odd.refresh_secs()), (50, 15));
+        let text = toml::to_string(&Settings {
+            printer_output: odd.clone(),
+            ..Settings::default()
+        })
+        .unwrap();
+        assert!(text.contains("paper = \"a4\""), "{text}");
+        let back: Settings = toml::from_str(&text).unwrap();
+        assert_eq!(back.printer_output, odd);
+    }
 
     #[test]
     fn display_settings_round_trip_per_system() {

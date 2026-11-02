@@ -132,6 +132,15 @@ impl Ui {
                 let system = self.selected_system();
                 crate::printer::start(&self.window, &self.state, system.as_deref());
             }
+            Task::PrinterOutput => {
+                if self.state.borrow().systems.is_empty() {
+                    crate::sysconfig::open(self);
+                }
+                if let Some(system) = self.selected_system() {
+                    crate::splf::open(self.parent(), &self.state, &system, None);
+                    self.refresh_systems();
+                }
+            }
             Task::RunCommand => {
                 if self.state.borrow().systems.is_empty() {
                     crate::sysconfig::open(self);
