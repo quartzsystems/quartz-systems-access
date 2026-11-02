@@ -83,6 +83,7 @@ fn session(state: &Shared, keypad: bool, keep: &mut Vec<Rc<SessionWindow>>) -> W
         device: String::new(),
         tls: false,
         color: ColorMap::Console,
+        auto_sign_on: false,
     };
     let s = SessionWindow::build(state, opts, Some(1));
     s.show_terminal(replayed("qs400-signon-24x80"), Conn::Connected);
@@ -159,16 +160,25 @@ fn session_manager(state: &Shared) -> Window {
 
 /// Session Properties for a session of sys1.
 fn session_properties(state: &Shared, tab: usize) -> Window {
+    session_properties_with(state, tab, true, false)
+}
+
+/// Session Properties for sys1 (QAP version 2), with TLS and automatic
+/// sign-on as given.
+fn session_properties_with(state: &Shared, tab: usize, tls: bool, auto: bool) -> Window {
     use qsa_config::qsd::SessionFile;
     use qsaccess::session::props;
     let st = state.borrow();
     let sys = st.systems.get("sys1.example.net").expect("fixture system");
     let mut f = SessionFile::new(sys);
     f.session.title = "Payroll".into();
+    f.system.tls = tls;
+    f.session.auto_sign_on = auto;
     let (mut d, _form) = props::build(
         "Session Properties - Payroll",
         &props::Props::from_file(&f),
         &st.systems,
+        Some(2),
     );
     d.tabs().select(tab);
     d.window().clone()
@@ -488,6 +498,14 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     out.push((
         "session-properties-hotspots".to_owned(),
         session_properties(state, 1),
+    ));
+    out.push((
+        "session-properties-auto-sign-on".to_owned(),
+        session_properties_with(state, 0, true, true),
+    ));
+    out.push((
+        "session-properties-auto-sign-on-disabled".to_owned(),
+        session_properties_with(state, 0, false, true),
     ));
     out.push((
         "keyboard-map-loaded".to_owned(),

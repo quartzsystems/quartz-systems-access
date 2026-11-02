@@ -58,6 +58,10 @@ QAP session and lists every message each sent, as the system sent it, with
 the job it ran in; Prompt (F4), Check, Cancel and a per-system history are
 there too. `docs/connecting.md` has the details.
 
+A 5250 display session can sign on automatically over Telnet TLS with a
+one-time QAP ticket instead of a password (Session Properties, **Sign on
+automatically**); `docs/connecting.md` has what the system needs.
+
 **System Configurations > Verify...** checks the name lookup, the Telnet port
 (and its TLS when used), the QAP port, the TLS 1.3 handshake and certificate,
 and QAP Hello, with an optional test sign-on, and shows each as OK, Failed or

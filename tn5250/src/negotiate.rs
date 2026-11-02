@@ -8,9 +8,14 @@
 //! The client answers the server's `DO TERMINAL-TYPE` and `DO NEW-ENVIRON`.
 //! To the terminal type `SEND` it answers with the device's terminal type;
 //! to the environment `SEND` with `DEVNAME` (when a device name was given),
-//! `KBDTYPE`, `CODEPAGE` and `CHARSET`. It never sends `USER`, the random
-//! seed or a password substitute: the user signs on at the system's own
-//! sign-on display.
+//! `KBDTYPE`, `CODEPAGE` and `CHARSET`.
+//!
+//! Automatic sign-on ([`AutoSignOn`]) is by a one-time QAP Telnet ticket,
+//! never by a password: the `USER` variable, the random-seed variable
+//! present and empty, and the password variable carrying the ticket as 64
+//! hexadecimal characters. The caller asks for it only over TLS. The ticket
+//! is sent once, then wiped; it never appears in the trace. Without it the
+//! user signs on at the system's own sign-on display.
 //!
 //! Vendor-prefixed wire strings come from [`crate::wire`].
 //!
@@ -69,6 +74,49 @@ impl ScreenSize {
     }
 }
 
+/// A one-time QAP Telnet ticket as automatic sign-on sends it: 64
+/// hexadecimal characters. It does not print, and is wiped when dropped.
+#[derive(Clone, PartialEq, Eq)]
+pub struct Ticket([u8; 64]);
+
+impl Ticket {
+    /// The ticket's 32 bytes, written as hexadecimal.
+    pub fn from_bytes(b: &[u8; 32]) -> Ticket {
+        const HEX: &[u8; 16] = b"0123456789ABCDEF";
+        let mut t = [0u8; 64];
+        for (i, v) in b.iter().enumerate() {
+            t[2 * i] = HEX[usize::from(v >> 4)];
+            t[2 * i + 1] = HEX[usize::from(v & 0x0F)];
+        }
+        Ticket(t)
+    }
+
+    /// The characters, for the password variable.
+    pub fn expose(&self) -> &[u8] {
+        &self.0
+    }
+}
+
+impl std::fmt::Debug for Ticket {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Ticket(..)")
+    }
+}
+
+impl Drop for Ticket {
+    fn drop(&mut self) {
+        self.0.fill(0);
+        std::hint::black_box(&self.0);
+    }
+}
+
+/// Automatic sign-on by ticket: the profile and its ticket.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct AutoSignOn {
+    pub user: String,
+    pub ticket: Ticket,
+}
+
 /// What the client asks the server for. A printer session uses the same
 /// request with a printer terminal type and its own variables in `extra`
 /// (see [`crate::printer`]).
@@ -81,6 +129,8 @@ pub struct Request {
     /// More `USERVAR`s, sent after the standard ones. Values are bytes:
     /// some printer variables are binary.
     pub extra: Vec<(String, Vec<u8>)>,
+    /// Sign on automatically with a ticket (only over TLS).
+    pub auto_sign_on: Option<AutoSignOn>,
 }
 
 impl Request {
@@ -94,6 +144,7 @@ impl Request {
                 .map(str::to_ascii_uppercase),
             ccsid,
             extra: Vec::new(),
+            auto_sign_on: None,
         }
     }
 
@@ -473,7 +524,17 @@ impl Negotiator {
             "tn5250e: recv SB NEW-ENVIRON SEND {}",
             describe_send(&asked)
         );
-        let ours = self.request.user_vars();
+        let mut ours = self.request.user_vars();
+        // Automatic sign-on: the seed present and empty, the ticket where
+        // the password goes. Sent once.
+        let auto = self.request.auto_sign_on.take();
+        if let Some(a) = &auto {
+            ours.push((wire::RANDOM_SEED.to_owned(), Vec::new()));
+            ours.push((
+                wire::PASSWORD_SUBSTITUTE.to_owned(),
+                a.ticket.expose().to_vec(),
+            ));
+        }
         let mut answer: Vec<(String, Vec<u8>)> = Vec::new();
         let mut want = |name: &str| {
             if let Some(v) = ours.iter().find(|(n, _)| n == name)
@@ -482,24 +543,50 @@ impl Negotiator {
                 answer.push(v.clone());
             }
         };
+        let mut user = asked.is_empty();
         if asked.is_empty() {
             ours.iter().for_each(|(n, _)| want(n));
         }
+        let seed = wire::RANDOM_SEED.as_bytes();
         for item in &asked {
             match item {
                 (USERVAR, name) if name.is_empty() => ours.iter().for_each(|(n, _)| want(n)),
+                // The seed's name carries the server's seed bytes.
+                (USERVAR, name) if name.starts_with(seed) => want(wire::RANDOM_SEED),
                 (USERVAR, name) => want(&String::from_utf8_lossy(name)),
-                // VARs (USER and the like) are never sent.
+                (VAR, name) if name.is_empty() || name.as_slice() == b"USER" => user = true,
                 _ => {}
             }
         }
-        let payload = encode_is(&answer);
+        let user = auto
+            .as_ref()
+            .filter(|_| user)
+            .map(|a| a.user.trim().to_ascii_uppercase());
+        let mut payload = encode_is_with_user(user.as_deref(), &answer);
         self.telnet.send_subneg(NEW_ENVIRON, &payload);
+        payload.fill(0);
         self.environ_sent = true;
-        let shown: Vec<String> = answer
-            .iter()
-            .map(|(n, v)| format!("USERVAR {n}={}", show_value(v)))
-            .collect();
+        let mut shown: Vec<String> = Vec::new();
+        if let Some(u) = &user {
+            shown.push(format!("VAR USER={u}"));
+        }
+        shown.extend(answer.iter().map(|(n, v)| {
+            if n == wire::PASSWORD_SUBSTITUTE {
+                format!("USERVAR {n}=(ticket, {} characters)", v.len())
+            } else {
+                format!("USERVAR {n}={}", show_value(v))
+            }
+        }));
+        for (n, v) in &mut answer {
+            if n == wire::PASSWORD_SUBSTITUTE {
+                v.fill(0);
+            }
+        }
+        for (n, v) in &mut ours {
+            if n == wire::PASSWORD_SUBSTITUTE {
+                v.fill(0);
+            }
+        }
         debug!("tn5250e: send SB NEW-ENVIRON IS {}", shown.join(" "));
     }
 }
@@ -527,6 +614,40 @@ pub fn parse_send(body: &[u8]) -> Vec<(u8, Vec<u8>)> {
         items.push((kind, name));
     }
     items
+}
+
+/// The variables of an `IS` body (after `IS`): type, name and value, RFC
+/// 1572 escapes undone. A variable without `VALUE` has an empty one.
+pub fn parse_is(body: &[u8]) -> Vec<(u8, Vec<u8>, Vec<u8>)> {
+    let mut out: Vec<(u8, Vec<u8>, Vec<u8>)> = Vec::new();
+    let mut i = 0;
+    let mut in_value = false;
+    while i < body.len() {
+        match body[i] {
+            k @ (VAR | USERVAR) => {
+                out.push((k, Vec::new(), Vec::new()));
+                in_value = false;
+            }
+            VALUE => in_value = true,
+            b => {
+                let b = if b == ESC && i + 1 < body.len() {
+                    i += 1;
+                    body[i]
+                } else {
+                    b
+                };
+                if let Some(last) = out.last_mut() {
+                    if in_value {
+                        last.2.push(b);
+                    } else {
+                        last.1.push(b);
+                    }
+                }
+            }
+        }
+        i += 1;
+    }
+    out
 }
 
 fn describe_send(items: &[(u8, Vec<u8>)]) -> String {
@@ -575,7 +696,18 @@ fn push_escaped(out: &mut Vec<u8>, s: &[u8]) {
 /// `IS USERVAR name VALUE value ...`, escaped as RFC 1572 says. Telnet's
 /// own `IAC` doubling happens later, in the codec.
 pub fn encode_is(vars: &[(String, Vec<u8>)]) -> Vec<u8> {
+    encode_is_with_user(None, vars)
+}
+
+/// [`encode_is`], with `VAR USER VALUE user` first when `user` is given.
+pub fn encode_is_with_user(user: Option<&str>, vars: &[(String, Vec<u8>)]) -> Vec<u8> {
     let mut out = vec![IS];
+    if let Some(u) = user {
+        out.push(VAR);
+        push_escaped(&mut out, b"USER");
+        out.push(VALUE);
+        push_escaped(&mut out, u.as_bytes());
+    }
     for (n, v) in vars {
         out.push(USERVAR);
         push_escaped(&mut out, n.as_bytes());
@@ -644,6 +776,65 @@ mod tests {
                 && !text.contains(wire::RANDOM_SEED)
                 && !text.contains(wire::PASSWORD_SUBSTITUTE)
         );
+    }
+
+    /// The variables of the `IS` in `out`.
+    fn is_vars(out: &[u8]) -> Vec<(u8, Vec<u8>, Vec<u8>)> {
+        let start = out
+            .windows(4)
+            .position(|w| w == [IAC, SB, NEW_ENVIRON, IS])
+            .expect("an IS")
+            + 4;
+        let end = start
+            + out[start..]
+                .windows(2)
+                .position(|w| w == [IAC, SE])
+                .unwrap();
+        parse_is(&out[start..end])
+    }
+
+    #[test]
+    fn automatic_sign_on_sends_the_user_an_empty_seed_and_the_ticket_once() {
+        let mut r = Request::display(ScreenSize::S24x80, Some("qsadsp01"), 37);
+        r.auto_sign_on = Some(AutoSignOn {
+            user: "bob".into(),
+            ticket: Ticket::from_bytes(&[0xAB; 32]),
+        });
+        assert!(!format!("{r:?}").contains("ABAB"), "{r:?}");
+        let (mut n, env) = opened(r);
+        let vars = is_vars(&env);
+        assert_eq!(vars[0], (VAR, b"USER".to_vec(), b"BOB".to_vec()));
+        let get = |vars: &[(u8, Vec<u8>, Vec<u8>)], name: &str| {
+            vars.iter()
+                .find(|(k, n, _)| *k == USERVAR && n == name.as_bytes())
+                .map(|(_, _, v)| v.clone())
+        };
+        assert_eq!(get(&vars, wire::RANDOM_SEED), Some(Vec::new()));
+        assert_eq!(
+            get(&vars, wire::PASSWORD_SUBSTITUTE),
+            Some(b"AB".repeat(32))
+        );
+        assert_eq!(get(&vars, "DEVNAME"), Some(b"QSADSP01".to_vec()));
+        // Used once: a second SEND gets no ticket and no user.
+        n.receive(&seeded_send());
+        let again = is_vars(&n.take_output());
+        assert!(again.iter().all(|(k, _, _)| *k == USERVAR));
+        assert_eq!(get(&again, wire::PASSWORD_SUBSTITUTE), None);
+        assert_eq!(
+            parse_is(&encode_is(&[("A".into(), vec![1, 2])])[1..]),
+            [(USERVAR, b"A".to_vec(), vec![1, 2])]
+        );
+    }
+
+    #[test]
+    fn ticket_hex() {
+        let mut b = [0u8; 32];
+        b[0] = 0x0F;
+        b[31] = 0xF0;
+        let t = Ticket::from_bytes(&b);
+        assert_eq!(&t.expose()[..4], b"0F00");
+        assert_eq!(&t.expose()[60..], b"00F0");
+        assert_eq!(format!("{t:?}"), "Ticket(..)");
     }
 
     #[test]

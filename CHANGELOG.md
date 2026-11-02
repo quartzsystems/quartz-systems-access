@@ -6,6 +6,15 @@ here. Breaking changes are marked **Breaking**.
 
 ## Unreleased
 
+### tn5250
+
+- **Breaking:** `negotiate::Request` has a new field, `auto_sign_on`: 5250
+  automatic sign-on by a one-time QAP Telnet ticket (`AutoSignOn`, with the
+  user and a `Ticket`), sent as the `USER` variable, an empty random-seed
+  variable and the ticket as 64 hexadecimal characters in the password
+  variable. `None` for no automatic sign-on, as before.
+- `negotiate::Ticket`, `AutoSignOn`, `parse_is` and `encode_is_with_user`.
+
 ### qsa-net
 
 - `info!`, beside `debug!`, `trace!` and `warn!`.

@@ -152,6 +152,37 @@ Values already typed on the command line are filled in.
   the command line, ready to run. **Cancel** keeps nothing.
 - The parameters scroll inside the dialog; it never grows past the screen.
 
+## 5250 automatic sign-on
+
+A display session can sign on by itself, without a password: **Sign on
+automatically** in Session Properties (`auto_sign_on` in the `.qsd` file's
+`[session]`, off unless set). It needs Telnet over TLS and QAP version 2;
+otherwise the check box is disabled and says why (`QAD5030`, or `QAD5001`
+with the version the system has).
+
+- At each connect the session gets the system's QAP session (signing on
+  first if this program has none) and asks it for a one-time ticket
+  (`TelnetTicket`): 256 random bits for the signed-on profile, good for one
+  sign-on within 60 seconds. A new one is asked for at every connect.
+- The ticket goes where RFC 4777 puts the password: the session sends the
+  user variable, the random-seed variable present and empty, and the
+  password variable carrying the ticket as 64 hexadecimal characters. A
+  password is never sent this way.
+- The ticket is wiped once sent. It is never logged (the negotiation trace
+  shows only that one was sent), and never recorded: recordings hold 5250
+  records, not the Telnet negotiation.
+- When the system will not sign the profile on automatically, the ticket is
+  refused before the connection (`TCP1A55`, shown as the system sent it) and
+  the session shows the sign-on display. The system decides with system
+  value `QRMTSIGN`: `*VERIFY` or `*SAMEPRF` allow it; systems installed
+  before QS/400 8306ec41 keep `*FRCSIGNON`, which turns it off.
+- When the system refuses the ticket at the Telnet server (used, expired,
+  not over TLS), it shows its sign-on display with no message; the session
+  says so with `QAD4040`.
+- Macros and Session Manager work as before: a macro that waits for the
+  sign-on display waits in vain on a session that signs on by itself, so
+  record such macros with automatic sign-on off, or from the first menu.
+
 ## Password expiry warning
 
 After each sign-on, and each time a session is resumed on a new connection,

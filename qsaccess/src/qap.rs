@@ -218,6 +218,42 @@ pub fn signed_on(state: &Shared, system: &str) -> Option<String> {
     state.borrow_mut().qap.profile(system)
 }
 
+/// The QAP version `system` speaks, for settings that depend on it: what
+/// this process's last `Hello` with it said, or, when `ask`, a new `Hello`
+/// (no sign-on). `None` when it is not known or cannot be reached.
+pub fn version_of(state: &Shared, system: &str, ask: bool) -> Option<u16> {
+    let sys = state.borrow().systems.get(system).cloned()?;
+    let h = client(state, &sys);
+    if let Ok(c) = h.try_lock()
+        && let Some(v) = c.version()
+    {
+        return Some(v);
+    }
+    if !ask {
+        return None;
+    }
+    busy(|| lock(&h).connect().ok().map(|hello| hello.version))
+}
+
+/// Why a 5250 session cannot sign on to `system` automatically, if it
+/// cannot: `QAD5030` without Telnet over TLS, `QAD5001` when the system's
+/// QAP version has no `TelnetTicket`. A version not known does not stop
+/// it: the connection finds out.
+pub fn auto_sign_on_blocked(system: &str, tls: bool, version: Option<u16>) -> Option<Message> {
+    if !tls {
+        return Some(qsa_msg::message(id::AUTO_SIGNON_NEEDS_TLS, &[]));
+    }
+    match version {
+        Some(v) if v < Op::TelnetTicket.since() => Some(version_needed(
+            function_name(Op::TelnetTicket),
+            system,
+            Op::TelnetTicket,
+            v,
+        )),
+        _ => None,
+    }
+}
+
 /// The days until a password expires, when that is within the system's
 /// warning period: `status` from `PasswordStatus`, `now_ms` the system's
 /// time. Part of a day counts as a day; an expired password has 0.

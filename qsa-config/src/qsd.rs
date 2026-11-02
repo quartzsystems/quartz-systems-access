@@ -163,6 +163,9 @@ pub struct Session {
     pub device_name: String,
     pub colour_map: ColorMap,
     pub auto_connect: bool,
+    /// Sign on automatically with a one-time QAP Telnet ticket (Telnet over
+    /// TLS only, QAP version 2).
+    pub auto_sign_on: bool,
     pub keypad_visible: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub window: Option<Geometry>,
@@ -179,6 +182,7 @@ impl Default for Session {
             device_name: String::new(),
             colour_map: ColorMap::Console,
             auto_connect: true,
+            auto_sign_on: false,
             keypad_visible: false,
             window: None,
             extra: Extra::new(),
@@ -469,6 +473,7 @@ mod tests {
             device_name: "QSADSP01".into(),
             colour_map: ColorMap::BlackOnWhite,
             auto_connect: false,
+            auto_sign_on: true,
             keypad_visible: true,
             window: Some(Geometry {
                 x: 10,

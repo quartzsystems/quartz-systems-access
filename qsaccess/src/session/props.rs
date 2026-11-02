@@ -24,7 +24,7 @@ use super::start::CCSIDS;
 /// Dialog width.
 pub const W: i32 = 440;
 /// Dialog height.
-pub const H: i32 = 400;
+pub const H: i32 = 456;
 
 /// What the dialog edits.
 #[derive(Clone, Debug, PartialEq)]
@@ -37,6 +37,7 @@ pub struct Props {
     pub tls: bool,
     pub color: ColorMap,
     pub auto_connect: bool,
+    pub auto_sign_on: bool,
     pub hotspots: Hotspots,
 }
 
@@ -52,6 +53,7 @@ impl Props {
             tls: f.system.tls,
             color: f.session.colour_map,
             auto_connect: f.session.auto_connect,
+            auto_sign_on: f.session.auto_sign_on,
             hotspots: f.hotspots.clone(),
         }
     }
@@ -79,6 +81,7 @@ impl Props {
         f.session.device_name = self.device.clone();
         f.session.colour_map = self.color;
         f.session.auto_connect = self.auto_connect;
+        f.session.auto_sign_on = self.auto_sign_on;
         f.hotspots = self.hotspots.clone();
     }
 }
@@ -93,6 +96,7 @@ pub struct PropsForm {
     tls: CheckButton,
     color: Choice,
     auto_connect: CheckButton,
+    auto_sign_on: CheckButton,
     hot_on: CheckButton,
     hot_fkeys: CheckButton,
     hot_paging: CheckButton,
@@ -126,14 +130,27 @@ impl PropsForm {
                 ColorMap::Console
             },
             auto_connect: self.auto_connect.is_checked(),
+            // Only when it can be used.
+            auto_sign_on: self.auto_sign_on.is_checked() && self.auto_sign_on.active(),
             hotspots,
         })
     }
 }
 
+/// The label of the automatic sign-on check box.
+pub const AUTO_SIGN_ON: &str = "Sign on automatically (QAP ticket, no password)";
+
 /// Builds the dialog for `p`. `systems` fills the System list; a system
 /// not configured is listed too, so the session's own value can stay.
-pub fn build(title: &str, p: &Props, systems: &Systems) -> (PropertyDialog, PropsForm) {
+/// `qap_version` is the QAP version the session's system speaks, when
+/// known: automatic sign-on needs Telnet over TLS and version 2, and is
+/// disabled with the reason (`QAD5030`, `QAD5001`) otherwise.
+pub fn build(
+    title: &str,
+    p: &Props,
+    systems: &Systems,
+    qap_version: Option<u16>,
+) -> (PropertyDialog, PropsForm) {
     let mut d = PropertyDialog::new(title, W, H);
     let fh = theme::FIELD_H;
     let mut general = None;
@@ -182,8 +199,25 @@ pub fn build(title: &str, p: &Props, systems: &Systems) -> (PropertyDialog, Prop
         device.set_maximum_size(10);
         controls::label(r.x + lw + 128, at, fw - 128, fh, "(optional)");
         let at = row("");
-        let tls = controls::check(r.x + lw, at, fw, fh, "Use TLS");
+        let mut tls = controls::check(r.x + lw, at, fw, fh, "Use TLS");
         tls.set_checked(p.tls);
+        let at = row("");
+        let mut auto_sign_on = controls::check(r.x + lw, at, fw, fh, AUTO_SIGN_ON);
+        auto_sign_on.set_checked(p.auto_sign_on);
+        let at = row("");
+        let mut why = controls::label(r.x + lw + 20, at - 4, fw - 20, 30, "");
+        why.set_align(Align::Left | Align::Top | Align::Inside | Align::Wrap);
+        why.set_label_color(theme::colors::DISABLED_TEXT);
+        let switch = Switch::for_button(&mut auto_sign_on);
+        let system_name = p.system.clone();
+        let show = move |tls: bool, why: &mut fltk::frame::Frame| {
+            let blocked = crate::qap::auto_sign_on_blocked(&system_name, tls, qap_version);
+            switch.set_enabled(blocked.is_none());
+            why.set_label(&blocked.map(|m| m.to_string()).unwrap_or_default());
+            why.redraw();
+        };
+        show(p.tls, &mut why);
+        tls.set_callback(move |b| show(b.is_checked(), &mut why));
         let at = row("Colour map:");
         let mut color = controls::combo(r.x + lw, at, fw, fh);
         color.add_choice("QS\\/400 console (green on black)|Black on white");
@@ -199,9 +233,19 @@ pub fn build(title: &str, p: &Props, systems: &Systems) -> (PropertyDialog, Prop
             "Changes to the system, screen size, CCSID, device name and TLS take effect at the next connection.",
         );
         note.set_align(Align::Left | Align::Top | Align::Inside | Align::Wrap);
-        general = Some((title, system, size, ccsid, device, tls, color, auto_connect));
+        general = Some((
+            title,
+            system,
+            size,
+            ccsid,
+            device,
+            tls,
+            auto_sign_on,
+            color,
+            auto_connect,
+        ));
     });
-    let (title, system, size, ccsid, device, tls, color, auto_connect) =
+    let (title, system, size, ccsid, device, tls, auto_sign_on, color, auto_connect) =
         general.expect("general page built");
 
     let mut hot = None;
@@ -260,6 +304,7 @@ pub fn build(title: &str, p: &Props, systems: &Systems) -> (PropertyDialog, Prop
             tls,
             color,
             auto_connect,
+            auto_sign_on,
             hot_on,
             hot_fkeys,
             hot_paging,
@@ -274,8 +319,9 @@ pub fn edit(
     title: &str,
     p: &Props,
     systems: &Systems,
+    qap_version: Option<u16>,
 ) -> Option<Props> {
-    let (mut d, form) = build(title, p, systems);
+    let (mut d, form) = build(title, p, systems, qap_version);
     let mut result = None;
     let ok = d.run(parent, || {
         result = Some(form.read()?);

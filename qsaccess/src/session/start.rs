@@ -47,6 +47,8 @@ pub struct StartOptions {
     pub device: String,
     pub tls: bool,
     pub color: ColorMap,
+    /// Sign on automatically with a QAP ticket (session files only).
+    pub auto_sign_on: bool,
 }
 
 pub use qsa_config::settings::check_device;
@@ -81,6 +83,7 @@ fn options_for(state: &Shared, system: &str) -> StartOptions {
         device: d.device_name,
         tls,
         color: d.color_map,
+        auto_sign_on: false,
     }
 }
 
@@ -119,6 +122,7 @@ impl Form {
             } else {
                 ColorMap::Console
             },
+            auto_sign_on: false,
         })
     }
 }

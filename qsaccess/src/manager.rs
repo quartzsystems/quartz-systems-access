@@ -676,11 +676,13 @@ impl Manager {
         };
         let mut f = SessionFile::new(&system);
         f.keymap = keymap;
+        let version = crate::qap::version_of(&self.state, &system.name, false);
         let Some(p) = props::edit(
             Some(&self.window),
             "New Session",
             &props::Props::from_file(&f),
             &systems,
+            version,
         ) else {
             return;
         };
@@ -748,11 +750,13 @@ impl Manager {
         };
         let systems = self.state.borrow().systems.clone();
         let title = format!("Session Properties - {}", e.title());
+        let version = crate::qap::version_of(&self.state, &f.system.name, f.system.tls);
         let Some(p) = props::edit(
             Some(&self.window),
             &title,
             &props::Props::from_file(&f),
             &systems,
+            version,
         ) else {
             return;
         };

@@ -203,6 +203,7 @@ impl Options {
                 .filter(|d| !d.is_empty()),
             ccsid: self.ccsid,
             extra,
+            auto_sign_on: None,
         }
     }
 }

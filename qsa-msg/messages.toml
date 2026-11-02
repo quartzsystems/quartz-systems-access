@@ -378,9 +378,9 @@ recovery = "Select Change password to change it now, or change it before it expi
 
 [QAD4040]
 severity = 20
-text = "Automatic sign-on to &1 was not accepted: &2."
-cause = "The 5250 session asked system &1 to sign on automatically, and the system refused: &2. The system's sign-on display is shown instead."
-recovery = "Sign on at the sign-on display. If the reason is the password, check the password used for the system; if automatic sign-on is not allowed on the system, clear Automatic sign-on in Session Properties."
+text = "Automatic sign-on to &1 was not accepted."
+cause = "The 5250 session sent system &1 a one-time QAP ticket to sign on automatically, and the system showed its sign-on display instead. The system does not say why: automatic sign-on may not be allowed (system value QRMTSIGN), the connection may not be Telnet over TLS, or the ticket was used or had expired."
+recovery = "Sign on at the sign-on display. To sign on automatically, ask for system value QRMTSIGN on &1 to be *VERIFY (or *SAMEPRF) and use TLS for the session (Session Properties, Use TLS); each connection asks for a new ticket."
 
 [QAD4050]
 severity = 0
@@ -459,3 +459,9 @@ severity = 30
 text = "Command &1 has errors; see the messages."
 cause = "The system checked command &1 without running it and found errors. Its messages are listed as the system sent them."
 recovery = "Correct the parameters the messages name, then check or run the command again. Select a message's ID for its second-level text."
+
+[QAD5030]
+severity = 10
+text = "Automatic sign-on needs Telnet over TLS."
+cause = "Automatic sign-on sends a one-time QAP ticket, and QS/400 accepts one only over a Telnet connection that uses TLS. This session does not use TLS, so it shows the system's sign-on display."
+recovery = "To sign on automatically, select Use TLS in Session Properties; the system's Telnet server must have a certificate this computer trusts."

@@ -163,11 +163,14 @@ impl Session {
     }
 
     fn flush(&mut self) -> Result<(), SessionError> {
-        let out = self.neg.take_output();
+        let mut out = self.neg.take_output();
         if out.is_empty() {
             return Ok(());
         }
-        self.transport.write_all(&out).map_err(|e| {
+        let written = self.transport.write_all(&out);
+        // What went out may hold an automatic sign-on ticket.
+        out.fill(0);
+        written.map_err(|e| {
             if is_closed(&e) {
                 SessionError::Closed
             } else {

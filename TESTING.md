@@ -22,6 +22,12 @@
   refused before they are sent;
 - `qsaccess/tests/verify.rs`: Verify Connection's checks against the same
   server.
+- `qsaccess/tests/autosignon.rs`: 5250 automatic sign-on end to end: a
+  ticket from the test system, sent by tn5250's negotiator, taken by the test
+  system as its Telnet server takes one (`System::redeem_ticket`): once over
+  TLS, then refused when used again, over plain Telnet, after a minute, for
+  another profile, or when `QRMTSIGN` does not allow it (`TCP1A55`); and
+  never in the trace.
 - `qsaccess/tests/sessions.rs`: one QAP session per system per process
   against the same server: every tool gets the same client, a running
   command and another request share its connection, and the GUI's look at
@@ -100,6 +106,7 @@ on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 | `sign-on`, `change-password`, `message-system` | New: the QAP Sign On and Change Password dialogs, and a system's message shown as sent. No golden yet. |
 | `verify-connection` | New: Verify Connection. No golden yet. |
 | `run-command`, `run-command-results` | New: Run Command, empty and after runs and a check. No golden yet. |
+| `session-properties-auto-sign-on`, `session-properties-auto-sign-on-disabled` | New: Session Properties with automatic sign-on enabled (TLS, QAP version 2) and disabled without TLS (`QAD5030`). `session-properties-general` changes with them. No golden yet. |
 | `password-expiry` | New: the password expiry warning, `QAD4031` with Change Password.... No golden yet. |
 | `prompt-simple`, `prompt-qualifiers`, `prompt-list`, `prompt-additional`, `prompt-elements`, `prompt-checked`, `prompt-help` | New: Prompt for QS/400's test commands (`qapd::testing`): CRTLIB; DSPOBJD with a qualified name, then a list with "+"; CRTPF with its additional parameters shown, then its element list changed; DSPOBJD after a failed check; a qualifier's help. No golden yet. |
 | `qsa-install`: `wizard-0-welcome`, `wizard-1-licence`, `wizard-2-install-for`, `wizard-3-location`, `wizard-4-options`, `wizard-5-ready`, `wizard-7-finish`, `uninstall`, `repair` | The licence text, the check box control, and no saved passwords in the Welcome, Uninstall and Repair text. |

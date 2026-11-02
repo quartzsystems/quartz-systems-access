@@ -101,6 +101,7 @@ pub mod id {
     pub const COMMAND_CANCELLED: &str = "QAD5012";
     pub const COMMAND_NOT_FOUND: &str = "QAD5013";
     pub const COMMAND_HAS_ERRORS: &str = "QAD5020";
+    pub const AUTO_SIGNON_NEEDS_TLS: &str = "QAD5030";
 }
 
 /// Errors in the catalogue itself.
@@ -270,7 +271,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 74] = [
+    const SEEDS: [&str; 75] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -345,6 +346,7 @@ mod tests {
         id::COMMAND_CANCELLED,
         id::COMMAND_NOT_FOUND,
         id::COMMAND_HAS_ERRORS,
+        id::AUTO_SIGNON_NEEDS_TLS,
     ];
 
     #[test]

@@ -37,7 +37,7 @@ use qsa_ui::terminal::TerminalView;
 use qsa_ui::theme::colors;
 use qsa_ui::{MessageBox, Status, StatusBar, Toolbar, controls, msgdetails};
 use tn5250::input::Key as K5250;
-use tn5250::negotiate::{Mode, Outcome, Request, ScreenSize};
+use tn5250::negotiate::{AutoSignOn, Mode, Outcome, Request, ScreenSize, Ticket};
 use tn5250::record::Record;
 use tn5250::replay::Recorder;
 use tn5250::session::Target;
@@ -176,6 +176,9 @@ struct State {
     macro_rec: Option<MacroRecorder>,
     player: Option<Player>,
     pick: Pick,
+    /// A ticket was sent: the first screen with input fields says whether
+    /// it was taken.
+    auto_pending: bool,
 }
 
 /// One session window.
@@ -217,6 +220,7 @@ pub fn options_for(doc: &SessionFile) -> StartOptions {
         device: doc.session.device_name.clone(),
         tls: doc.system.tls,
         color: doc.session.colour_map,
+        auto_sign_on: doc.session.auto_sign_on,
     }
 }
 
@@ -240,6 +244,7 @@ pub fn file_for(state: &Shared, opts: &StartOptions) -> SessionFile {
     f.session.ccsid = opts.ccsid;
     f.session.device_name = opts.device.clone();
     f.session.colour_map = opts.color;
+    f.session.auto_sign_on = opts.auto_sign_on;
     f.keymap = st.settings.new_session_keymap.clone();
     f
 }
@@ -495,6 +500,7 @@ impl SessionWindow {
                     macro_rec: None,
                     player: None,
                     pick: Pick::Off,
+                    auto_pending: false,
                 }),
             }
         });
@@ -946,9 +952,10 @@ impl SessionWindow {
                 props::Props::from_file(&f),
             )
         };
+        let version = crate::qap::version_of(&self.state, &p.system, p.tls);
         let edited = {
-            let app = self.state.borrow();
-            props::edit(Some(&self.window), &title, &p, &app.systems)
+            let systems = self.state.borrow().systems.clone();
+            props::edit(Some(&self.window), &title, &p, &systems, version)
         };
         let Some(p) = edited else { return };
         {
@@ -961,6 +968,7 @@ impl SessionWindow {
             st.opts.size = f.session.screen_size;
             st.opts.ccsid = f.session.ccsid;
             st.opts.device = f.session.device_name.clone();
+            st.opts.auto_sign_on = f.session.auto_sign_on;
             st.doc = f;
         }
         self.set_color_map(p.color);
@@ -1150,8 +1158,14 @@ impl SessionWindow {
     /// device name when given.
     pub fn connect(&self, device: Option<String>) {
         self.disconnect_quietly();
+        // A ticket for every connect: one use each, a minute to use it.
+        let opts = self.st.borrow().opts.clone();
+        let ticket = if opts.auto_sign_on {
+            self.ticket(&opts)
+        } else {
+            None
+        };
         let mut st = self.st.borrow_mut();
-        let opts = st.opts.clone();
         let Some(system) = self.state.borrow().systems.get(&opts.system).cloned() else {
             drop(st);
             self.report(&qsa_msg::message(id::HOST_NOT_FOUND, &[&opts.system]), true);
@@ -1180,7 +1194,9 @@ impl SessionWindow {
             timeout: CONNECT_TIMEOUT,
             tls13_only: false,
         });
-        let request = Request::display(size, Some(&device), opts.ccsid);
+        let mut request = Request::display(size, Some(&device), opts.ccsid);
+        st.auto_pending = ticket.is_some();
+        request.auto_sign_on = ticket;
         st.worker = Some(Worker::spawn(Target { host, port, tls }, request));
         if let Some(path) = st.record_to.take() {
             match Recorder::create(&path, size, opts.ccsid) {
@@ -1197,6 +1213,90 @@ impl SessionWindow {
             false,
         );
         self.refresh();
+    }
+
+    /// A one-time QAP ticket for signing this session on automatically:
+    /// from the system's QAP session, signing on first when there is none.
+    /// `None`, with the reason shown, when there is none to be had; the
+    /// session then shows the sign-on display.
+    fn ticket(&self, opts: &StartOptions) -> Option<AutoSignOn> {
+        let system = opts.system.as_str();
+        if !opts.tls {
+            self.report(&qsa_msg::message(id::AUTO_SIGNON_NEEDS_TLS, &[]), false);
+            return None;
+        }
+        let h = crate::qap::session(Some(&self.window), &self.state, system)?;
+        let got = crate::qap::busy(|| {
+            let mut c = crate::qap::lock(&h);
+            let r = c.telnet_ticket()?;
+            let user = c.profile().map(|p| p.profile.clone()).unwrap_or_default();
+            Ok::<_, qap_client::Error>(AutoSignOn {
+                user,
+                ticket: Ticket::from_bytes(&r.ticket.0),
+            })
+        });
+        match got {
+            Ok(a) => {
+                crate::log!("automatic sign-on to {system} as {} by ticket", a.user);
+                Some(a)
+            }
+            Err(e) => {
+                let sys = self
+                    .state
+                    .borrow()
+                    .systems
+                    .get(system)
+                    .cloned()
+                    .unwrap_or_else(|| qsa_config::System::new(system));
+                let x = crate::qap::explain(&sys, &e);
+                crate::log!("automatic sign-on to {system}: {}", x.line());
+                match (e.status(), &x.server) {
+                    // TCP1A55 and the like, as the system sent them.
+                    (Some(qap_client::Status::NotAuthorized), Some(m)) => {
+                        let mut bar = self.status.clone();
+                        bar.set_message(&x.line());
+                        msgdetails::show_system_message(
+                            Some(&self.window),
+                            None,
+                            &crate::qap::shown(m),
+                        );
+                    }
+                    _ => self.report(&x.message, false),
+                }
+                None
+            }
+        }
+    }
+
+    /// After an automatic sign-on was asked for: the first screen with
+    /// input fields is the sign-on display (a non-display password field)
+    /// when the ticket was refused, and `QAD4040` says so.
+    fn check_auto_sign_on(&self) {
+        let (refused, system) = {
+            let mut st = self.st.borrow_mut();
+            if !st.auto_pending {
+                return;
+            }
+            let fields: Vec<bool> = st
+                .terminal
+                .screen
+                .input_fields()
+                .map(|(_, f)| f.nondisplay())
+                .collect();
+            if fields.is_empty() {
+                return;
+            }
+            st.auto_pending = false;
+            (fields.contains(&true), st.opts.system.clone())
+        };
+        if refused {
+            self.report(
+                &qsa_msg::message(id::AUTO_SIGNON_REFUSED, &[&system]),
+                false,
+            );
+        } else {
+            crate::log!("signed on to {system} automatically");
+        }
     }
 
     fn disconnect_quietly(&self) {
@@ -1549,6 +1649,7 @@ impl SessionWindow {
                     self.send(&mut st, reply);
                 }
                 drop(st);
+                self.check_auto_sign_on();
                 if let Some(e) = applied.errors.first() {
                     self.report(
                         &qsa_msg::message(id::PROTOCOL_ERROR, &[&system, &e.to_string()]),
