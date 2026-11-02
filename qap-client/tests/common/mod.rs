@@ -11,9 +11,11 @@
 //! Access speaks only TLS 1.3 and reconnects to resume, so the listener
 //! here stays: it takes any number of connections over TLS, each a new
 //! connection job of the same system. [`listen`] is generic over the engine,
-//! so `tests/version1.rs` puts the version-1 engine behind it too.
+//! so [`v1`] puts the version-1 engine behind it too.
 
 #![allow(dead_code)]
+
+pub mod v1;
 
 use std::io::{Read, Write};
 use std::net::{Shutdown, TcpListener, TcpStream};

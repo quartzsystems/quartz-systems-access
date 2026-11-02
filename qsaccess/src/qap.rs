@@ -84,6 +84,16 @@ pub struct Registry {
     map: HashMap<String, Entry>,
 }
 
+impl std::fmt::Debug for Registry {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut m = f.debug_map();
+        for (k, e) in &self.map {
+            m.entry(k, &e.profile);
+        }
+        m.finish()
+    }
+}
+
 impl Registry {
     /// The client for `system`: the one there is, unless it is not signed on
     /// and free, in which case a new one for the system as it is configured

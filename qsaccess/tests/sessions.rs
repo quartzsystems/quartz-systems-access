@@ -148,8 +148,10 @@ fn a_quiet_resume_is_noticed_once() {
     let mut r = Registry::default();
     signed_on(&mut r, &sys);
     assert!(!r.resumed("127.0.0.1"));
-    common::until("the idle close", || s.ended().len() == 1);
     let h = r.signed_on_client("127.0.0.1").unwrap();
+    common::until("the idle close", || {
+        s.ended().len() == 1 && lock(&h).connection().is_some_and(|c| c.closed().is_some())
+    });
     // A request finds the connection gone and resumes on a new one.
     lock(&h).system_info().unwrap();
     assert!(r.resumed("127.0.0.1"));

@@ -22,6 +22,18 @@
   refused before they are sent;
 - `qsaccess/tests/verify.rs`: Verify Connection's checks against the same
   server.
+- `qap-client/tests/version2.rs`: every version-2 operation and status
+  against the test system: `RunCommand` (`Ok`, `Error`, `NotFound`,
+  `NotAuthorized`, `Cancelled`, interactive only), `CheckCommand`,
+  `DescribeCommand`, `PasswordStatus`, `TelnetTicket` (and the ticket as the
+  Telnet server takes it).
+- `qsaccess/tests/fallback.rs`: against the version-1 engine, sign-on works
+  and every version-2 function is `QAD5001` (the expiry warning silent).
+- `qsaccess/tests/secrets.rs`: a full run with every trace line in the log
+  file, then the log, a session recording and the `Debug` output searched
+  for every password, the session token and the Telnet ticket.
+- `qsaccess/src/prompt/form.rs`: the command string builder against the test
+  system's CRTLIB, DSPOBJD, CRTPF and DLYJOB definitions.
 - `qsaccess/tests/autosignon.rs`: 5250 automatic sign-on end to end: a
   ticket from the test system, sent by tn5250's negotiator, taken by the test
   system as its Telnet server takes one (`System::redeem_ticket`): once over
@@ -180,6 +192,70 @@ to `QS400_ACCESS_SERVER`:
 - `ENDTCPSVR SERVER(*QAP)`: the server-ending message; Reconnect after
   `STRTCPSVR`;
 - Actions > Sign Off.
+
+## Live acceptance (Phase 5: QAP version 2)
+
+On QS/400 at 10.42.70.150, prepared first:
+
+1. a QS/400 build at or after 8306ec41 installed (`STRTCPSVR SERVER(*QAP)`,
+   a certificate assigned to `QS400_ACCESS_SERVER`);
+2. `CHGSYSVAL QRMTSIGN '*VERIFY'` (a system installed earlier keeps the old
+   shipped `*FRCSIGNON`, which turns automatic sign-on off);
+3. Telnet TLS on 992 with a certificate this computer trusts (the one
+   assigned to `QS400_TELNET_SERVER`, else the system's self-signed one,
+   trusted when asked);
+4. a test profile whose password expires inside the warning period, for
+   example `CRTUSRPRF USRPRF(QATEST) PASSWORD(...) PWDEXPITV(5)` with
+   `QPWDEXPWRN` 7 (the shipped value).
+
+Then, with `QSACCESS_LOG=trace`:
+
+- [ ] **Verify.** System Configurations > Verify...: QAP Hello says
+  "Version 2".
+- [ ] **Run a command.** Run Command, `CRTLIB LIB(QATESTLIB)`, Run:
+  `QAD5010` and `CPC2102` as the system sent it; the job line shows
+  `QAPCNN`, `QUSER` and a number; the ID opens its second-level text. Run it
+  again: `QAD5011` and `CPF2111`. `DLTLIB LIB(QATESTLIB)` afterwards.
+- [ ] **Prompt a command.** Type `DSPOBJD`, F4: the title is the command's
+  text and name; `OBJ` with indented name and library rows; `OBJTYPE` with
+  "+"; F1 on a row shows the prompt text with the no-help note; F10 shows
+  the additional parameters. Fill `OBJ(QGPL/QSYS)` and `OBJTYPE(*LIB)`,
+  Show Command String, OK: the string is on the command line. Prompt a
+  command with an element list (`CRTPF`, `SIZE` under F10).
+- [ ] **Check errors.** Prompt `DSPOBJD`, leave `OBJ` empty, OK: the check's
+  `CPD0071` and `CPF0006` are listed in the dialog with `QAD5020` and it
+  stays open. Check on the Run Command window does the same in the results.
+- [ ] **Cancel a long command.** Run `DLYJOB DLY(60)`, Cancel after a few
+  seconds: `QAD5012` well before the minute. The window keeps redrawing and
+  Cancel answers while the command runs.
+- [ ] **Not authorized and interactive only.** As a profile without
+  `*SECADM`, `DLTUSRPRF USRPRF(QATEST)` shows the system's escape message on
+  the status line; `STRSEU` ends with its escape message (`QAD5011`).
+- [ ] **Expiry warning.** Sign on as `QATEST`: `QAD4031` with the days left,
+  once; Change Password... changes it. Sign off and on as a profile whose
+  password does not expire: nothing.
+- [ ] **Auto sign-on over TLS.** A display session on 992 with Use TLS and
+  Sign on automatically: Connect goes straight to the profile's initial menu
+  (Sign On is asked first if this program had no session). `WRKACTJOB` shows
+  the device job under the signed-on profile.
+- [ ] **Refused over plain Telnet, and a reused ticket refused.** The same
+  session file edited by hand to `tls = false` (the check box is disabled
+  without TLS): the status bar says `QAD5030` and the sign-on display comes
+  up. Then, for what the program itself never does:
+  `QSA_CHECK_PASSWORD=... cargo run -p qsaccess --example ticket_check --
+  10.42.70.150 QATEST` signs on over QAP, connects on 992 with a ticket
+  (PASS: signed on), connects again with the same ticket (PASS: the sign-on
+  display), and offers a new ticket on 23 (PASS: the sign-on display). It
+  prints no ticket and signs off at the end.
+- [ ] **TCP1A55.** `CHGSYSVAL QRMTSIGN '*FRCSIGNON'`, Connect: `TCP1A55` shown
+  as the system sent it, then the sign-on display. Set `*VERIFY` back.
+- [ ] **Nothing secret logged.** Search `qsaccess.log` for the passwords
+  used and for any 64-hexadecimal-character run: none.
+
+Against a version-1 server (QS/400 before 8306ec41, if one is at hand; the
+automated tests cover it with QS/400's engine at 58a7e6d3): Run Command
+opens disabled with `QAD5001`, Session Properties' Sign on automatically is
+disabled with `QAD5001`, no expiry warning, and sign-on works.
 
 ## Keyboard: Right Ctrl
 

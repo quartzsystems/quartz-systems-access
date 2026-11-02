@@ -21,6 +21,8 @@ qsa-print.workspace = true
 
 [dev-dependencies]
 qapd.workspace = true
+qapd_v1.workspace = true
+qap_proto_v1.workspace = true
 rustls.workspace = true
 
 [build-dependencies]
