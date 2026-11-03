@@ -125,6 +125,52 @@ database (`qapd::testing::sql`):
   since a test cannot run as another user), counted and closed unread.
 - `qsaccess/tests/secrets.rs` also attaches and runs SQL, and searches for
   the session token too.
+- `qap-client/tests/ifs.rs`: version 5's `Ifs` service against QS/400's
+  test file system (`qapd::testing::files`): every operation and status
+  with the file-system commands' messages (`CPFA0A9`, `CPFA09C`, `CPFA0A0`,
+  `CPFA09E`, `CPFA0AC`, `TCP1A5A`), 1,200 entries in pages of 500, links
+  and a broken one, `InUse` on `LOCKED` and the read after
+  `System::release_lock()`, `CHECKED_OUT`, the 200 MiB file both ways byte
+  for byte, the 37, 273, 819, 1208 and mixed 939 files read in chunks that
+  cut inside characters joining into the system's whole conversion, text
+  written in pieces making the same file as one write, a text download
+  resumed from its last `next_offset` on another connection, a read and a
+  binary upload resumed after `System::drop_connection`, a cancel, and a
+  session at version 4 sending nothing of `Ifs`.
+- `qsa-transfer/tests/files.rs`: `TREE` counted and deleted depth-first,
+  stopping at `TREE_HELD` (checked out to `ANN`) with `CPFA09E`, what came
+  before it deleted and its folders refusing as not empty (`CPFA0AC`); a
+  folder copied on the system and deleted whole.
+- `qsa-transfer/tests/file_transfer.rs`: one file's transfer: binary both
+  ways resumed after a cancel, the partial download beside its target, the
+  existing-file policies (Ask with each answer, Skip, Replace, Replace if
+  newer, Keep both), text converted by the system with CR LF here matching
+  the system's whole-file conversion, a text download resumed from its last
+  confirmed `next_offset`, folders made a job per file, and a saved
+  request's files planned (patterns, recurse or not, a refused folder).
+- `qsa-transfer`'s `files::lines` unit tests: LF to CR LF and back, a CR LF
+  pair split across chunks and across every buffer size.
+- `qsa-transfer`'s `request` unit tests: `.qdx` version 2 for tables and
+  files both ways, version 1 read as a table's, and what is refused.
+- `qsaccess/tests/ifs_editor.rs`: the editor's reads (each CCSID, the mixed
+  file, a link, binary as a hex dump read-only, over 8 MiB read-only, the
+  200 MiB file refused, `InUse` then the read after the hold ends) and
+  saves (the CCSID kept, the change time moved, Save As in another CCSID,
+  `Exists` for a name taken).
+- `qsaccess/tests/run_request.rs` also runs a files request delegated to the
+  instance: exit 0 with the files written, exit 3 for a folder refused.
+- `qsaccess/tests/fallback.rs` also: the Integrated File System is
+  `QAD5001` before version 5, against a version 2 server and in a session
+  that agreed version 4.
+- `qap-client/tests/sql.rs`: a slow select, plain and under
+  `RepeatableRead`, holding up no Run Command, Printer Output list or other
+  window's query; `DECFLOAT` read back as the engine's text exactly and `=`
+  by value. `qsa-transfer/tests/upload.rs`: the same `DECFLOAT` texts
+  through a download and upload in every format.
+- `qap-client/tests/connection.rs`: the server's end over `System::listen`:
+  connects refused while ended, taken after `System::restart()`, and a
+  connection opened before the end still ending with it after a quick
+  restart.
 
 CI also runs `cargo fmt --check`, `cargo clippy -D warnings`, the clean-room
 check (`ci/cleanroom.sh`), the copyright header check and `ci/deps.sh`
@@ -132,9 +178,9 @@ check (`ci/cleanroom.sh`), the copyright header check and `ci/deps.sh`
 not depend on FLTK).
 
 The clean-room check allows an explicit list of files and no others: each
-protocol crate's `wire.rs` (today only `tn5250/src/wire.rs`), and, while QS/400's
-version 4 build notes name another platform, the read-only spec mirror
-`docs/qap-protocol-spec.md`.
+protocol crate's `wire.rs` (today only `tn5250/src/wire.rs`). The read-only
+spec mirror `docs/qap-protocol-spec.md` is checked like any other file, and
+the check fails if it is ever allowlisted.
 The protocols' vendor-prefixed strings (5250 terminal types and environment
 variable names) live there and nowhere else.
 Other code uses their constants, and logs them only at debug level. A new
@@ -214,6 +260,9 @@ on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 | `transfer-download-source`, `transfer-download-columns`, `transfer-download-output`, `transfer-download-fixed`, `transfer-download-query` | New: Data Transfer from the system: each page for `HLINV.ASSETS` with a Where clause, chosen columns and a row limit; the fixed-width widths; a query source. No golden yet. |
 | `transfer-upload-input`, `transfer-upload-target`, `transfer-upload-mapping`, `transfer-upload-commit` | New: Data Transfer to the system: each page, the mapping grid with a value that does not fit (`QAD7035`), and commit every 10 batches. No golden yet. |
 | `transfer-progress`, `transfer-summary`, `transfer-no-commitment-control` | New: the progress dialog, the summary (`QAD7030`), and `SQL7008` as sent with `QAD7034` and Upload Without Commitment Control. No golden yet. |
+| `ifs-home`, `ifs-large-folder`, `ifs-unauthorized`, `ifs-broken-link`, `ifs-delete-files`, `ifs-delete-folder` | New: the Integrated File System window on `/home/BOB` with links (the broken one red), on a 1,200-entry folder with its first 500 loaded, on a folder refused with `CPFA09C` in the list area, on two links, and the delete confirmations for files and for a folder with its counts. No golden yet. |
+| `ifs-transfers-running`, `ifs-transfers-failed`, `ifs-transfers-finished`, `ifs-transfer-options`, `ifs-existing-file` | New: the transfer queue running (a download at 28.5 MiB/s), with a failure as the system sent it and a cancel, and all finished; the transfer options; the existing-file prompt (`QAD8010`) with Keep Both. No golden yet. |
+| `ifs-editor`, `ifs-editor-read-only`, `ifs-editor-changed`, `ifs-properties`, `ifs-properties-link` | New: the editor on a CCSID 37 file, a binary file read-only as a hex dump (`QAD8013`), the changed-on-system prompt (`QAD8011`), and Properties of a file and of a link. No golden yet. |
 | `qsa-install`: `wizard-0-welcome`, `wizard-1-licence`, `wizard-2-install-for`, `wizard-3-location`, `wizard-4-options`, `wizard-5-ready`, `wizard-7-finish`, `uninstall`, `repair` | The licence text, the check box control, and no saved passwords in the Welcome, Uninstall and Repair text; `.qdx` among the file types on Options and Ready. |
 
 ## PDF goldens
@@ -561,6 +610,113 @@ Against a version-3 server (QS/400 at 3134e9ea, if one is at hand; the
 automated tests cover version 2 with QS/400's engine at 8306ec41): Run SQL,
 Schemas and Data Transfer are dimmed with `QAD5001`; Run Command works on
 the shared connection; everything earlier works as before.
+
+## Live acceptance (Phase 8: QAP version 5)
+
+On QS/400 at 10.42.70.150, prepared first:
+
+1. a QS/400 build at or after 58e189df installed (`STRTCPSVR SERVER(*QAP)`;
+   Verify... says "Version 5"), with the Phase 7 setup done (profiles `BOB`
+   and `ANN`, the `HLINV` and `HLTEST` data);
+2. `fixtures/live/ifs-setup.sh` put in `/home/QSECOFR/` (with `sftp`, say)
+   and run as `QSECOFR`: `QSH CMD('/home/QSECOFR/ifs-setup.sh')`. It makes
+   `/home/BOB/qsa8` (1,200 files in `many`, the text files in CCSIDs 1208,
+   37, 273, 819 and mixed 939 and a binary one in `text`, a link and a
+   broken one, `edit37.txt`, `checkedout.txt` and `tree/src/lib/m.txt`
+   checked out to `ANN`, and `tree`) and `/home/ANN/qsa8private`, which
+   `BOB` may not read, with `MKDIR`, `CPY ... TOCCSID`, `ADDLNK`, `CHGAUT`
+   and `CHKOUT`; its header says how to run it again. Check both `CHKOUT`
+   jobs ended normally;
+3. on this computer, a 200 MiB file of random bytes, `big.bin`, and its
+   SHA-256 (`certutil -hashfile big.bin SHA256` on Windows, `sha256sum` on
+   Linux);
+4. this program installed by its installer, signed on as `BOB`.
+
+Then, with `QSACCESS_LOG=trace`:
+
+- [ ] **Home and `/`.** Integrated File System (General) opens on
+  `/home/BOB`; the tree has `/home/BOB` and `/`; opening `/` lists `home`,
+  `QSYS.LIB` and the rest; `/QSYS.LIB/QGPL.LIB` lists its objects. The
+  status line says `QAD8001` with the count.
+- [ ] **A large folder.** `/home/BOB/qsa8/many`: `QAD8001` says 1,200; the
+  first 500 show, and scrolling down loads the next pages until
+  `f1199.txt`. A pattern `f11??.txt` shows 100. Sorting by Size or Name
+  sorts those loaded, folders first.
+- [ ] **Links.** In `/home/BOB/qsa8`, `link1208 -> .../text1208.txt` is a
+  Link to file and opens (Edit) as the text; `broken` is red, Broken link,
+  and does not open.
+- [ ] **An unauthorized folder.** Path `/home/ANN/qsa8private`, Go: the list
+  area shows `CPFA09C` as the system sent it; Back returns.
+- [ ] **Binary both ways, interrupted and resumed.** Upload... `big.bin` to
+  `/home/BOB/qsa8` (Binary): the queue shows Upload, Progress and Speed.
+  Part way, Cancel (`QAD8022`); Retry: `QAD8023` names where it goes on, and
+  it completes (`QAD8020`). Download it back to another folder, cancelling
+  part way: `big.bin.qsapart` is beside the target and the target is not
+  there; Retry resumes and completes, the part file gone. The downloaded
+  file's SHA-256 equals the original's. Also pull the network cable (or
+  disable the adapter) for a few seconds during a download: it fails
+  (`QAD8021`); Retry resumes from the last confirmed part.
+- [ ] **Text round trips.** Download `text37.txt` and `text1208.txt` in Text
+  mode with CR LF: both open in Notepad as the same German text with CR LF
+  line ends. Edit the local copy of `text37.txt` (add a line with `ß`) and
+  Upload it in Text mode, CCSID for new files 37, Replace: Properties says
+  CCSID 37; Edit shows the new line; `DSPF '/home/BOB/qsa8/text37.txt'`
+  (5250) shows it as the system's own conversion. Upload a new UTF-8 file
+  in Text mode with CCSID 1208: Properties says 1208.
+- [ ] **A text download resumed.** Make a large mixed file: Upload a few
+  MiB of Japanese text (UTF-8) in Text mode with CCSID 939. Download it in
+  Text mode, cancel part way, Retry (`QAD8023`): the result equals the
+  original UTF-8 text exactly (`fc /b` or `cmp`), its CR LF aside.
+- [ ] **Edit and save.** Edit `edit37.txt`: CCSID 37 on the status bar, line
+  and column follow the cursor. Change a line, Ctrl+S: saved, still CCSID 37.
+  Change it again; meanwhile in 5250 `EDTF '/home/BOB/qsa8/edit37.txt'` and
+  save a change there; Ctrl+S here: `QAD8011` with Overwrite, Reload and
+  Cancel; Reload shows the 5250 change. `binary.dat` opens read-only as a
+  hex dump (`QAD8013`); Open on `text939.txt` opens a read-only copy in the
+  default application.
+- [ ] **Server-side copy.** Copy `edit37.txt`, open `many`, Paste:
+  `QAD8005`; Properties of the copy says CCSID 37. Paste again: `QAD8010`
+  with Replace, Skip and Cancel. Copy the folder `text`, Paste into
+  `/home/BOB`: the folder and its files are there. No data passed through
+  this computer (the trace shows `Copy` requests, no `ReadFile`).
+- [ ] **Cut and paste.** Cut the copied `text` folder, open `/home/BOB/qsa8`,
+  Paste: it moves (`QAD8003`); Paste is then empty.
+- [ ] **Recursive delete.** Delete `tree`: the confirmation gives 7 files and
+  4 folders. Delete: it stops at `src/lib/m.txt` with `QAD8006` and the
+  system's `CPFA09E`; `docs` and `readme.txt` are gone, `src` is still there.
+  Deleting `checkedout.txt` gives `CPFA09E` too.
+- [ ] **Drag and drop.** Drag three files and a folder from Explorer (or
+  Files) onto the list: the options dialog, then each in the queue, the
+  folder's files with it; the list shows them when done.
+- [ ] **A files `.qdx` double-clicked.** In the transfer options of a
+  download of `text`, Save Request... (`QAD7040`). Double-click it in
+  Explorer: the Integrated File System window opens with the request's
+  options; OK queues its files. Open Request... in the options dialog runs
+  another saved request instead.
+- [ ] **`qsaccess run`, both ways.** With the program running and signed
+  on, `start /wait "" qsaccess run text.qdx` (Windows) or
+  `qsaccess run text.qdx` (Linux): no Sign On, file progress on stderr,
+  `QAD8020` on stdout, exit 0; a request for `/home/ANN/qsa8private`: exit 3
+  with the system's `CPFA09C`. Close the program and run `text.qdx` again:
+  the Sign On dialog, then the files, exit 0.
+- [ ] **Responsiveness during a transfer and a long query.** While the 200
+  MiB upload runs: Run SQL `SELECT * FROM HLINV.ASSETS` and Printer Output's
+  list answer at once, and the IFS window still browses. Then, with each of
+  the three long statements of the Phase 7 item running in a Run SQL
+  window (the aggregate, the slow plain select, the aggregate under
+  Repeatable read): the IFS window lists and transfers, Run Command
+  `CRTLIB LIB(QATESTLIB)` completes and Printer Output lists, none waiting.
+- [ ] **Connections.** `WRKACTJOB`: each IFS window with transfers has one
+  job of its own beside the shared connection's. With 15 Run SQL windows
+  open, a transfer shows `QAD8030` once and runs on the shared connection.
+- [ ] **Nothing secret logged.** Search `qsaccess.log` for the passwords
+  used and for any 64-hexadecimal-character run: none.
+
+Against a version-4 server (QS/400 at dd1f61a4, if one is at hand; the
+automated tests cover version 2 with QS/400's engine at 8306ec41 and a
+session that agrees version 4 with the current one): Integrated File System
+is dimmed with `QAD5001`, and opening a files `.qdx` says the same; Run SQL,
+Schemas, Data Transfer and everything earlier work as before.
 
 ## Keyboard: Right Ctrl
 
