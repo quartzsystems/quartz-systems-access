@@ -320,10 +320,14 @@ impl Pending {
 }
 
 /// Whether `op` runs until it is done or cancelled, with no reply timeout:
-/// `RunCommand` and `ReadSpooledFile`. A wait on one that runs out of time
-/// leaves it running; only [`Pending::cancel`] ends it.
+/// `RunCommand`, `ReadSpooledFile`, and `Sql`'s `Execute`, `Fetch`,
+/// `Commit` and `Rollback`. A wait on one that runs out of time leaves it
+/// running; only [`Pending::cancel`] ends it.
 pub fn runs_long(op: Op) -> bool {
-    matches!(op, Op::RunCommand | Op::ReadSpooledFile)
+    matches!(
+        op,
+        Op::RunCommand | Op::ReadSpooledFile | Op::Execute | Op::Fetch | Op::Commit | Op::Rollback
+    )
 }
 
 /// Whether `op` only reads, so that when its connection closed quietly or

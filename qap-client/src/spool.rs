@@ -52,7 +52,7 @@ pub const BATCH_PAGES: u32 = 25;
 const LOOK: Duration = Duration::from_millis(25);
 
 /// Entries per request when paging through a whole list.
-const ALL_PAGE: u32 = 500;
+pub(crate) const ALL_PAGE: u32 = 500;
 
 /// Where a paged list is: the first entry shown (0-based), how many a page
 /// shows, and how many there are by the last reply.

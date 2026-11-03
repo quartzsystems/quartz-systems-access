@@ -267,6 +267,31 @@ impl Attached {
         r
     }
 
+    /// Sends a request on the connection there is, never a new one: for
+    /// requests that name the job's statements or cursors, which a new
+    /// connection's job does not have. [`Error::Closed`] when it has closed.
+    pub fn request_here<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error> {
+        self.absorb_events();
+        if let Some(e) = &self.ended {
+            return Err(ended_error(e));
+        }
+        let r = match &self.conn {
+            Some(c) => match c.closed() {
+                None => c.request(op, body),
+                Some(why) => Err(Error::Closed(why)),
+            },
+            None => Err(Error::Closed(Closed::Quietly)),
+        };
+        self.absorb_events();
+        r
+    }
+
+    /// Whether the connection there is has closed (or there is none): the
+    /// job, and everything it held, is gone.
+    pub fn is_closed(&self) -> bool {
+        self.conn.as_ref().is_none_or(|c| c.closed().is_some())
+    }
+
     /// Closes the connection, never signing off; the session goes on.
     pub fn close(&mut self) {
         if let Some(c) = self.conn.take() {

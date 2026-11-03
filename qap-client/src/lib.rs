@@ -27,6 +27,12 @@
 //! - [`attach`]: version 4's `Attach` and `JobInfo`: a connection of its
 //!   own to a signed-on session, with its own job, for a window that keeps
 //!   job state; it never signs off.
+//! - [`sql`]: version 4's `Sql` service: a [`SqlConnection`] owns one
+//!   attached connection with its options, statements and cursors, rows
+//!   stream in blocks of 500 into a caller's sink, and the catalog is
+//!   listed a page at a time on the shared connection. `SqlError` is
+//!   [`Error::Sql`]; a cancelled `Execute` or `Fetch` is an outcome with
+//!   what it did before the cancel.
 //!
 //! `Hello` offers versions [`proto::MIN_VERSION`] to [`proto::VERSION`] (1
 //! to 4) and the server picks the highest both speak. An operation is sent
@@ -43,6 +49,7 @@ pub mod command;
 pub mod conn;
 pub mod session;
 pub mod spool;
+pub mod sql;
 
 mod error;
 mod frames;
@@ -58,6 +65,7 @@ pub use ipc::Wire;
 pub use qap_proto as proto;
 pub use qap_proto::{Secret, ServerMessage, Status, Token};
 pub use session::{Client, Notice};
+pub use sql::{ExecuteOutcome, FetchEnd, FetchOutcome, SqlConnection};
 
 /// The most a split reply is joined to: 64 MiB.
 pub const MAX_REPLY: usize = 64 << 20;

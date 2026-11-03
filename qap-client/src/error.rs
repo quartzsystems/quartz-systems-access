@@ -4,6 +4,7 @@
 
 //! What can go wrong.
 
+use qap_proto::ops::sql::SqlFailure;
 use qap_proto::{Op, ServerMessage, Status};
 
 use crate::conn::Closed;
@@ -20,6 +21,14 @@ pub enum Error {
     #[error("{}", status_text(*status, message.as_ref()))]
     Status {
         status: Status,
+        message: Option<ServerMessage>,
+    },
+    /// `SqlError` (version 4): the statement failed in the database: its
+    /// SQLSTATE, SQLCODE and, for an `Execute` over several rows, the
+    /// 0-based failing row of that request; and the SQL message as sent.
+    #[error("{}", status_text(Status::SqlError, message.as_ref()))]
+    Sql {
+        failure: Box<SqlFailure>,
         message: Option<ServerMessage>,
     },
     /// The connection closed before the reply came.
@@ -60,6 +69,7 @@ impl Error {
     pub fn status(&self) -> Option<Status> {
         match self {
             Error::Status { status, .. } => Some(*status),
+            Error::Sql { .. } => Some(Status::SqlError),
             _ => None,
         }
     }
@@ -67,7 +77,7 @@ impl Error {
     /// The server's message, when it sent one.
     pub fn server_message(&self) -> Option<&ServerMessage> {
         match self {
-            Error::Status { message, .. } => message.as_ref(),
+            Error::Status { message, .. } | Error::Sql { message, .. } => message.as_ref(),
             _ => None,
         }
     }
