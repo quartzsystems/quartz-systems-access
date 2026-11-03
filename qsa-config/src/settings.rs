@@ -143,6 +143,78 @@ pub struct Settings {
     pub command_history: std::collections::BTreeMap<String, Vec<String>>,
     /// Printer Output's list and output.
     pub printer_output: PrinterOutput,
+    /// Run SQL's history, recent scripts and options.
+    pub run_sql: RunSql,
+}
+
+/// Statements Run SQL keeps per system.
+pub const SQL_HISTORY_MAX: usize = 100;
+
+/// `[run_sql]`: what Run SQL keeps between runs.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RunSql {
+    /// Statements run, by system name in lower case, oldest first, at most
+    /// [`SQL_HISTORY_MAX`] each. One that names a password is never kept.
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub history: std::collections::BTreeMap<String, Vec<String>>,
+    /// `.sql` files opened or saved most recently, newest first.
+    pub recent: Vec<PathBuf>,
+    /// Systems, in lower case, whose CCSID 65535 character data shows as
+    /// text in the job's CCSID rather than as hex.
+    #[serde(skip_serializing_if = "std::collections::BTreeSet::is_empty")]
+    pub bit_data_as_text: std::collections::BTreeSet<String>,
+    /// Run All stops at the first statement that fails.
+    pub stop_on_error: bool,
+}
+
+impl RunSql {
+    /// `system`'s statements, oldest first.
+    pub fn history(&self, system: &str) -> &[String] {
+        self.history
+            .get(&system.to_ascii_lowercase())
+            .map_or(&[], Vec::as_slice)
+    }
+
+    /// Keeps `statement` as `system`'s newest, once, dropping the oldest
+    /// past [`SQL_HISTORY_MAX`]. A statement that names a password (the
+    /// word `PASSWORD`, or a CL password parameter in a command it runs)
+    /// is not kept. False when nothing was kept.
+    pub fn add(&mut self, system: &str, statement: &str) -> bool {
+        let s = statement.trim();
+        if s.is_empty() || names_password(s) || s.to_ascii_uppercase().contains("PASSWORD") {
+            return false;
+        }
+        let list = self.history.entry(system.to_ascii_lowercase()).or_default();
+        list.retain(|c| c != s);
+        list.push(s.to_owned());
+        let over = list.len().saturating_sub(SQL_HISTORY_MAX);
+        list.drain(..over);
+        true
+    }
+
+    /// Puts `path` at the top of the recent scripts, keeping at most
+    /// [`RECENT_MAX`].
+    pub fn add_recent(&mut self, path: &Path) {
+        self.recent.retain(|p| !same_path(p, path));
+        self.recent.insert(0, path.to_owned());
+        self.recent.truncate(RECENT_MAX);
+    }
+
+    /// Whether `system` shows CCSID 65535 data as text.
+    pub fn bit_data_as_text(&self, system: &str) -> bool {
+        self.bit_data_as_text.contains(&system.to_ascii_lowercase())
+    }
+
+    /// Sets whether `system` shows CCSID 65535 data as text.
+    pub fn set_bit_data_as_text(&mut self, system: &str, on: bool) {
+        let k = system.to_ascii_lowercase();
+        if on {
+            self.bit_data_as_text.insert(k);
+        } else {
+            self.bit_data_as_text.remove(&k);
+        }
+    }
 }
 
 /// Rows a page of Printer Output's lists may show.
@@ -275,6 +347,7 @@ impl Default for Settings {
             new_session_keymap: None,
             command_history: Default::default(),
             printer_output: PrinterOutput::default(),
+            run_sql: RunSql::default(),
         }
     }
 }
@@ -402,6 +475,46 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn run_sql_settings() {
+        let mut s = Settings::default();
+        assert!(s.run_sql.add("Sys1", " SELECT * FROM HLINV.ASSETS "));
+        assert!(s.run_sql.add("SYS1", "VALUES 1"));
+        assert!(s.run_sql.add("sys1", "SELECT * FROM HLINV.ASSETS"));
+        assert_eq!(
+            s.run_sql.history("SYS1"),
+            ["VALUES 1", "SELECT * FROM HLINV.ASSETS"]
+        );
+        assert!(
+            !s.run_sql
+                .add("sys1", "CALL QSYS2.QCMDEXC('CHGUSRPRF X PASSWORD(ABC)')")
+        );
+        assert!(!s.run_sql.add("sys1", "SET ENCRYPTION PASSWORD = 'x'"));
+        for n in 0..150 {
+            s.run_sql.add("sys1", &format!("VALUES {n}"));
+        }
+        assert_eq!(s.run_sql.history("sys1").len(), SQL_HISTORY_MAX);
+        assert_eq!(s.run_sql.history("sys1")[99], "VALUES 149");
+        s.run_sql.add_recent(Path::new("/q/a.sql"));
+        s.run_sql.add_recent(Path::new("/q/b.sql"));
+        s.run_sql.add_recent(Path::new("/q/a.sql"));
+        assert_eq!(
+            s.run_sql.recent,
+            [Path::new("/q/a.sql"), Path::new("/q/b.sql")]
+        );
+        assert!(!s.run_sql.bit_data_as_text("SYS1"));
+        s.run_sql.set_bit_data_as_text("SYS1", true);
+        assert!(s.run_sql.bit_data_as_text("sys1"));
+        s.run_sql.stop_on_error = true;
+        let back: Settings = toml::from_str(&toml::to_string(&s).unwrap()).unwrap();
+        assert_eq!(back.run_sql, s.run_sql);
+        // An older file without the section loads with the defaults.
+        let old: Settings = toml::from_str("version = 1\n").unwrap();
+        assert_eq!(old.run_sql, RunSql::default());
+        s.run_sql.set_bit_data_as_text("sys1", false);
+        assert!(!s.run_sql.bit_data_as_text("SYS1"));
+    }
 
     #[test]
     fn printer_output_settings() {

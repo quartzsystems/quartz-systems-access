@@ -15,11 +15,13 @@
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
+use std::ffi::{CStr, CString};
 use std::rc::Rc;
 
 use fltk::app;
 use fltk::draw;
 use fltk::enums::{Align, Color, Event, FrameType, Key, Shortcut};
+use fltk::misc::Tooltip;
 use fltk::prelude::*;
 use fltk::table::{TableContext, TableRow, TableRowSelectMode};
 
@@ -67,6 +69,10 @@ struct Model {
     anchor: Option<usize>,
     /// Sorted column and whether ascending, for the header arrow.
     sort: Option<(usize, bool)>,
+    /// A tooltip for each column header, if any.
+    header_tips: Vec<Option<&'static CStr>>,
+    /// The column of the last click in the rows.
+    clicked_col: Option<usize>,
     on_select: Option<Callback>,
     on_activate: Option<Callback>,
     on_context: Option<Callback>,
@@ -135,6 +141,8 @@ impl ListTable {
             marked: BTreeSet::new(),
             anchor: None,
             sort: None,
+            header_tips: Vec::new(),
+            clicked_col: None,
             on_select: None,
             on_activate: None,
             on_context: None,
@@ -223,6 +231,9 @@ impl ListTable {
                 }
                 let row = t.callback_row();
                 let in_rows = t.callback_context() == TableContext::Cell;
+                if in_rows {
+                    m.borrow_mut().clicked_col = usize::try_from(t.callback_col()).ok();
+                }
                 let double = app::event_clicks();
                 let _ = t.take_focus();
                 if in_rows {
@@ -305,11 +316,49 @@ impl ListTable {
                 t.redraw();
                 true
             }
+            Event::Move => {
+                if let Some((TableContext::ColHeader, _, col, _)) = t.cursor2rowcol()
+                    && let Some(Some(tip)) = m.borrow().header_tips.get(col as usize)
+                    && let Some((x, y, w, h)) = t.find_cell(TableContext::ColHeader, 0, col)
+                {
+                    Tooltip::enter_area(t, x, y, w, h, tip);
+                }
+                false
+            }
             _ => false,
         });
         table.super_handle_first(false);
 
         ListTable { table, model }
+    }
+
+    /// A tooltip for each column header (`None`: no tooltip). Their texts
+    /// are kept for the life of the program, each distinct one once.
+    pub fn set_header_tooltips(&mut self, tips: &[Option<String>]) {
+        self.model.borrow_mut().header_tips =
+            tips.iter().map(|t| t.as_deref().map(intern)).collect();
+    }
+
+    /// The column of the last click in the rows.
+    pub fn clicked_column(&self) -> Option<usize> {
+        self.model.borrow().clicked_col
+    }
+
+    /// Row `row`'s cells.
+    pub fn row(&self, row: usize) -> Option<Vec<Cell>> {
+        self.model.borrow().rows.get(row).cloned()
+    }
+
+    /// Adds rows at the end, keeping the selection and scroll position.
+    pub fn append_rows(&mut self, rows: Vec<Vec<Cell>>) {
+        let n = {
+            let mut m = self.model.borrow_mut();
+            m.rows.extend(rows);
+            m.rows.len()
+        };
+        self.table.set_rows(n as i32);
+        self.table.set_row_height_all(theme::ROW_H);
+        self.table.redraw();
     }
 
     /// Allows more than one row to be selected.
@@ -506,4 +555,20 @@ fn fire(m: &Rc<RefCell<Model>>, activate: bool) {
             *slot = Some(cb);
         }
     }
+}
+
+/// `text` as a C string that lives as long as the program, each distinct
+/// text made once: FLTK keeps the pointer an area tooltip shows.
+fn intern(text: &str) -> &'static CStr {
+    static TIPS: std::sync::Mutex<Vec<&'static CStr>> = std::sync::Mutex::new(Vec::new());
+    let mut tips = TIPS
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let clean: String = text.chars().filter(|c| *c != '\0').collect();
+    if let Some(t) = tips.iter().find(|t| t.to_bytes() == clean.as_bytes()) {
+        return t;
+    }
+    let t: &'static CStr = Box::leak(CString::new(clean).expect("no NUL left").into_boxed_c_str());
+    tips.push(t);
+    t
 }

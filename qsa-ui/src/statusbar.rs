@@ -24,6 +24,8 @@ pub enum Status {
     Active,
     /// Ended, error, not connected: red.
     Error,
+    /// Not a value (an SQL null): grey.
+    Muted,
 }
 
 impl Status {
@@ -33,6 +35,7 @@ impl Status {
             Status::Neutral => colors::TEXT,
             Status::Active => colors::STATUS_ACTIVE,
             Status::Error => colors::STATUS_ERROR,
+            Status::Muted => colors::DISABLED_TEXT,
         }
     }
 }

@@ -150,6 +150,38 @@ impl Tabs {
         page
     }
 
+    /// Retitles page `i`.
+    pub fn set_title(&mut self, i: usize, title: &str) {
+        if let Some(t) = self.pages.borrow_mut().titles.get_mut(i) {
+            title.clone_into(t);
+        }
+        self.strip.redraw();
+    }
+
+    /// Page `i`'s title.
+    pub fn title(&self, i: usize) -> Option<String> {
+        self.pages.borrow().titles.get(i).cloned()
+    }
+
+    /// Removes the pages after the first `keep`, and the widgets on them;
+    /// the first page is shown if one of them was.
+    pub fn truncate(&mut self, keep: usize) {
+        let groups = {
+            let mut p = self.pages.borrow_mut();
+            p.titles.truncate(keep);
+            let at = keep.min(p.groups.len());
+            p.groups.split_off(at)
+        };
+        for g in groups {
+            self.group.remove(&g);
+            fltk::app::delete_widget(g);
+        }
+        if self.current.get() >= keep {
+            self.select(0);
+        }
+        self.group.redraw();
+    }
+
     /// Shows page `i`.
     pub fn select(&mut self, i: usize) {
         select(&self.pages, &self.current, &mut self.group, i);

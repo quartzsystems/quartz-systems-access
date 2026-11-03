@@ -23,6 +23,7 @@ pub mod qap;
 pub mod recent;
 pub mod request;
 pub mod runcmd;
+pub mod runsql;
 pub mod session;
 pub mod shell;
 pub mod signon;

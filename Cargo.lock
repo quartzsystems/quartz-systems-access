@@ -1162,6 +1162,7 @@ dependencies = [
  "qsa-msg",
  "qsa-net",
  "qsa-print",
+ "qsa-sql",
  "qsa-ui",
  "rustls",
  "scs",

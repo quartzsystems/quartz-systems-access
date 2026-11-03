@@ -19,7 +19,7 @@ first, so the phases follow the versions:
 |---|---|---|
 | 5 | 2 | Run Command (`Command`), the password expiry warning (`PasswordStatus`), 5250 automatic sign-on by ticket (`TelnetTicket`) |
 | 6 | 3 | Printer Output (`Spool`) |
-| 7 | 4 | Run SQL, Schemas and Data Transfer (`Sql`) |
+| 7 | 4 | Run SQL, Schemas and Data Transfer (`Sql`); a connection of its own per window (`Attach`, `JobInfo`) |
 | 8 | 5 | Integrated File System (`Ifs`) |
 | 9 | 6 | Messages (`Messages`) |
 | 10 | none | 5250 Console and Control Panel (the service console, not QAP) |
@@ -176,6 +176,58 @@ Values already typed on the command line are filled in.
   dialog with `QAD5020` and it stays open; a command without errors goes to
   the command line, ready to run. **Cancel** keeps nothing.
 - The parameters scroll inside the dialog; it never grows past the screen.
+
+## Run SQL
+
+**Run SQL** in the task pane's Database group opens a window for SQL
+statements on the selected system, signing on first if this program has no
+session on it. It needs QAP version 4 (the `Sql` service); for an older
+system the link is dimmed and the window does not open (`QAD5001`). Every
+Run SQL window has a connection of its own, attached to the session, with
+its own job: its title names the system and the job (`QAD7001`), and a long
+query in one window holds up no other window, Run Command, or Printer
+Output.
+
+- **The script.** Statements in the system-output font, separated by `;`
+  (a `;` in a string, a delimited identifier or a comment does not count).
+  The status bar shows the cursor's line and column. **Run Statement**
+  (Ctrl+Enter, and the Run button) runs the statement at the cursor, **Run
+  Selected** (Ctrl+Shift+Enter) the selection's, **Run All** (F5) every
+  one, stopping at the first that fails when **Stop at First Error** is on.
+  **File** opens and saves `.sql` files and lists the recent ones; **Run >
+  History** lists the last 100 statements run on the system (kept in
+  `settings.toml`, never one that names a password).
+- **Options.** The default schema (chosen from the system's schemas, or
+  typed), SQL or System naming, and the commit level: None (the default),
+  Read uncommitted, Read committed, Repeatable read or Serializable.
+  **Commit** and **Rollback** are enabled under a commit level. While
+  changes are uncommitted the level, naming and schema cannot change: the
+  program first asks to commit, roll back or cancel (`QAD7021`), as it does
+  when the window closes. Open results stay open across Commit and
+  Rollback.
+- **Results.** A tab per result set. Column headers are the SQL names; the
+  label and type are their tooltip. Rows come 500 at a time, with **Fetch
+  More** and **Fetch All**; NULL is a grey `-`. Decimals show exactly, to
+  their column's scale; dates, times and timestamps in your job's date
+  format and separators, a timestamp to its precision (up to 12 digits);
+  BOOLEAN as TRUE or FALSE; binary data and CCSID 65535 character data as
+  hex (`X'C1C2'`), or the latter as text when **Options > Show CCSID 65535
+  Data as Text** is on (kept per system). **Edit > Copy Cell** and **Copy
+  Row** (also on a right-click) copy tab-separated text.
+- **Messages.** Every statement's message as the system sent it, with its
+  ID, SQLSTATE and SQLCODE, the rows changed (`QAD7020`) or fetched, and
+  the time it took; a double-click shows its second-level text.
+- **Cancel** ends the statement or fetch in flight. The rows that came
+  before stay, the tab and status bar saying the result is incomplete
+  (`QAD7011`); they can still be copied.
+- **Lost connections and ended sessions.** Closing the window closes its
+  connection (uncommitted changes are rolled back unless you commit them
+  when asked); it never signs off. If the connection is lost, the window
+  keeps what it shows, marks the result incomplete, and says the statement
+  must be run again (`QAD7010`): the next run attaches a new connection.
+  Nothing is ever run again by itself. If the session ends (a sign-off, or
+  an operator ending one of its jobs), the window shows the system's
+  message and offers **Sign On...**.
 
 ## Printer Output
 

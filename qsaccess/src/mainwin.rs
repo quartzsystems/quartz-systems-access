@@ -113,6 +113,9 @@ pub struct Ui {
     /// The task pane's Printer Output link, dimmed for a system whose QAP
     /// version has no Spool service.
     printer_output: Widget,
+    /// The links of the tasks that need the Sql service (Data Transfer,
+    /// Schemas, Run SQL), dimmed for a system whose version has none.
+    sql_links: Vec<(Task, Widget)>,
 }
 
 impl Ui {
@@ -150,6 +153,15 @@ impl Ui {
                 }
                 if let Some(system) = self.selected_system() {
                     crate::runcmd::open(self.parent(), &self.state, &system);
+                    self.refresh_systems();
+                }
+            }
+            Task::RunSql => {
+                if self.state.borrow().systems.is_empty() {
+                    crate::sysconfig::open(self);
+                }
+                if let Some(system) = self.selected_system() {
+                    crate::runsql::open(self.parent(), &self.state, &system, None, false, 0);
                     self.refresh_systems();
                 }
             }
@@ -216,6 +228,19 @@ impl Ui {
         let mut link = self.printer_output.clone();
         let text = why.as_ref().map(ToString::to_string).unwrap_or_default();
         TaskPane::set_link_dimmed(&mut link, why.is_some(), &text);
+        for (task, link) in &self.sql_links {
+            let why = crate::runsql::sql_blocked(task.label(), system, version);
+            let text = why.as_ref().map(ToString::to_string).unwrap_or_default();
+            TaskPane::set_link_dimmed(&mut link.clone(), why.is_some(), &text);
+        }
+    }
+
+    /// Whether the task pane's link for `task` (Data Transfer, Schemas or
+    /// Run SQL) is dimmed.
+    pub fn sql_task_dimmed(&self, task: Task) -> bool {
+        self.sql_links
+            .iter()
+            .any(|(t, l)| *t == task && l.label_color() == qsa_ui::theme::colors::DISABLED_TEXT)
     }
 
     /// Whether the task pane's Printer Output is dimmed.
@@ -526,6 +551,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
     });
     let system = system.expect("system row is built");
     let mut printer_output = None;
+    let mut sql_links = Vec::new();
     pane.add_rule();
     for (title, tasks) in TASK_GROUPS {
         match title {
@@ -535,6 +561,9 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
                     let task = *task;
                     let link =
                         pane.add_link(None, task.label(), move || tx.send(Action::Task(task)));
+                    if matches!(task, Task::DataTransfer | Task::Schemas | Task::RunSql) {
+                        sql_links.push((task, link.clone()));
+                    }
                     if task == Task::PrinterOutput {
                         printer_output = Some(link);
                     }
@@ -560,6 +589,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
         tx,
         recent_gen: Rc::new(Cell::new(None)),
         printer_output: printer_output.expect("the General group has Printer Output"),
+        sql_links,
     };
     ui.refresh_systems();
     ui.refresh_recent();
