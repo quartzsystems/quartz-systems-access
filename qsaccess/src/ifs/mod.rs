@@ -21,14 +21,19 @@
 //!   them, a folder with everything in it after one giving the counts,
 //!   depth-first, stopping at the first refusal with the system's message
 //!   (`QAD8006`).
+//! - Download... and Upload... (and files dragged from the desktop's file
+//!   manager onto the list) go to the transfer queue ([`queue`]), on a
+//!   connection of the window's own.
 //! - The system's messages are shown as it sent them; a folder the profile
 //!   may not read shows its message in the list.
 //! - Before QAP version 5 the window does not open: `QAD5001`.
 
 pub mod model;
+pub mod queue;
 
 use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use fltk::app;
@@ -86,6 +91,13 @@ pub enum Act {
     Delete,
     SelectAll,
     Sort(usize),
+    Download,
+    Upload,
+    /// Files dropped on the list.
+    Dropped,
+    /// Show or hide the transfer queue.
+    Transfers,
+    Queue(queue::Act),
     Close,
 }
 
@@ -100,8 +112,11 @@ pub struct Widgets {
     /// A folder's refusal, shown in the list area.
     pub note: Frame,
     pub status: StatusBar,
+    pub queue: queue::Queue,
     back: fltk::button::Button,
     forward: fltk::button::Button,
+    /// Paths dropped on the list, until taken.
+    dropped: Rc<RefCell<Vec<PathBuf>>>,
 }
 
 /// A label as a tree path part: its `/` and `\` kept.
@@ -110,8 +125,10 @@ fn part(label: &str) -> String {
 }
 
 /// The actions a right-click in the list offers, with what they ask for.
-const CONTEXT: [(&str, Act); 7] = [
+const CONTEXT: [(&str, Act); 9] = [
     ("Open", Act::Open),
+    ("Download...", Act::Download),
+    ("Upload...", Act::Upload),
     ("Rename...", Act::Rename),
     ("Copy", Act::Copy),
     ("Cut", Act::Cut),
@@ -135,6 +152,8 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
         let n = MenuFlag::Normal;
         let d = MenuFlag::MenuDivider;
         add("&File/&Open", Shortcut::None, Act::Open, d);
+        add("&File/&Download...", Shortcut::Ctrl | 'd', Act::Download, n);
+        add("&File/&Upload...", Shortcut::Ctrl | 'u', Act::Upload, d);
         add(
             "&File/New &Folder...",
             Shortcut::Ctrl | Shortcut::Shift | 'n',
@@ -153,7 +172,8 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
             d,
         );
         add("&Edit/Select &All", Shortcut::Ctrl | 'a', Act::SelectAll, n);
-        add("&View/&Refresh", Shortcut::None | Key::F5, Act::Refresh, n);
+        add("&View/&Refresh", Shortcut::None | Key::F5, Act::Refresh, d);
+        add("&View/&Transfers", Shortcut::Ctrl | 't', Act::Transfers, n);
         add("&Go/&Back", Shortcut::Alt | Key::Left, Act::Back, n);
         add("&Go/&Forward", Shortcut::Alt | Key::Right, Act::Forward, n);
         add("&Go/&Up", Shortcut::Alt | Key::Up, Act::Up, d);
@@ -163,6 +183,13 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
     for (g, tip, a) in [
         (Glyph::Up, "Up one folder", Act::Up),
         (Glyph::Folder, "New Folder", Act::NewFolder),
+    ] {
+        tb.add(g, tip, move || tx.send(a));
+    }
+    tb.separator();
+    for (g, tip, a) in [
+        (Glyph::Download, "Download...", Act::Download),
+        (Glyph::Upload, "Upload...", Act::Upload),
     ] {
         tb.add(g, tip, move || tx.send(a));
     }
@@ -235,6 +262,19 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
     note.set_label_size(theme::UI_SIZE);
     note.set_label_color(colors::TEXT);
     note.hide();
+    // Files from the desktop: uploaded to the folder shown.
+    let dropped = Rc::new(RefCell::new(Vec::new()));
+    {
+        let d = Rc::clone(&dropped);
+        list.on_drop(move |paths| {
+            d.borrow_mut().extend(paths);
+            tx.send(Act::Dropped);
+        });
+    }
+    let queue = queue::Queue::new(lx, ty + th - queue::PANEL_H, W - lx - m, move |a| {
+        tx.send(Act::Queue(a));
+    });
+    queue.group.clone().hide();
     let status = StatusBar::new(0, H - StatusBar::HEIGHT, W);
     window.resizable(list.table());
     window.end();
@@ -248,10 +288,41 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
         list,
         note,
         status,
+        queue,
         back,
         forward,
+        dropped,
     };
     (w, rx)
+}
+
+impl Widgets {
+    /// Shows or hides the transfer queue under the list, the list taking
+    /// the room it leaves.
+    fn show_queue(&self, on: bool) {
+        let mut g = self.queue.group.clone();
+        if on == g.visible() {
+            return;
+        }
+        let t = self.list.table();
+        let (x, y, w) = (t.x(), t.y(), t.w());
+        let bottom = self.window.h() - StatusBar::HEIGHT - 6;
+        let list_h = if on {
+            bottom - y - queue::PANEL_H - 6
+        } else {
+            bottom - y
+        };
+        self.list.table().clone().resize(x, y, w, list_h);
+        let mut n = self.note.clone();
+        n.resize(n.x(), n.y(), n.w(), list_h - ListTable::HEADER_H - 2);
+        g.resize(x, bottom - queue::PANEL_H, w, queue::PANEL_H);
+        if on {
+            g.show();
+        } else {
+            g.hide();
+        }
+        self.window.clone().redraw();
+    }
 }
 
 /// Entries copied or cut, for Paste in this window or another of the same
@@ -287,6 +358,12 @@ pub struct Ifs {
     folders: RefCell<HashMap<String, String>>,
     /// A call is under way: nothing else starts meanwhile.
     busy: Cell<bool>,
+    /// The last batch's transfer options, offered for the next.
+    options: Cell<qsa_transfer::files::Options>,
+    /// `QAD8030` was shown: the queue runs on the shared connection.
+    shared_said: Cell<bool>,
+    /// A folder whose list an upload changed, refreshed when nothing runs.
+    stale: RefCell<Option<String>>,
 }
 
 impl Ifs {
@@ -310,6 +387,9 @@ impl Ifs {
             forward: RefCell::new(Vec::new()),
             folders: RefCell::default(),
             busy: Cell::new(false),
+            options: Cell::new(qsa_transfer::files::Options::default()),
+            shared_said: Cell::new(false),
+            stale: RefCell::new(None),
         };
         let mut tree = s.w.tree.clone();
         for p in [s.home.clone(), "/".to_owned()] {
@@ -356,6 +436,20 @@ impl Ifs {
         }
         s.nav_buttons();
         s
+    }
+
+    /// Shows the transfer queue with `items` as given: for screenshots.
+    pub fn show_transfers(
+        &self,
+        items: Vec<(
+            qsa_transfer::files::Job,
+            queue::State,
+            qap_client::ifs::Progress,
+            Option<f64>,
+        )>,
+    ) {
+        self.w.queue.show(items);
+        self.w.show_queue(true);
     }
 
     fn parent_window(&self) -> Option<&dyn WindowExt> {
@@ -610,16 +704,167 @@ impl Ifs {
                 return false;
             }
         }
+        let parent = self.parent_window();
+        let notes = self.w.queue.pump(&|c| queue::existing_prompt(parent, c));
+        self.notes(notes);
         if self.h.is_some() {
+            if !self.w.queue.busy()
+                && let Some(d) = self.stale.borrow_mut().take()
+                && d == *self.cur.borrow()
+            {
+                self.go_to(&d, false);
+            }
             self.more();
         }
         self.w.window.shown()
     }
 
+    /// What the queue said: on the status line and in the log; a folder
+    /// shown that an upload changed is listed again once nothing runs.
+    fn notes(&self, notes: Vec<queue::Note>) {
+        for n in notes {
+            match n {
+                queue::Note::Said(m) => self.said(&m),
+                queue::Note::Changed(d) => *self.stale.borrow_mut() = Some(d),
+            }
+        }
+    }
+
+    /// Closes the window, asking first when transfers are running.
+    fn close(&self) {
+        if self.w.queue.busy() {
+            let choice = MessageBox::new(
+                FUNCTION,
+                "Transfers are still running or queued. Cancel them and close the window?",
+            )
+            .buttons(&["Cancel Transfers", "Keep Open"], 1, 1)
+            .run(self.parent_window());
+            if choice != 0 {
+                return;
+            }
+            self.w.queue.cancel_all();
+        }
+        self.w.window.clone().hide();
+    }
+
+    /// The options for a batch, from the dialog; `None` when cancelled.
+    fn ask_options(&self, what: &str) -> Option<qsa_transfer::files::Options> {
+        let mut d = queue::OptionsDialog::build(what, self.options.get());
+        loop {
+            match d.run(self.parent_window()) {
+                queue::Asked::Ok => match d.options() {
+                    Some(o) => {
+                        self.options.set(o);
+                        return Some(o);
+                    }
+                    None => self.report("Enter a CCSID for new files, such as 1208."),
+                },
+                queue::Asked::Cancel => return None,
+                queue::Asked::SaveRequest | queue::Asked::OpenRequest => {
+                    self.report("Requests are saved from the transfer options of a later step.");
+                }
+            }
+        }
+    }
+
+    /// Starts the queue's connection when it has none; false when it
+    /// could not.
+    fn queue_ready(&self) -> bool {
+        if self.w.queue.started() {
+            return true;
+        }
+        let Some(h) = &self.h else { return false };
+        let Some((conn, shared)) = queue::connect(self.parent_window(), h, &self.sys) else {
+            return false;
+        };
+        self.w.queue.start(conn);
+        if shared && !self.shared_said.replace(true) {
+            let m = qsa_msg::message(id::SHARED_FOR_TRANSFERS, &[]);
+            self.said(&m);
+            msgdetails::show_message(self.parent_window(), &m);
+        }
+        true
+    }
+
+    /// Queues `works` as one batch and shows the queue.
+    fn enqueue(&self, works: Vec<queue::Work>) {
+        if works.is_empty() || !self.queue_ready() {
+            return;
+        }
+        let batch = self.w.queue.batch();
+        let n = works.len();
+        for w in works {
+            self.w.queue.add(batch, w);
+        }
+        self.w.show_queue(true);
+        self.report(&format!(
+            "{n} {} queued.",
+            if n == 1 { "transfer" } else { "transfers" }
+        ));
+    }
+
+    fn download(&self) {
+        let rows = self.selected();
+        if rows.is_empty() {
+            self.report("Select the files and folders to download.");
+            return;
+        }
+        let Some(into) =
+            crate::files::choose_folder(&crate::files::downloads_dir(), "Download To Folder")
+        else {
+            return;
+        };
+        let what = match &rows[..] {
+            [one] => one.entry.name.clone(),
+            _ => format!("{} entries", rows.len()),
+        };
+        let Some(options) = self.ask_options(&format!("Download {what}")) else {
+            return;
+        };
+        self.enqueue(queue::downloads(&rows, &into, options));
+    }
+
+    fn upload(&self, paths: Vec<PathBuf>) {
+        if paths.is_empty() {
+            return;
+        }
+        let cur = self.cur.borrow().clone();
+        let what = match &paths[..] {
+            [one] => one
+                .file_name()
+                .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
+            _ => format!("{} files", paths.len()),
+        };
+        let Some(options) = self.ask_options(&format!("Upload {what} to {cur}")) else {
+            return;
+        };
+        self.enqueue(queue::uploads(&paths, &cur, options));
+    }
+
     fn act(&self, a: Act) {
         let cur = self.cur.borrow().clone();
         match a {
-            Act::Close => self.w.window.clone().hide(),
+            Act::Close => self.close(),
+            Act::Download => self.download(),
+            Act::Upload => {
+                let paths = crate::files::choose_open_many(
+                    &crate::files::downloads_dir(),
+                    &format!("Upload To {cur}"),
+                );
+                self.upload(paths);
+            }
+            Act::Dropped => {
+                let paths = std::mem::take(&mut *self.w.dropped.borrow_mut());
+                self.upload(paths);
+            }
+            Act::Transfers => {
+                let on = !self.w.queue.group.visible();
+                self.w.show_queue(on);
+            }
+            Act::Queue(q) => {
+                let notes = self.w.queue.act(q);
+                self.notes(notes);
+            }
             Act::Go => {
                 let p = self.w.path.value();
                 if p.starts_with('/') {

@@ -106,6 +106,27 @@ pub fn choose_save_in(dir: &Path, title: &str, pattern: &str, name: &str) -> Opt
     )
 }
 
+/// Asks for one or more existing files, starting in `dir`.
+pub fn choose_open_many(dir: &Path, title: &str) -> Vec<PathBuf> {
+    let mut d = NativeFileChooser::new(NativeFileChooserType::BrowseMultiFile);
+    d.set_title(title);
+    let start = dir.ancestors().find(|p| p.is_dir()).unwrap_or(dir);
+    let _ = d.set_directory(&start);
+    d.show();
+    d.filenames()
+        .into_iter()
+        .filter(|p| !p.as_os_str().is_empty())
+        .collect()
+}
+
+/// The folder downloads go to by default: the user's Downloads folder,
+/// else the home directory.
+pub fn downloads_dir() -> PathBuf {
+    directories::UserDirs::new()
+        .and_then(|u| u.download_dir().map(Path::to_path_buf))
+        .unwrap_or_else(start_dir)
+}
+
 /// Asks for a folder, starting in `dir`.
 pub fn choose_folder(dir: &Path, title: &str) -> Option<PathBuf> {
     run(NativeFileChooserType::BrowseDir, dir, title, None, None)

@@ -1124,6 +1124,76 @@ fn ifs_views() -> Vec<(String, Window)> {
             .build()
             .0
     };
+    // The transfer queue: one running, then failed, then all finished.
+    use qap_client::ifs::Progress;
+    use qsa_transfer::files::{Conflict, Direction, Job, Options};
+    use qsaccess::ifs::queue::{OptionsDialog, State};
+    let job = |dir: Direction, remote: &str, size: u64, text: bool| Job {
+        direction: dir,
+        remote: remote.into(),
+        local: PathBuf::from("C:/Users/bob/Downloads")
+            .join(remote.rsplit('/').next().unwrap_or(remote)),
+        size,
+        options: Options {
+            text,
+            ..Options::default()
+        },
+        resume: None,
+    };
+    let at = |n: u64| Progress {
+        offset: n,
+        size: n,
+        bytes: n,
+    };
+    let big = job(Direction::Download, "/home/BOB/big.bin", 200 << 20, false);
+    let notes = job(Direction::Upload, "/home/BOB/notes.txt", 4211, true);
+    let jp = job(Direction::Download, "/home/BOB/text/text939.txt", 110, true);
+    let held = job(Direction::Upload, "/home/BOB/checkedout.txt", 19, true);
+    let queue_view = |items: Vec<(Job, State, Progress, Option<f64>)>| {
+        let v = Ifs::build(&sys, home, home, Vec::new(), 0, None);
+        v.show_transfers(items);
+        v
+    };
+    let running = queue_view(vec![
+        (jp.clone(), State::Done, at(110), None),
+        (
+            big.clone(),
+            State::Running,
+            at(84 << 20),
+            Some(28.5 * 1024.0 * 1024.0),
+        ),
+        (notes.clone(), State::Queued, Progress::default(), None),
+    ]);
+    let failed = queue_view(vec![
+        (jp.clone(), State::Done, at(110), None),
+        (
+            held.clone(),
+            State::Failed("CPFA09E: Object in use. Object is /home/BOB/checkedout.txt".into()),
+            Progress::default(),
+            None,
+        ),
+        (big.clone(), State::Cancelled, at(84 << 20), None),
+    ]);
+    let finished = queue_view(vec![
+        (jp, State::Done, at(110), None),
+        (big, State::Done, at(200 << 20), None),
+        (notes, State::Skipped, Progress::default(), None),
+    ]);
+    let options = OptionsDialog::build(
+        "Download 3 entries",
+        Options {
+            text: true,
+            crlf: true,
+            ..Options::default()
+        },
+    );
+    let exists = qsaccess::ifs::queue::existing_box(&Conflict {
+        name: "notes.txt".into(),
+        folder: "C:\\Users\\bob\\Downloads".into(),
+        keep_both: true,
+    })
+    .build()
+    .0;
     vec![
         ("ifs-home".to_owned(), home_view.w.window.clone()),
         ("ifs-large-folder".to_owned(), large.w.window.clone()),
@@ -1131,6 +1201,14 @@ fn ifs_views() -> Vec<(String, Window)> {
         ("ifs-broken-link".to_owned(), broken.w.window.clone()),
         ("ifs-delete-files".to_owned(), confirm(&files)),
         ("ifs-delete-folder".to_owned(), confirm(&folder)),
+        ("ifs-transfers-running".to_owned(), running.w.window.clone()),
+        ("ifs-transfers-failed".to_owned(), failed.w.window.clone()),
+        (
+            "ifs-transfers-finished".to_owned(),
+            finished.w.window.clone(),
+        ),
+        ("ifs-transfer-options".to_owned(), options.window.clone()),
+        ("ifs-existing-file".to_owned(), exists),
     ]
 }
 

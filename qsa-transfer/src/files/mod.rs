@@ -18,6 +18,17 @@
 //!
 //! A symbolic link is an entry like a file: deleted or copied as itself,
 //! never followed into.
+//!
+//! [`transfer`] moves one file either way, binary or text, with the
+//! existing-file policy, a partial download kept beside its target, and
+//! resume; [`lines`] changes line endings for text.
+
+pub mod lines;
+pub mod transfer;
+
+pub use transfer::{
+    Choice, Conflict, Direction, Failed, Failure, Job, Options, Outcome, Policy, Resume,
+};
 
 use qap_client::Error;
 use qap_client::ifs::{Files, join};
