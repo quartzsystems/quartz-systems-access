@@ -723,3 +723,69 @@ severity = 30
 text = "A connection to this program from another user was refused."
 cause = "A program running as another user, or one whose user could not be checked, connected to this program's private link, which takes connections from the same user only. It was closed before anything was read from it."
 recovery = "None needed if you expected nothing. If it happens again, find out which program runs as another user and connects to QS/400 Access for Desktop; the program's log names its user."
+
+[QAD9001]
+severity = 0
+text = "&1 messages on &2."
+cause = "The message queue &2 holds &1 messages. The list shows them newest first, 100 at a time; inquiries waiting for a reply are in bold."
+recovery = "None needed. Select a message to see its second-level text, and reply to an inquiry from the detail pane."
+
+[QAD9002]
+severity = 0
+text = "Reply sent to &1."
+cause = "The reply was sent to the inquiry &1, and the system took it. The program that sent the inquiry receives it and goes on."
+recovery = "None needed."
+
+[QAD9003]
+severity = 0
+text = "&1 messages removed from &2."
+cause = "The system removed &1 messages from the message queue &2. An inquiry removed before it was answered gets no reply: its sender waits until it ends some other way."
+recovery = "None needed."
+
+[QAD9004]
+severity = 0
+text = "Message sent to &1."
+cause = "The system put the message on the message queue of &1. For an inquiry, the reply comes to your own message queue."
+recovery = "None needed. For an inquiry, keep Send Message open to see the reply, or look for it in Messages."
+
+[QAD9005]
+severity = 0
+text = "Reply received from &1: &2."
+cause = "&1 answered your inquiry with &2. The reply is on your own message queue, and the copy of your inquiry there shows it too."
+recovery = "None needed."
+
+[QAD9010]
+severity = 0
+text = "Watching &1 on &2."
+cause = "The system reports each message that arrives on &1 on system &2 to this program, on its shared connection, within about a quarter of a second. Watching only looks: a 5250 session that holds the queue in break mode keeps it."
+recovery = "None needed. To change which queues are watched, and what opens Message Arrived, select Messages > Options."
+
+[QAD9011]
+severity = 20
+text = "Watching &1 on &2 stopped: &3."
+cause = "This program could not watch &1 on system &2 again after it reconnected or signed on. The reason given was: &3. Messages that arrive there are not reported until it can."
+recovery = "Correct the cause, then sign off and sign on again, or reconnect: watching starts again, and the messages that arrived in between are caught up."
+
+[QAD9012]
+severity = 10
+text = "Not authorized to &1 on &2; it will not be watched."
+cause = "Your user profile on system &2 may not display the messages on &1, so this program does not watch it, and its option in Messages > Options is turned off."
+recovery = "Ask your security officer for authority to the message queue if you need it, then turn the option on again in Messages > Options."
+
+[QAD9013]
+severity = 0
+text = "Caught up &1 messages on &2 after reconnecting."
+cause = "While this program was not connected, &1 messages arrived on &2. It watched the queue again and listed what it had missed, each message once."
+recovery = "None needed."
+
+[QAD9020]
+severity = 0
+text = "Printer Output is updating as changes happen."
+cause = "The system reports each spooled file added, changed or removed for the list's user or output queue as it happens, so this window does not ask for the list again on a timer."
+recovery = "None needed. Refresh still asks for the page shown at once."
+
+[QAD9021]
+severity = 0
+text = "Printer Output is refreshing every &1 seconds."
+cause = "This window asks for the page shown every &1 seconds: the system's QAP version reports no spool changes, the list shows every user's files on every queue (a watch needs one user or one queue), or watching failed."
+recovery = "None needed. To have the list update as changes happen, choose one user or one output queue in the filter on a system whose QAP version is 6 or later. Auto-refresh sets how often it asks otherwise."

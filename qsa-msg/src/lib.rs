@@ -145,6 +145,17 @@ pub mod id {
     pub const RESUMING: &str = "QAD8023";
     pub const SHARED_FOR_TRANSFERS: &str = "QAD8030";
     pub const FOREIGN_PEER_REFUSED: &str = "QAD8040";
+    pub const MESSAGES_LISTED: &str = "QAD9001";
+    pub const REPLY_SENT: &str = "QAD9002";
+    pub const MESSAGES_REMOVED: &str = "QAD9003";
+    pub const MESSAGE_SENT: &str = "QAD9004";
+    pub const REPLY_RECEIVED: &str = "QAD9005";
+    pub const WATCHING: &str = "QAD9010";
+    pub const WATCH_STOPPED: &str = "QAD9011";
+    pub const WATCH_NOT_AUTHORIZED: &str = "QAD9012";
+    pub const CAUGHT_UP: &str = "QAD9013";
+    pub const SPOOL_LIVE: &str = "QAD9020";
+    pub const SPOOL_POLLING: &str = "QAD9021";
 }
 
 /// Errors in the catalogue itself.
@@ -314,7 +325,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 118] = [
+    const SEEDS: [&str; 129] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -433,7 +444,103 @@ mod tests {
         id::RESUMING,
         id::SHARED_FOR_TRANSFERS,
         id::FOREIGN_PEER_REFUSED,
+        id::MESSAGES_LISTED,
+        id::REPLY_SENT,
+        id::MESSAGES_REMOVED,
+        id::MESSAGE_SENT,
+        id::REPLY_RECEIVED,
+        id::WATCHING,
+        id::WATCH_STOPPED,
+        id::WATCH_NOT_AUTHORIZED,
+        id::CAUGHT_UP,
+        id::SPOOL_LIVE,
+        id::SPOOL_POLLING,
     ];
+
+    #[test]
+    fn phase_9_texts() {
+        let t = |id: &str, args: &[&str]| message(id, args).text;
+        for (id, args, want) in [
+            (
+                id::MESSAGES_LISTED,
+                &["149", "QSYS/QSYSOPR"][..],
+                "149 messages on QSYS/QSYSOPR.",
+            ),
+            (id::REPLY_SENT, &["CPA0701"], "Reply sent to CPA0701."),
+            (
+                id::MESSAGES_REMOVED,
+                &["2", "QUSRSYS/BOB"],
+                "2 messages removed from QUSRSYS/BOB.",
+            ),
+            (id::MESSAGE_SENT, &["ANN"], "Message sent to ANN."),
+            (
+                id::REPLY_RECEIVED,
+                &["ANN", "Yes"],
+                "Reply received from ANN: Yes.",
+            ),
+            (
+                id::WATCHING,
+                &["QSYS/QSYSOPR", "SYS"],
+                "Watching QSYS/QSYSOPR on SYS.",
+            ),
+            (
+                id::WATCH_STOPPED,
+                &["QSYS/QSYSOPR", "SYS", "CPF9802: Not authorized"],
+                "Watching QSYS/QSYSOPR on SYS stopped: CPF9802: Not authorized.",
+            ),
+            (
+                id::WATCH_NOT_AUTHORIZED,
+                &["QSYS/QSYSOPR", "SYS"],
+                "Not authorized to QSYS/QSYSOPR on SYS; it will not be watched.",
+            ),
+            (
+                id::CAUGHT_UP,
+                &["3", "QUSRSYS/BOB"],
+                "Caught up 3 messages on QUSRSYS/BOB after reconnecting.",
+            ),
+            (
+                id::SPOOL_LIVE,
+                &[],
+                "Printer Output is updating as changes happen.",
+            ),
+            (
+                id::SPOOL_POLLING,
+                &["30"],
+                "Printer Output is refreshing every 30 seconds.",
+            ),
+        ] {
+            assert_eq!(t(id, args), want, "{id}");
+            let m = message(id, args);
+            assert!(!m.cause.is_empty() && !m.recovery.is_empty(), "{id}");
+            assert!(!m.text.contains('&'), "{id}");
+            assert!(!m.cause.contains('&') && !m.recovery.contains('&'), "{id}");
+        }
+        let m = |id: &str, args: &[&str]| message(id, args);
+        assert!(
+            m(id::MESSAGES_REMOVED, &["1", "Q"])
+                .cause
+                .contains("gets no reply")
+        );
+        assert!(m(id::WATCHING, &["Q", "S"]).cause.contains("break mode"));
+        assert!(
+            m(id::WATCH_NOT_AUTHORIZED, &["Q", "S"])
+                .cause
+                .contains("Messages > Options")
+        );
+        assert_eq!(m(id::WATCH_STOPPED, &["1", "2", "3"]).kind(), Kind::Error);
+        assert_eq!(
+            m(id::WATCH_NOT_AUTHORIZED, &["1", "2"]).kind(),
+            Kind::Warning
+        );
+        for id in [
+            id::MESSAGES_LISTED,
+            id::REPLY_RECEIVED,
+            id::CAUGHT_UP,
+            id::SPOOL_LIVE,
+        ] {
+            assert_eq!(m(id, &["1", "2"]).kind(), Kind::Information, "{id}");
+        }
+    }
 
     #[test]
     fn phase_7_texts() {
