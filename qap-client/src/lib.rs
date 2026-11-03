@@ -33,6 +33,11 @@
 //!   listed a page at a time on the shared connection. `SqlError` is
 //!   [`Error::Sql`]; a cancelled `Execute` or `Fetch` is an outcome with
 //!   what it did before the cancel.
+//! - [`ifs`]: version 5's `Ifs` service: integrated file system files
+//!   listed a page at a time, looked at, read and written in chunks of
+//!   about 1 MiB with conversion by the system (`as_ccsid`, `data_ccsid`),
+//!   progress, cancel and resume, and made, deleted, renamed and copied on
+//!   the system, on the shared connection or a window's own.
 //!
 //! `Hello` offers versions [`proto::MIN_VERSION`] to [`proto::VERSION`] (1
 //! to 5) and the server picks the highest both speak. An operation is sent
@@ -47,6 +52,7 @@
 pub mod attach;
 pub mod command;
 pub mod conn;
+pub mod ifs;
 pub mod session;
 pub mod spool;
 pub mod sql;
@@ -61,6 +67,7 @@ pub use attach::{Attached, Ended};
 pub use command::{CheckOutcome, CommandOutcome};
 pub use conn::{Closed, Connection, Event, Pending, Reply, retryable, runs_long};
 pub use error::Error;
+pub use ifs::Files;
 pub use ipc::Wire;
 pub use qap_proto as proto;
 pub use qap_proto::{Secret, ServerMessage, Status, Token};

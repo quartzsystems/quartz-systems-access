@@ -44,6 +44,9 @@ pub enum Error {
     /// What a read was written to failed.
     #[error("write failed: {0}")]
     Write(std::io::Error),
+    /// What a write reads from failed.
+    #[error("read failed: {0}")]
+    Read(std::io::Error),
     /// A request that does not fit in one frame.
     #[error("request of {0} bytes exceeds the 1 MiB frame limit")]
     TooLarge(usize),

@@ -334,9 +334,10 @@ pub fn runs_long(op: Op) -> bool {
 /// dropped before the reply came it may be sent once more, on a new
 /// connection: the lists (the `Sql` catalog's, operations 9 to 11,
 /// included), `ReadSpooledFile`, `SystemInfo`, `PasswordStatus`,
-/// `DescribeCommand`, `CheckCommand` and `JobInfo`. Nothing that changes
-/// state is ever sent again, nor `Execute` or `Fetch`: their callers report
-/// the lost connection.
+/// `DescribeCommand`, `CheckCommand`, `JobInfo`, and `Ifs`'s
+/// `ListDirectory`, `GetInfo` and `ReadFile`. Nothing that changes state is
+/// ever sent again (`WriteFile` included), nor `Execute` or `Fetch`: their
+/// callers report the lost connection.
 pub fn retryable(op: Op) -> bool {
     matches!(
         op,
@@ -351,6 +352,9 @@ pub fn retryable(op: Op) -> bool {
             | Op::DescribeCommand
             | Op::CheckCommand
             | Op::JobInfo
+            | Op::ListDirectory
+            | Op::GetInfo
+            | Op::ReadFile
     )
 }
 
