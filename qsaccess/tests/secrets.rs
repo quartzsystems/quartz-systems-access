@@ -199,10 +199,9 @@ fn no_secret_in_logs_recordings_or_debug_output() {
     debug.push(format!("{:?}", *lock(&h)));
     debug.push(format!("{r:?}"));
 
-    // Version 4: a window's own connection, attached with the token, SQL
-    // on it, and the session handed to `qsaccess run` over the instance
-    // endpoint, as its token in hex.
-    let session_token = lock(&h).session_token().unwrap();
+    // Version 4: a window's own connection, attached with the token, and
+    // SQL on it. (`qsaccess run` sends no token anywhere: see
+    // run_request.rs.)
     let mut q = lock(&h).sql_connection().unwrap();
     debug.push(format!("{q:?}"));
     let p = q.prepare("SELECT * FROM HLINV.ASSETS").unwrap();
@@ -210,33 +209,6 @@ fn no_secret_in_logs_recordings_or_debug_output() {
     let o = q.execute_now(p.statement, Vec::new()).unwrap();
     debug.push(format!("{o:?}"));
     q.close();
-    let mut systems = qsa_config::Systems::new();
-    systems.upsert(sys.clone());
-    let st = qsaccess::app::AppState::new(None, systems, qsa_config::Settings::default()).shared();
-    st.borrow_mut().qap = r;
-    #[cfg(windows)]
-    let main = qsaccess::ipc::Endpoint::named(&format!(
-        "quartz-access-test-secrets-{}",
-        std::process::id()
-    ));
-    #[cfg(unix)]
-    let main = qsaccess::ipc::Endpoint::at(dir.join("s.sock"));
-    qsaccess::ipc::remember(&main);
-    let (tx, rx) = std::sync::mpsc::channel();
-    let _server = qsaccess::ipc::Server::bind(&main).unwrap().spawn(move |a| {
-        let _ = tx.send(a);
-    });
-    let m2 = main.clone();
-    let asker =
-        std::thread::spawn(move || qsaccess::transfer::cli::borrow_session(&m2, "127.0.0.1"));
-    let asked = rx.recv_timeout(Duration::from_secs(10)).unwrap();
-    let parsed = qsaccess::request::Request::parse(&asked);
-    let (asys, reply) = parsed.session_token.clone().unwrap();
-    qsaccess::log!("request from another instance: {asked:?}");
-    qsaccess::transfer::cli::answer(&st, &asys, &reply);
-    let handed = asker.join().unwrap().expect("handed over");
-    assert_eq!(handed.0, session_token.0);
-    debug.push(format!("{handed:?} {parsed:?}"));
 
     // Search.
     let log = std::fs::read_to_string(dir.join(qsaccess::log::LOG_FILE)).unwrap();
@@ -254,7 +226,6 @@ fn no_secret_in_logs_recordings_or_debug_output() {
     let mut secrets: Vec<String> = PASSWORDS.iter().map(|p| (*p).to_owned()).collect();
     secrets.extend(forms(&ticket));
     secrets.extend(forms(&token_tail));
-    secrets.extend(forms(&session_token.0));
     for (what, text) in [
         ("the log", log.as_str()),
         ("the recording", recorded.as_str()),

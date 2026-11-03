@@ -2,24 +2,28 @@
 // licensed under the terms of the MIT license which can be found in the
 // root directory of this project.
 
-//! `qsaccess run`: the running instance hands its session on a system to
-//! the run over the instance endpoint (a reply endpoint of the same user's
-//! only), the run attaches its own connection with it, and the exit codes
-//! for bad arguments and request files.
+//! `qsaccess run`: a run hands the running instance only the request
+//! file's path, the instance runs it on its own session and attached
+//! connection and sends back progress, the summary and the exit code, no
+//! token ever crossing the link; and the exit codes for bad arguments and
+//! request files.
 
 #[path = "../../qap-client/tests/common/mod.rs"]
 mod common;
 
 use std::process::Command;
 use std::sync::mpsc;
+use std::time::Duration;
 
 use common::{Server, cfg, start};
-use qap_client::{Attached, Secret};
+use qap_client::Secret;
 use qsa_config::system::CaCertificate;
 use qsa_config::{Settings, System, Systems};
+use qsa_transfer::request;
+use qsa_transfer::{Download, Source};
 use qsaccess::app::AppState;
 use qsaccess::ipc::{self, Endpoint};
-use qsaccess::qap::{self, lock};
+use qsaccess::qap::lock;
 use qsaccess::request::Request;
 use qsaccess::transfer::cli;
 
@@ -50,8 +54,18 @@ fn endpoint() -> Endpoint {
     }
 }
 
+/// The hexadecimal and plain forms of `bytes`.
+fn forms(bytes: &[u8]) -> Vec<String> {
+    let hex: String = bytes.iter().map(|b| format!("{b:02X}")).collect();
+    let mut v = vec![hex.clone(), hex.to_lowercase()];
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        v.push(s.to_owned());
+    }
+    v
+}
+
 #[test]
-fn the_running_instances_session_is_handed_to_a_run() {
+fn a_run_is_delegated_to_the_instance_and_no_token_crosses_the_link() {
     let s = start(cfg());
     let sys = system(&s);
     let mut systems = Systems::new();
@@ -59,42 +73,136 @@ fn the_running_instances_session_is_handed_to_a_run() {
     let state = AppState::new(None, systems, Settings::default()).shared();
     let h = state.borrow_mut().qap.client(&sys);
     lock(&h).sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    let jobs = s.jobs().len();
 
-    // The running instance: its endpoint, and its answers on this thread.
+    // The saved request: HLINV.ASSETS to a CSV beside it.
+    let dir = std::env::temp_dir().join(format!("qsa-run-req-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let qdx = dir.join("assets.qdx");
+    let csv = dir.join("assets.csv");
+    let r = request::Request::Download {
+        system: sys.name.clone(),
+        download: Download {
+            source: Source::Table {
+                schema: "HLINV".into(),
+                table: "ASSETS".into(),
+                where_clause: String::new(),
+            },
+            file: csv.clone(),
+            ..Download::default()
+        },
+    };
+    request::save(&r, &qdx).unwrap();
+
+    // The running instance: its endpoint, every message it is sent kept,
+    // and the run served here, on its own session.
     let main = endpoint();
-    ipc::remember(&main);
     let (tx, rx) = mpsc::channel();
-    let _server = ipc::Server::bind(&main).unwrap().spawn(move |args| {
-        let _ = tx.send(args);
+    let server = ipc::Server::bind(&main).unwrap().spawn(move |args, link| {
+        let _ = tx.send((args, link));
     });
-    let ask = |system: &'static str| {
-        let m = main.clone();
-        std::thread::spawn(move || cli::borrow_session(&m, system))
-    };
-    let answer = |state: &qsaccess::app::Shared| {
-        let args = rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
-        let r = Request::parse(&args);
-        let (sys, reply) = r.session_token.clone().expect("a session request");
-        cli::answer(state, &sys, &reply);
-    };
+    // `qsaccess run`'s side, every frame it is sent kept.
+    let m = main.clone();
+    let path = qdx.clone();
+    let run = std::thread::spawn(move || {
+        let mut link = m.open().unwrap().expect("the instance listens");
+        link.send(&["--run".to_owned(), path.display().to_string()])
+            .unwrap();
+        let mut got = Vec::new();
+        while let Some(f) = link.recv().unwrap() {
+            let last = f.first().is_some_and(|k| k == "exit");
+            got.push(f);
+            if last {
+                break;
+            }
+        }
+        got
+    });
+    let (asked, link) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    let parsed = Request::parse(&asked);
+    assert_eq!(parsed.run.as_deref(), Some(qdx.as_path()));
+    cli::serve(&state, parsed.run.as_ref().unwrap(), link, false);
+    let replies = run.join().unwrap();
 
-    let run = ask("127.0.0.1");
-    answer(&state);
-    let token = run.join().unwrap().expect("the session handed over");
-    let a = Attached::open(&qap::target_for(&sys), &token).unwrap();
-    assert_eq!(a.job().user, "BOB");
-    assert_ne!(a.job().job.number, lock(&h).job_info().unwrap().job.number);
+    // Only the path went to the instance; lines and the exit code came back.
+    assert_eq!(asked, ["--run".to_owned(), qdx.display().to_string()]);
+    assert!(
+        replies
+            .iter()
+            .all(|f| f.len() == 2 && ["progress", "summary", "exit"].contains(&f[0].as_str())),
+        "{replies:?}"
+    );
+    assert_eq!(
+        replies.last().unwrap(),
+        &["exit".to_owned(), "0".to_owned()]
+    );
+    assert!(
+        replies
+            .iter()
+            .any(|f| f[0] == "summary" && f[1].starts_with("QAD7030")),
+        "{replies:?}"
+    );
+    assert_eq!(std::fs::read_to_string(&csv).unwrap().lines().count(), 13);
+    // The instance ran it on a connection of its own, attached to its
+    // session.
+    assert_eq!(s.jobs().len(), jobs + 1);
+    // Nothing that crossed the link holds the session token: the test
+    // system's tokens end in 28 bytes of 0x5A.
+    let tail = [0x5Au8; 28];
+    let all: Vec<String> = asked
+        .iter()
+        .chain(replies.iter().flatten())
+        .cloned()
+        .collect();
+    for secret in forms(&tail) {
+        assert!(
+            all.iter().all(|a| !a.contains(&secret)),
+            "{secret:?} crossed the link"
+        );
+    }
+    assert_eq!(server.refused(), 0);
 
-    // A system with no session: nothing handed over.
-    let run = ask("other.example.net");
-    answer(&state);
-    assert!(run.join().unwrap().is_none());
+    // delegate() relays the same run, and says how it ended.
+    let m = main.clone();
+    let path = qdx.clone();
+    let run = std::thread::spawn(move || cli::delegate(&m, &path, &cli::Out::Console));
+    let (asked, link) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    cli::serve(
+        &state,
+        Request::parse(&asked).run.as_ref().unwrap(),
+        link,
+        false,
+    );
+    assert_eq!(run.join().unwrap(), Some(cli::Exit::Done));
 
-    // Only a reply endpoint of the same instance's naming is answered.
-    let name = ipc::reply_name(&main, 4242);
-    assert!(ipc::reply_endpoint(&main, &name).is_some());
-    assert!(ipc::reply_endpoint(&main, &format!("{name}x")).is_none());
-    assert!(ipc::reply_endpoint(&main, r"\\.\pipe\someone-else").is_none());
+    // A request file the instance cannot read: exit 1, from the instance.
+    let bad = dir.join("bad.qdx");
+    std::fs::write(
+        &bad,
+        "[qsaccess]
+kind = \"display\"
+version = 1
+",
+    )
+    .unwrap();
+    let m = main.clone();
+    let path = bad.clone();
+    let run = std::thread::spawn(move || cli::delegate(&m, &path, &cli::Out::Console));
+    let (asked, link) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+    cli::serve(
+        &state,
+        Request::parse(&asked).run.as_ref().unwrap(),
+        link,
+        false,
+    );
+    assert_eq!(run.join().unwrap(), Some(cli::Exit::BadInput));
+
+    // No instance: nothing to delegate to.
+    drop(server);
+    #[cfg(unix)]
+    assert_eq!(cli::delegate(&main, &qdx, &cli::Out::Console), None);
+    let _ = std::fs::remove_dir_all(&dir);
 }
 
 #[test]

@@ -4,28 +4,33 @@
 
 //! `qsaccess run <file.qdx>`: a saved transfer run without its window.
 //!
-//! - The session: the running instance's on the request's system, when it
-//!   has one (asked for over the per-user instance endpoint, its token
-//!   answered on a reply endpoint of this process's), with a connection of
-//!   this process's own attached to it. Otherwise the Sign On dialog, and
-//!   that session is signed off at the end. Passwords are never saved, so a
-//!   run with no running instance always asks for one: fully unattended runs
-//!   are not offered.
+//! - With a running instance (the per-user instance endpoint, its user
+//!   checked as [`crate::ipc`] does): only `--run` and the request file's
+//!   path go to it. The instance runs the transfer on its own session (Sign
+//!   On there when it has none) and a connection of its own attached to it,
+//!   shows its progress dialog, and sends back one frame per line:
+//!   `progress` (to stderr here), `summary` (to stdout) and, last, `exit`
+//!   with the code. The session token never leaves the instance.
+//! - Without one: the Sign On dialog here, and that session is signed off
+//!   at the end. Passwords are never saved, so such a run always asks for
+//!   one: fully unattended runs are not offered.
 //! - Progress goes to stderr, and the progress dialog shows it with Cancel;
-//!   the summary goes to stdout.
+//!   the summary goes to stdout. When this process goes away, a delegated
+//!   transfer is cancelled at its next progress line.
 //! - Exit codes ([`Exit`]): 0 done, 1 bad arguments or request file, 2
 //!   sign-on cancelled or failed, 3 transfer failed, 4 cancelled.
 
 use std::io::Write;
-use std::path::PathBuf;
-use std::sync::mpsc;
-use std::time::Duration;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 
-use qap_client::{Attached, SqlConnection, Token};
+use qap_client::SqlConnection;
 use qsa_config::ConfigDir;
 use qsa_transfer::request::{self, Request};
 
 use crate::app::{AppState, Shared};
+use crate::ipc::{Endpoint, Link};
 use crate::qap;
 
 /// How `qsaccess run` ends.
@@ -38,99 +43,82 @@ pub enum Exit {
     Cancelled = 4,
 }
 
-/// Hex of `b`.
-fn hex(b: &[u8]) -> String {
-    use std::fmt::Write as _;
-    b.iter()
-        .fold(String::with_capacity(b.len() * 2), |mut s, x| {
-            let _ = write!(s, "{x:02x}");
-            s
-        })
-}
-
-/// A token from its hex; `None` for anything else.
-fn token_from_hex(s: &str) -> Option<Token> {
-    let b = s.as_bytes();
-    if b.len() != 64 {
-        return None;
-    }
-    let mut t = Token::default();
-    for (i, pair) in b.chunks(2).enumerate() {
-        let v = std::str::from_utf8(pair).ok()?;
-        t.0[i] = u8::from_str_radix(v, 16).ok()?;
-    }
-    Some(t)
-}
-
-/// The running instance answers `qsaccess run`'s question: its session's
-/// token on `system`, to the reply endpoint `reply` (only one of this
-/// user's), or nothing when it has none. The token is never logged.
-pub fn answer(state: &Shared, system: &str, reply: &str) {
-    let Some(main) = crate::ipc::remembered() else {
-        return;
-    };
-    let Some(ep) = crate::ipc::reply_endpoint(main, reply) else {
-        crate::log!(
-            "a session request for {system} named a reply endpoint that is not this user's: ignored"
-        );
-        return;
-    };
-    let h = state.borrow_mut().qap.signed_on_client(system);
-    let token = h.and_then(|h| qap::lock(&h).session_token());
-    crate::log!(
-        "qsaccess run asked for the session on {system}: {}",
-        if token.is_some() {
-            "handed over"
-        } else {
-            "none"
+impl Exit {
+    /// The exit for `code` as an `exit` frame carries it; anything not
+    /// known is a failure.
+    pub fn from_code(code: &str) -> Exit {
+        match code {
+            "0" => Exit::Done,
+            "1" => Exit::BadInput,
+            "2" => Exit::SignOn,
+            "4" => Exit::Cancelled,
+            _ => Exit::Failed,
         }
-    );
-    let mut arg = token.map(|t| hex(&t.0)).unwrap_or_default();
-    let _ = ep.send(std::slice::from_ref(&arg));
-    // The hex goes as it came.
-    // SAFETY: zeroes are valid UTF-8.
-    unsafe { arg.as_bytes_mut().fill(b'0') };
+    }
 }
 
-/// The running instance's session token on `system`, if there is an
-/// instance and it has one.
-fn borrowed_token(dir: Option<&ConfigDir>, system: &str) -> Option<Token> {
-    let main = crate::ipc::Endpoint::for_user(dir.map(ConfigDir::path)).ok()?;
-    borrow_session(&main, system)
+/// Where a run's lines go: this process's console, or the link back to the
+/// `qsaccess run` that asked for it.
+#[derive(Clone)]
+pub enum Out {
+    Console,
+    Link(Arc<Mutex<Option<Link>>>),
 }
 
-/// The session token on `system` of the instance listening at `main`, if
-/// it has one: asked for with [`crate::ipc::SESSION_TOKEN`], answered on a
-/// reply endpoint of this process's within 15 seconds.
-pub fn borrow_session(main: &crate::ipc::Endpoint, system: &str) -> Option<Token> {
-    if !main.is_running() {
-        return None;
+impl Out {
+    fn link(link: Link) -> Out {
+        Out::Link(Arc::new(Mutex::new(Some(link))))
     }
-    // A name of its own for every question: the process ID, then a count.
-    static ASKED: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-    let n = ASKED.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    let id = u64::from(std::process::id()) * 1000 + u64::from(n % 1000);
-    let reply = crate::ipc::Endpoint::from_id(&crate::ipc::reply_name(main, id));
-    let server = crate::ipc::Server::bind(&reply).ok()?;
-    let (tx, rx) = mpsc::channel::<Vec<String>>();
-    let _server = server.spawn(move |args| {
-        let _ = tx.send(args);
-    });
-    let ask = [
-        crate::ipc::SESSION_TOKEN.to_owned(),
-        system.to_owned(),
-        reply.id(),
-    ];
-    if !main.send(&ask).unwrap_or(false) {
-        return None;
+
+    /// One frame on the link; false once it is gone.
+    fn send(&self, kind: &str, line: &str) -> bool {
+        let Out::Link(l) = self else {
+            return true;
+        };
+        let mut g = l.lock().unwrap_or_else(PoisonError::into_inner);
+        let Some(link) = g.as_mut() else {
+            return false;
+        };
+        if link.send(&[kind.to_owned(), line.to_owned()]).is_err() {
+            crate::log!("qsaccess run went away; its transfer is cancelled");
+            *g = None;
+            return false;
+        }
+        true
     }
-    let mut got = rx.recv_timeout(Duration::from_secs(15)).ok()?;
-    let t = got.first().and_then(|s| token_from_hex(s));
-    for s in &mut got {
-        // SAFETY: zeroes are valid UTF-8.
-        unsafe { s.as_bytes_mut().fill(b'0') };
+
+    /// A progress line, stderr's; false once nobody reads it (the run that
+    /// asked went away).
+    pub fn tell(&self, line: &str) -> bool {
+        match self {
+            Out::Console => {
+                let mut e = std::io::stderr();
+                let _ = writeln!(e, "{line}");
+                let _ = e.flush();
+                true
+            }
+            Out::Link(_) => self.send("progress", line),
+        }
     }
-    t
+
+    /// A summary line, stdout's.
+    pub fn say(&self, line: &str) {
+        match self {
+            Out::Console => {
+                let mut o = std::io::stdout();
+                let _ = writeln!(o, "{line}");
+                let _ = o.flush();
+            }
+            Out::Link(_) => {
+                self.send("summary", line);
+            }
+        }
+    }
+
+    /// The last frame: the exit code.
+    fn exit(&self, exit: Exit) {
+        self.send("exit", &(exit as i32).to_string());
+    }
 }
 
 /// The console of whatever started this program, for stdout and stderr
@@ -145,76 +133,130 @@ fn attach_console() {
     }
 }
 
-fn say(line: &str) {
-    let mut o = std::io::stdout();
-    let _ = writeln!(o, "{line}");
-    let _ = o.flush();
-}
-
-fn tell(line: &str) {
-    let mut e = std::io::stderr();
-    let _ = writeln!(e, "{line}");
-    let _ = e.flush();
-}
-
 /// `qsaccess run <file.qdx>`; `args` are those after `run`.
 pub fn run(args: &[String], dir: Option<ConfigDir>) -> Exit {
     attach_console();
+    let out = Out::Console;
     let [file] = args else {
-        tell("usage: qsaccess run <file.qdx>");
+        out.tell("usage: qsaccess run <file.qdx>");
         return Exit::BadInput;
     };
     let path = std::path::absolute(PathBuf::from(file)).unwrap_or_else(|_| PathBuf::from(file));
     let r = match request::load(&path) {
         Ok(r) => r,
         Err(e) => {
-            tell(&format!("{}: {e}", path.display()));
+            out.tell(&format!("{}: {e}", path.display()));
             return Exit::BadInput;
         }
     };
-    let state = AppState::load(dir.clone()).shared();
-    let Some(sys) = state.borrow().systems.get(r.system()).cloned() else {
-        tell(&qsa_msg::message(qsa_msg::id::SYSTEM_NOT_CONFIGURED, &[r.system()]).to_string());
-        return Exit::BadInput;
-    };
+    if let Ok(main) = Endpoint::for_user(dir.as_ref().map(ConfigDir::path))
+        && let Some(exit) = delegate(&main, &path, &out)
+    {
+        return exit;
+    }
+    let state = AppState::load(dir).shared();
     let _app = fltk::app::App::default();
     if let Err(e) = qsa_ui::theme::init() {
         crate::log!("fonts not loaded: {e}");
     }
-    // The running instance's session, else a sign-on of this process's.
-    let target = qap::target_for(&sys);
-    let mut own: Option<qap::Handle> = None;
-    let attached = match borrowed_token(dir.as_ref(), &sys.name)
-        .and_then(|t| Attached::open(&target, &t).ok())
-    {
-        Some(a) => {
-            tell(&format!(
-                "Using the running program's session on {}.",
-                sys.name
-            ));
-            a
+    run_request(&state, &r, &out, true, true)
+}
+
+/// Hands the run of `path` to the instance listening at `main` and relays
+/// what it sends back to `out`; `None` when no instance is listening.
+pub fn delegate(main: &Endpoint, path: &Path, out: &Out) -> Option<Exit> {
+    let mut link = match main.open() {
+        Ok(Some(l)) => l,
+        Ok(None) => return None,
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            out.tell(&e.to_string());
+            return Some(Exit::Failed);
         }
-        None => {
-            let Some(h) = qap::session(None, &state, &sys.name) else {
-                tell(&format!("Not signed on to {}.", sys.name));
-                return Exit::SignOn;
-            };
-            let refused = qap::lock(&h).supports(qap_client::proto::Op::Prepare).err();
-            if let Some(e) = refused {
-                tell(&qap::explain(&sys, &e).line());
-                let _ = qap::lock(&h).sign_off();
-                return Exit::SignOn;
-            }
-            let a = match qap::busy(|| qap::lock(&h).attach()) {
-                Ok(a) => a,
-                Err(e) => {
-                    tell(&qap::explain(&sys, &e).line());
-                    let _ = qap::lock(&h).sign_off();
-                    return Exit::SignOn;
+        Err(e) => {
+            crate::log!("the running program could not be asked: {e}");
+            return None;
+        }
+    };
+    if let Err(e) = link.send(&["--run".to_owned(), path.display().to_string()]) {
+        crate::log!("the running program could not be asked: {e}");
+        return None;
+    }
+    loop {
+        match link.recv() {
+            Ok(Some(f)) => match f.as_slice() {
+                [k, line] if k == "progress" => {
+                    out.tell(line);
                 }
-            };
-            own = Some(h);
-            a
+                [k, line] if k == "summary" => out.say(line),
+                [k, code] if k == "exit" => return Some(Exit::from_code(code)),
+                other => crate::log!("qsaccess run: unexpected frame {other:?}"),
+            },
+            Ok(None) | Err(_) => {
+                out.tell("The running program closed the link before the transfer ended.");
+                return Some(Exit::Failed);
+            }
+        }
+    }
+}
+
+/// The running instance's side of `qsaccess run`: the request at `path`
+/// run on this instance's session, its lines and exit code sent back on
+/// `link`. `show` puts up the progress dialog.
+pub fn serve(state: &Shared, path: &Path, link: Link, show: bool) {
+    let out = Out::link(link);
+    crate::log!("qsaccess run asked to run {}", path.display());
+    let exit = match request::load(path) {
+        Ok(r) => run_request(state, &r, &out, false, show),
+        Err(e) => {
+            out.tell(&format!("{}: {e}", path.display()));
+            Exit::BadInput
+        }
+    };
+    out.exit(exit);
+}
+
+/// Runs `r` on the session there is on its system, or one signed on now;
+/// `own_session` signs that one off at the end.
+fn run_request(state: &Shared, r: &Request, out: &Out, own_session: bool, show: bool) -> Exit {
+    let Some(sys) = state.borrow().systems.get(r.system()).cloned() else {
+        out.tell(&qsa_msg::message(qsa_msg::id::SYSTEM_NOT_CONFIGURED, &[r.system()]).to_string());
+        return Exit::BadInput;
+    };
+    let Some(h) = qap::session(None, state, &sys.name) else {
+        out.tell(&format!("Not signed on to {}.", sys.name));
+        return Exit::SignOn;
+    };
+    if !own_session {
+        out.tell(&format!(
+            "Using the running program's session on {}.",
+            sys.name
+        ));
+    }
+    let exit = transfer_on(&h, &sys, r, out, show);
+    if own_session {
+        let _ = qap::busy(|| qap::lock(&h).sign_off());
+    }
+    exit
+}
+
+/// Runs `r` on a connection of its own attached to `h`'s session.
+fn transfer_on(
+    h: &qap::Handle,
+    sys: &qsa_config::System,
+    r: &Request,
+    out: &Out,
+    show: bool,
+) -> Exit {
+    let refused = qap::lock(h).supports(qap_client::proto::Op::Prepare).err();
+    if let Some(e) = refused {
+        out.tell(&qap::explain(sys, &e).line());
+        return Exit::SignOn;
+    }
+    let attached = match qap::busy(|| qap::lock(h).attach()) {
+        Ok(a) => a,
+        Err(e) => {
+            out.tell(&qap::explain(sys, &e).line());
+            return Exit::SignOn;
         }
     };
     let p = attached.profile().clone();
@@ -228,24 +270,40 @@ pub fn run(args: &[String], dir: Option<ConfigDir>) -> Exit {
         .file()
         .file_name()
         .map_or_else(|| "transfer".into(), |n| n.to_string_lossy().into_owned());
-    tell(&format!("Transfer {name} on {}...", sys.name));
-    let exit = go(q, &r, &name, dates, ccsid);
-    if let Some(h) = own {
-        let _ = qap::busy(|| qap::lock(&h).sign_off());
-    }
-    exit
+    out.tell(&format!("Transfer {name} on {}...", sys.name));
+    go(q, r, &name, dates, ccsid, out, show)
 }
 
-/// Runs the transfer with the progress dialog; what to exit with.
-fn go(q: SqlConnection, r: &Request, name: &str, dates: qsa_sql::DateStyle, ccsid: u16) -> Exit {
+/// How a transfer stopped short: cancelled or not, the upload's failing
+/// row, line, rows kept and resume row, and why.
+type Stopped = (
+    bool,
+    Option<(Option<u64>, Option<usize>, u64, Option<u64>)>,
+    String,
+);
+
+/// Runs the transfer, with the progress dialog when `show`; what to exit
+/// with.
+fn go(
+    q: SqlConnection,
+    r: &Request,
+    name: &str,
+    dates: qsa_sql::DateStyle,
+    ccsid: u16,
+    out: &Out,
+    show: bool,
+) -> Exit {
     let req = r.clone();
-    let result = super::with_progress(None, name, move |progress, cancel| {
+    let lines = out.clone();
+    let work = move |progress: &dyn Fn(qsa_transfer::Progress), cancel: &AtomicBool| {
         let mut q = q;
         let report = |p: qsa_transfer::Progress| {
-            tell(&super::progress_text(p));
+            if !lines.tell(&super::progress_text(p)) {
+                cancel.store(true, Ordering::SeqCst);
+            }
             progress(p);
         };
-        let out = match &req {
+        let done: Result<qsa_transfer::Summary, Stopped> = match &req {
             Request::Download { download: d, .. } => {
                 let mut d = d.clone();
                 // Unattended: an existing file is replaced, as asked or not.
@@ -271,17 +329,22 @@ fn go(q: SqlConnection, r: &Request, name: &str, dates: qsa_sql::DateStyle, ccsi
             }
         };
         q.close();
-        out
-    });
+        done
+    };
+    let result = if show {
+        super::with_progress(None, name, work)
+    } else {
+        work(&|_| {}, &AtomicBool::new(false))
+    };
     match result {
         Ok(s) => {
-            say(&super::complete(name, s.rows, s.elapsed).to_string());
+            out.say(&super::complete(name, s.rows, s.elapsed).to_string());
             Exit::Done
         }
         Err((true, at, _)) => {
-            say(&super::cancelled(name).to_string());
+            out.say(&super::cancelled(name).to_string());
             if let Some((_, _, kept, Some(x))) = at {
-                say(&resumable(name, kept, x));
+                out.say(&resumable(name, kept, x));
             }
             Exit::Cancelled
         }
@@ -289,9 +352,11 @@ fn go(q: SqlConnection, r: &Request, name: &str, dates: qsa_sql::DateStyle, ccsi
             let (row, line) = at.map_or((0, 0), |(r, l, _, _)| {
                 (r.unwrap_or(0), l.map_or(0, |l| l as u64))
             });
-            say(&super::failed(name, row, line, &r.file().display().to_string(), &why).to_string());
+            out.say(
+                &super::failed(name, row, line, &r.file().display().to_string(), &why).to_string(),
+            );
             if let Some((_, _, kept, Some(x))) = at {
-                say(&resumable(name, kept, x));
+                out.say(&resumable(name, kept, x));
             }
             Exit::Failed
         }
@@ -318,13 +383,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tokens_as_hex() {
-        let t = Token([0xAB; 32]);
-        let h = hex(&t.0);
-        assert_eq!(h.len(), 64);
-        assert_eq!(token_from_hex(&h).unwrap().0, t.0);
-        assert!(token_from_hex("").is_none());
-        assert!(token_from_hex(&"zz".repeat(32)).is_none());
+    fn exit_codes() {
+        for e in [
+            Exit::Done,
+            Exit::BadInput,
+            Exit::SignOn,
+            Exit::Failed,
+            Exit::Cancelled,
+        ] {
+            assert_eq!(Exit::from_code(&(e as i32).to_string()), e);
+        }
+        assert_eq!(Exit::from_code("99"), Exit::Failed);
         assert_eq!(Exit::Cancelled as i32, 4);
     }
 }

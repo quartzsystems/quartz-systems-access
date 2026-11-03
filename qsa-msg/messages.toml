@@ -627,3 +627,9 @@ severity = 0
 text = "Request saved to &1."
 cause = "The transfer request was saved to &1. It holds everything needed to run the transfer again except passwords, which are never saved."
 recovery = "None needed. Open &1, or run it with qsaccess run, to transfer again."
+
+[QAD8040]
+severity = 30
+text = "A connection to this program from another user was refused."
+cause = "A program running as another user, or one whose user could not be checked, connected to this program's private link, which takes connections from the same user only. It was closed before anything was read from it."
+recovery = "None needed if you expected nothing. If it happens again, find out which program runs as another user and connects to QS/400 Access for Desktop; the program's log names its user."

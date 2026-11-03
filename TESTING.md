@@ -115,11 +115,16 @@ database (`qapd::testing::sql`):
 - `qsaccess/tests/fallback.rs`: before version 4, Run SQL, Schemas and Data
   Transfer are `QAD5001`, nothing of `Sql` or `Attach` is sent, and Run
   Command keeps the shared connection.
-- `qsaccess/tests/run_request.rs`: the running instance's session handed to
-  `qsaccess run` over the instance endpoint, and exit code 1 for bad
-  arguments and request files.
-- `qsaccess/tests/secrets.rs` also attaches, runs SQL and hands the session
-  over, and searches for the session token too.
+- `qsaccess/tests/run_request.rs`: `qsaccess run` delegated to the running
+  instance with only the request's path, the instance running it on its own
+  attached connection and sending back progress, the summary and the exit
+  code, every message both ways searched for the session token; exit code 1
+  for bad arguments and request files.
+- `qsaccess`'s `ipc` unit tests: frames both ways on one link, and a peer of
+  another user refused both ways (simulated by expecting another SID or uid,
+  since a test cannot run as another user), counted and closed unread.
+- `qsaccess/tests/secrets.rs` also attaches and runs SQL, and searches for
+  the session token too.
 
 CI also runs `cargo fmt --check`, `cargo clippy -D warnings`, the clean-room
 check (`ci/cleanroom.sh`), the copyright header check and `ci/deps.sh`
@@ -536,9 +541,13 @@ Then, with `QSACCESS_LOG=trace`:
   opens with the request, ready to run (`QAD7040` when saved).
 - [ ] **`qsaccess run` with a running instance.** With the program running
   and signed on: `start /wait "" qsaccess run assets.qdx` (Windows) or
-  `qsaccess run assets.qdx` (Linux): no Sign On; progress on stderr and in
-  the progress window; `QAD7030` on stdout; exit code 0. Cancel in the
-  progress window: exit code 4.
+  `qsaccess run assets.qdx` (Linux): no Sign On; the running program shows
+  the progress window, progress on stderr; `QAD7030` on stdout; exit code 0;
+  `WRKACTJOB` shows the transfer's job attached to the program's session.
+  Cancel in the progress window: exit code 4. With `QSACCESS_LOG=trace`,
+  the program's log shows `request from another instance: ["--run", ...]`
+  and nothing else from the run. Close the console window during a long
+  download: the program cancels it at its next progress line.
 - [ ] **`qsaccess run` without one.** Close the program, run it again: the
   Sign On dialog, then the transfer; exit code 0. Cancel the Sign On: exit
   code 2. A request naming a missing table: `QAD7031`, exit code 3.

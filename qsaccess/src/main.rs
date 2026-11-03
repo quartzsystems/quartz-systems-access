@@ -85,10 +85,8 @@ fn main() {
     let tool_mode = args.ui_sampler.is_some() || args.snapshot.is_some();
     let mut server = None;
     if !tool_mode {
-        let started = ipc::Endpoint::for_user(dir.as_ref().map(|d| d.path())).and_then(|ep| {
-            ipc::remember(&ep);
-            ipc::start(&ep, &request.to_args())
-        });
+        let started = ipc::Endpoint::for_user(dir.as_ref().map(|d| d.path()))
+            .and_then(|ep| ipc::start(&ep, &request.to_args()));
         match started {
             Ok(ipc::Startup::Secondary) => {
                 qsaccess::log!("handed the request to the running instance; exiting");
@@ -140,10 +138,10 @@ fn main() {
         return;
     }
 
-    let (args_tx, args_rx) = std::sync::mpsc::channel::<Vec<String>>();
+    let (args_tx, args_rx) = std::sync::mpsc::channel::<(Vec<String>, ipc::Link)>();
     let _server = server.map(|s| {
-        s.spawn(move |received| {
-            let _ = args_tx.send(received);
+        s.spawn(move |received, link| {
+            let _ = args_tx.send((received, link));
             app::awake();
         })
     });
@@ -164,7 +162,7 @@ fn main() {
         );
     }
     mainwin::report_startup_errors(&ui);
-    serve(&ui, &state, &request, &mut main_shown);
+    serve(&ui, &state, &request, None, &mut main_shown);
     while app.wait() {
         while let Some(action) = rx.recv() {
             ui.handle(action);
@@ -177,10 +175,10 @@ fn main() {
         qsaccess::macros::editor::pump();
         qsaccess::qap::pump(&ui);
         ui.refresh_recent();
-        while let Ok(received) = args_rx.try_recv() {
+        while let Ok((received, link)) = args_rx.try_recv() {
             qsaccess::log!("request from another instance: {received:?}");
             let r = Request::parse(&received);
-            serve(&ui, &state, &r, &mut main_shown);
+            serve(&ui, &state, &r, Some(link), &mut main_shown);
         }
         if !win.shown()
             && !qsaccess::session::any_open()
@@ -215,9 +213,9 @@ fn main() {
     }
 }
 
-/// Does what a launch asked for. A request that opens nothing raises the
-/// main window.
-fn serve(ui: &Ui, state: &Shared, r: &Request, main_shown: &mut bool) {
+/// Does what a launch asked for, `link` the one it came on from another
+/// instance. A request that opens nothing raises the main window.
+fn serve(ui: &Ui, state: &Shared, r: &Request, link: Option<ipc::Link>, main_shown: &mut bool) {
     if r.quit {
         qsaccess::log!("asked to quit");
         qsaccess::session::close_all();
@@ -230,8 +228,8 @@ fn serve(ui: &Ui, state: &Shared, r: &Request, main_shown: &mut bool) {
     if let Some(p) = &r.record {
         state.borrow_mut().record_next = Some(p.clone());
     }
-    if let Some((system, reply)) = &r.session_token {
-        qsaccess::transfer::cli::answer(state, system, reply);
+    if let (Some(path), Some(link)) = (&r.run, link) {
+        qsaccess::transfer::cli::serve(state, path, link, true);
         return;
     }
     let parent = ui.window.shown().then_some(&ui.window);

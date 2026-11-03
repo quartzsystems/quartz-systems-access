@@ -129,6 +129,7 @@ pub mod id {
     pub const NO_COMMITMENT_CONTROL: &str = "QAD7034";
     pub const VALUE_DOES_NOT_FIT: &str = "QAD7035";
     pub const REQUEST_SAVED: &str = "QAD7040";
+    pub const FOREIGN_PEER_REFUSED: &str = "QAD8040";
 }
 
 /// Errors in the catalogue itself.
@@ -298,7 +299,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 102] = [
+    const SEEDS: [&str; 103] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -401,6 +402,7 @@ mod tests {
         id::NO_COMMITMENT_CONTROL,
         id::VALUE_DOES_NOT_FIT,
         id::REQUEST_SAVED,
+        id::FOREIGN_PEER_REFUSED,
     ];
 
     #[test]

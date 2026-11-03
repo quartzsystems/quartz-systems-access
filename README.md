@@ -79,11 +79,18 @@ Opening one (a double-click, or **Open Request...**) shows it ready to run.
 qsaccess run <file.qdx>
 ```
 
-runs a request without its window. If the program is running with a session
-on the request's system, the run uses that session (asked for over the
-per-user instance endpoint) with a connection of its own; otherwise it shows
-the Sign On dialog. Progress goes to stderr, and to a progress window with
-**Cancel**; the summary goes to stdout. A download replaces an existing
+runs a request without its window. If the program is running, the run hands
+it the request file's path over the per-user instance endpoint and nothing
+else: the program runs the transfer on its own session and a connection of
+its own (showing Sign On first if it has no session on the request's
+system) and sends back the progress, the summary and the exit code. The
+session token never leaves the running program. The endpoint takes
+connections from the same user only (on Windows a named pipe that refuses
+remote clients and lets the current user alone open it, on Linux a socket of
+mode 0600), and each end checks the other's user; another user's connection
+is refused and logged as `QAD8040`. With no running program, the run shows
+the Sign On dialog itself and signs off at the end. Progress goes to stderr,
+and to a progress window with **Cancel**; the summary goes to stdout. A download replaces an existing
 output file even when the request says to ask. Exit codes:
 
 | Code | Meaning |
