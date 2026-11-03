@@ -628,6 +628,96 @@ text = "Request saved to &1."
 cause = "The transfer request was saved to &1. It holds everything needed to run the transfer again except passwords, which are never saved."
 recovery = "None needed. Open &1, or run it with qsaccess run, to transfer again."
 
+[QAD8001]
+severity = 0
+text = "&1 entries in &2."
+cause = "The folder &2 on the system holds &1 entries that match the name pattern shown. The list shows them a page of 500 at a time; scrolling down loads the next page."
+recovery = "None needed. To see fewer entries, enter a name pattern with * and ? and press Enter."
+
+[QAD8002]
+severity = 0
+text = "Folder &1 created."
+cause = "The folder &1 was created on the system, with the authorities its parent folder gives new objects."
+recovery = "None needed."
+
+[QAD8003]
+severity = 0
+text = "&1 renamed to &2."
+cause = "The system renamed or moved &1 to &2."
+recovery = "None needed. To undo it, rename &2 back."
+
+[QAD8004]
+severity = 0
+text = "&1 deleted."
+cause = "&1 was deleted on the system. A deleted file cannot be recovered from this program."
+recovery = "None needed."
+
+[QAD8005]
+severity = 0
+text = "&1 copied to &2."
+cause = "The system copied &1 to &2, keeping its data and CCSID as stored. The data did not pass through this computer."
+recovery = "None needed."
+
+[QAD8006]
+severity = 30
+text = "Deleting &1 stopped at &2: &3."
+cause = "The folder &1 is deleted from the inside out, one entry at a time. The system refused to delete &2, with the message shown (&3), so the delete stopped there. Entries deleted before it stay deleted; &2, the folders that hold it and anything not reached yet are still there."
+recovery = "Correct what the system's message describes (for example, a file checked out to another user, or one you are not authorized to delete), then delete &1 again."
+
+[QAD8010]
+severity = 10
+text = "&1 already exists in &2."
+cause = "An entry named &1 is already in the folder &2, so the copy, move, upload or download would replace it."
+recovery = "Choose Replace to replace it, Skip to leave it as it is, or Keep both (downloads only) to save the new file with a number added to its name."
+
+[QAD8011]
+severity = 10
+text = "&1 changed on the system since you opened it."
+cause = "The file &1 was changed on the system after this editor read it: its last-changed time is not the one it had when it was opened. Saving now would replace those changes."
+recovery = "Choose Overwrite to save your text over the system's file, Reload to read the system's file again and lose your changes, or Cancel to go on editing."
+
+[QAD8012]
+severity = 20
+text = "&1 is too large to edit here; download it instead."
+cause = "The file &1 is larger than 64 MiB, the most the built-in editor opens."
+recovery = "Download the file, then open it with a program on this computer that edits large files, and upload it again."
+
+[QAD8013]
+severity = 10
+text = "&1 is not a text file; opened read-only."
+cause = "The file &1 is binary (its CCSID is 65535, or its first 8 KiB hold NUL bytes), or it is larger than 8 MiB, so the editor shows it without letting it be changed."
+recovery = "To change the file, download it, edit it with a program that suits it, and upload it again."
+
+[QAD8020]
+severity = 0
+text = "Transfer of &1 complete: &2 in &3."
+cause = "The file &1 was copied; &2 of data took &3."
+recovery = "None needed."
+
+[QAD8021]
+severity = 20
+text = "Transfer of &1 failed: &2."
+cause = "The file &1 was not copied completely. The reason given was: &2. A download keeps its partial data in a temporary file beside the target; the target itself is unchanged."
+recovery = "Correct the cause, then select Retry in the transfer list. A binary transfer, and a text download, resume from the last part the system confirmed; a text upload starts again from the beginning."
+
+[QAD8022]
+severity = 10
+text = "Transfer of &1 cancelled."
+cause = "The transfer of &1 was cancelled before it ended. A download keeps its partial data in a temporary file beside the target; the target itself is unchanged."
+recovery = "Select Retry in the transfer list to go on from where it stopped, or Remove finished to drop it from the list."
+
+[QAD8023]
+severity = 0
+text = "Resuming &1 at &2."
+cause = "The transfer of &1 goes on from &2, the last part the system confirmed before it stopped, instead of starting again."
+recovery = "None needed."
+
+[QAD8030]
+severity = 10
+text = "No connection available for transfers; using the shared connection."
+cause = "The session already has the 16 connections the system allows (TCP1A59), so this window could not get a connection of its own for its transfers. They run on the session's shared connection instead, one request at a time, and may be slower."
+recovery = "None needed. To give transfers a connection of their own, close a Run SQL, Run Command or Integrated File System window, then close and open this window again."
+
 [QAD8040]
 severity = 30
 text = "A connection to this program from another user was refused."

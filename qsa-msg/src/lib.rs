@@ -129,6 +129,21 @@ pub mod id {
     pub const NO_COMMITMENT_CONTROL: &str = "QAD7034";
     pub const VALUE_DOES_NOT_FIT: &str = "QAD7035";
     pub const REQUEST_SAVED: &str = "QAD7040";
+    pub const ENTRIES_LISTED: &str = "QAD8001";
+    pub const FOLDER_CREATED: &str = "QAD8002";
+    pub const RENAMED: &str = "QAD8003";
+    pub const DELETED: &str = "QAD8004";
+    pub const COPIED: &str = "QAD8005";
+    pub const DELETE_STOPPED: &str = "QAD8006";
+    pub const ALREADY_EXISTS: &str = "QAD8010";
+    pub const CHANGED_ON_SYSTEM: &str = "QAD8011";
+    pub const TOO_LARGE_TO_EDIT: &str = "QAD8012";
+    pub const NOT_TEXT: &str = "QAD8013";
+    pub const FILE_TRANSFER_COMPLETE: &str = "QAD8020";
+    pub const FILE_TRANSFER_FAILED: &str = "QAD8021";
+    pub const FILE_TRANSFER_CANCELLED: &str = "QAD8022";
+    pub const RESUMING: &str = "QAD8023";
+    pub const SHARED_FOR_TRANSFERS: &str = "QAD8030";
     pub const FOREIGN_PEER_REFUSED: &str = "QAD8040";
 }
 
@@ -299,7 +314,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 103] = [
+    const SEEDS: [&str; 118] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -402,6 +417,21 @@ mod tests {
         id::NO_COMMITMENT_CONTROL,
         id::VALUE_DOES_NOT_FIT,
         id::REQUEST_SAVED,
+        id::ENTRIES_LISTED,
+        id::FOLDER_CREATED,
+        id::RENAMED,
+        id::DELETED,
+        id::COPIED,
+        id::DELETE_STOPPED,
+        id::ALREADY_EXISTS,
+        id::CHANGED_ON_SYSTEM,
+        id::TOO_LARGE_TO_EDIT,
+        id::NOT_TEXT,
+        id::FILE_TRANSFER_COMPLETE,
+        id::FILE_TRANSFER_FAILED,
+        id::FILE_TRANSFER_CANCELLED,
+        id::RESUMING,
+        id::SHARED_FOR_TRANSFERS,
         id::FOREIGN_PEER_REFUSED,
     ];
 
@@ -527,6 +557,120 @@ mod tests {
             assert_eq!(m(id, &["1"]).kind(), Kind::Warning, "{id}");
         }
         assert_eq!(m(id::ROWS_CHANGED, &["1"]).kind(), Kind::Information);
+    }
+
+    #[test]
+    fn phase_8_texts() {
+        let t = |id: &str, args: &[&str]| message(id, args).text;
+        for (id, args, want) in [
+            (
+                id::ENTRIES_LISTED,
+                &["1200", "/home/BOB/many"][..],
+                "1200 entries in /home/BOB/many.",
+            ),
+            (
+                id::FOLDER_CREATED,
+                &["/home/BOB/new"],
+                "Folder /home/BOB/new created.",
+            ),
+            (id::RENAMED, &["a.txt", "b.txt"], "a.txt renamed to b.txt."),
+            (
+                id::DELETED,
+                &["/home/BOB/a.txt"],
+                "/home/BOB/a.txt deleted.",
+            ),
+            (
+                id::COPIED,
+                &["a.txt", "/home/ANN"],
+                "a.txt copied to /home/ANN.",
+            ),
+            (
+                id::DELETE_STOPPED,
+                &[
+                    "/home/BOB/tree",
+                    "/home/BOB/tree/src/lib/m.txt",
+                    "CPFA09E: Object in use",
+                ],
+                "Deleting /home/BOB/tree stopped at /home/BOB/tree/src/lib/m.txt: CPFA09E: Object in use.",
+            ),
+            (
+                id::ALREADY_EXISTS,
+                &["a.txt", "/home/BOB"],
+                "a.txt already exists in /home/BOB.",
+            ),
+            (
+                id::CHANGED_ON_SYSTEM,
+                &["/home/BOB/a.txt"],
+                "/home/BOB/a.txt changed on the system since you opened it.",
+            ),
+            (
+                id::TOO_LARGE_TO_EDIT,
+                &["big.bin"],
+                "big.bin is too large to edit here; download it instead.",
+            ),
+            (
+                id::NOT_TEXT,
+                &["binary.dat"],
+                "binary.dat is not a text file; opened read-only.",
+            ),
+            (
+                id::FILE_TRANSFER_COMPLETE,
+                &["big.bin", "200.0 MiB", "12.3 s"],
+                "Transfer of big.bin complete: 200.0 MiB in 12.3 s.",
+            ),
+            (
+                id::FILE_TRANSFER_FAILED,
+                &["a.txt", "CPFA09E: Object in use"],
+                "Transfer of a.txt failed: CPFA09E: Object in use.",
+            ),
+            (
+                id::FILE_TRANSFER_CANCELLED,
+                &["a.txt"],
+                "Transfer of a.txt cancelled.",
+            ),
+            (
+                id::RESUMING,
+                &["big.bin", "64.0 MiB"],
+                "Resuming big.bin at 64.0 MiB.",
+            ),
+            (
+                id::SHARED_FOR_TRANSFERS,
+                &[],
+                "No connection available for transfers; using the shared connection.",
+            ),
+            (
+                id::FOREIGN_PEER_REFUSED,
+                &[],
+                "A connection to this program from another user was refused.",
+            ),
+        ] {
+            assert_eq!(t(id, args), want, "{id}");
+            let m = message(id, args);
+            assert!(!m.cause.is_empty() && !m.recovery.is_empty(), "{id}");
+            assert!(!m.text.contains('&'), "{id}");
+            assert!(!m.cause.contains('&') && !m.recovery.contains('&'), "{id}");
+        }
+        let m = |id: &str, args: &[&str]| message(id, args);
+        assert!(m(id::SHARED_FOR_TRANSFERS, &[]).cause.contains("TCP1A59"));
+        assert!(
+            m(id::FILE_TRANSFER_FAILED, &["a", "b"])
+                .recovery
+                .contains("starts again")
+        );
+        assert!(m(id::TOO_LARGE_TO_EDIT, &["a"]).cause.contains("64 MiB"));
+        assert!(m(id::NOT_TEXT, &["a"]).cause.contains("8 MiB"));
+        for id in [id::DELETE_STOPPED, id::FOREIGN_PEER_REFUSED] {
+            assert_eq!(m(id, &["1", "2", "3"]).kind(), Kind::Error, "{id}");
+        }
+        for id in [
+            id::ALREADY_EXISTS,
+            id::CHANGED_ON_SYSTEM,
+            id::NOT_TEXT,
+            id::SHARED_FOR_TRANSFERS,
+        ] {
+            assert_eq!(m(id, &["1", "2"]).kind(), Kind::Warning, "{id}");
+        }
+        assert_eq!(m(id::ENTRIES_LISTED, &["1", "2"]).kind(), Kind::Information);
     }
 
     #[test]
