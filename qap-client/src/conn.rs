@@ -166,6 +166,10 @@ struct Shared {
     last_traffic: Instant,
     frames_in: u64,
     pings: u64,
+    /// No `Ping` of the thread's own until a connection that will
+    /// `Attach` has sent it: `Attach` must be the first request after
+    /// `Hello`.
+    pings_held: bool,
 }
 
 impl Shared {
@@ -381,7 +385,32 @@ impl Connection {
     }
 
     /// Runs `Hello` over a stream already open (TLS done) to `target`.
-    pub fn over(mut t: Box<dyn Transport>, target: &Target) -> Result<Connection, Error> {
+    pub fn over(t: Box<dyn Transport>, target: &Target) -> Result<Connection, Error> {
+        Connection::over_held(t, target, false)
+    }
+
+    /// [`Connection::open`] for a connection that will `Attach`: the
+    /// thread sends no `Ping` until [`Connection::release_pings`].
+    pub(crate) fn open_held(target: &Target) -> Result<Connection, Error> {
+        let t = qsa_net::connect(
+            &target.host,
+            target.port,
+            Some(&target.tls()),
+            target.options.connect_timeout,
+        )?;
+        Connection::over_held(t, target, true)
+    }
+
+    /// Lets the thread ping when the connection is quiet.
+    pub(crate) fn release_pings(&self) {
+        lock(&self.shared).pings_held = false;
+    }
+
+    fn over_held(
+        mut t: Box<dyn Transport>,
+        target: &Target,
+        hold_pings: bool,
+    ) -> Result<Connection, Error> {
         t.set_read_timeout(Some(POLL))
             .map_err(|e| Error::Protocol(e.to_string()))?;
         let security = t.security();
@@ -393,6 +422,7 @@ impl Connection {
             last_traffic: Instant::now(),
             frames_in: 0,
             pings: 0,
+            pings_held: hold_pings,
         }));
         let (out, rx) = mpsc::channel();
         let pump = Pump {
@@ -562,8 +592,11 @@ impl Pump {
             if let Some(why) = self.write_queued() {
                 break why;
             }
-            let quiet = lock(&self.shared).last_traffic.elapsed();
-            if quiet >= self.ping_after && !self.ping() {
+            let (quiet, held) = {
+                let s = lock(&self.shared);
+                (s.last_traffic.elapsed(), s.pings_held)
+            };
+            if !held && quiet >= self.ping_after && !self.ping() {
                 break self.peer_closed();
             }
             match self.t.read(&mut buf) {

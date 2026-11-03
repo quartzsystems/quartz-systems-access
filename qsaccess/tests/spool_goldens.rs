@@ -31,7 +31,7 @@ use qap_client::spool::{self, ReadEnd};
 use qap_client::{Client, Secret};
 use qsaccess::splf::model;
 
-const FILES: [&str; 4] = ["QPJOBLOG", "QSYSPRT", "LANDSCAPE", "MIXED"];
+const FILES: [&str; 5] = ["QPJOBLOG", "QSYSPRT", "LANDSCAPE", "MIXED", "OVERFLOW"];
 
 fn goldens() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/goldens/spool")

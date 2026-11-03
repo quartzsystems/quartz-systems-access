@@ -75,7 +75,8 @@ fn range(c: &mut Client, id: &SpooledFileId, first: u32, last: u32) -> Result<Sp
 }
 
 /// A later batch's leading state (format commands, then the absolute
-/// vertical move and, unless at column 1, the horizontal one) and the
+/// vertical move, AVPP `X'34C4'`, and, unless at column 1, the horizontal
+/// one, AHPP `X'34C0'`) and the
 /// pages after it: the split for which the pages go on where `whole` is at.
 fn strip_state<'a>(b: &'a [u8], whole_rest: &[u8]) -> (&'a [u8], &'a [u8]) {
     let mut i = 0;
@@ -84,7 +85,7 @@ fn strip_state<'a>(b: &'a [u8], whole_rest: &[u8]) -> (&'a [u8], &'a [u8]) {
     }
     assert_eq!(
         b.get(i..i + 2),
-        Some(&[0x34, 0x4C][..]),
+        Some(&[0x34, 0xC4][..]),
         "the line comes next"
     );
     i += 3;
@@ -95,14 +96,14 @@ fn strip_state<'a>(b: &'a [u8], whole_rest: &[u8]) -> (&'a [u8], &'a [u8]) {
     (&b[..i], &b[i..])
 }
 
-const SCS_FILES: [&str; 4] = ["QPJOBLOG", "QSYSPRT", "LANDSCAPE", "MIXED"];
+const SCS_FILES: [&str; 5] = ["QPJOBLOG", "QSYSPRT", "LANDSCAPE", "MIXED", "OVERFLOW"];
 
 #[test]
 fn spool_is_there_from_version_3() {
     let s = start(cfg());
     let mut c = Client::new(s.target());
     c.connect().unwrap();
-    assert_eq!(c.version(), Some(3));
+    assert_eq!(c.version(), Some(4));
     assert!(c.hello().unwrap().services.contains(&Service::Spool));
     assert_eq!(Op::ListSpooledFiles.since(), 3);
     let e = c.list_spooled_files(&list("*CURRENT")).unwrap_err();
@@ -553,14 +554,11 @@ fn batches_as_received_render_the_whole_files_pages() {
     }
 }
 
-/// A batch that starts on a page begun by overflow rather than a form
-/// feed: QS/400's leading state moves to the line with `X'344C'`, which
-/// this program's SCS reader (and its printer sessions) takes as a move
-/// down that many lines (`RVPP`); `X'34C4'` is its absolute move. The page
-/// then renders a line low. Waiting on QS/400 and Cody: see the Phase 6
-/// report.
+/// Every page a batch of its own: each batch after the first starts with
+/// QS/400's leading state, whose move to the line is AVPP (`X'34C4'`), and
+/// the pages lay out as the file read whole, a page begun by overflow
+/// (`OVERFLOW`'s page 26) included.
 #[test]
-#[ignore = "QS/400's batch state uses X'344C' for the absolute line; scs reads it as RVPP"]
 fn one_page_batches_render_the_whole_files_pages() {
     let s = start(cfg());
     let mut c = bob(&s);

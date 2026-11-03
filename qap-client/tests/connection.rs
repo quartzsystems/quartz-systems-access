@@ -29,7 +29,7 @@ fn hello_over_tls13() {
     let s = start(cfg());
     let c = Connection::open(&s.target()).unwrap();
     let h = c.hello();
-    assert_eq!(h.version, 3);
+    assert_eq!(h.version, 4);
     assert_eq!(h.system_name, "QSHQ400");
     assert_eq!(h.release, "V1R0M0");
     assert_eq!(h.services, Service::ALL.to_vec());
@@ -75,8 +75,8 @@ fn an_untrusted_certificate_goes_to_the_trust_flow() {
 fn version_mismatch() {
     let s = start(cfg());
     let mut t = s.target();
-    // The server speaks versions 1 to 3.
-    t.options.min_version = 4;
+    // The server speaks versions 1 to 4.
+    t.options.min_version = 5;
     t.options.max_version = 9;
     let e = Connection::open(&t).unwrap_err();
     assert_eq!(e.status(), Some(Status::VersionUnsupported), "{e:?}");
@@ -292,7 +292,11 @@ fn server_ending() {
         Err(Error::Closed(Closed::ServerEnding))
     ));
     assert_eq!(s.ended(), [qapd::Closed::ServerEnding]);
-    // Reconnect when asked.
+    // The test system keeps its end for connections opened later, as
+    // ENDTCPSVR does; once it is started again (STRTCPSVR), reconnect
+    // when asked.
+    s.c.server_ending
+        .store(false, std::sync::atomic::Ordering::SeqCst);
     assert_eq!(c.reconnect().unwrap().system_name, "QSHQ400");
     c.sign_on("BOB", &Secret::from("SECRET1")).unwrap();
     assert_eq!(c.system_info().unwrap().system_name, "QSHQ400");

@@ -24,9 +24,12 @@
 //!   queues listed a page at a time, held, released, deleted and moved one
 //!   request per file, and read in page batches to a file, with progress
 //!   and cancel.
+//! - [`attach`]: version 4's `Attach` and `JobInfo`: a connection of its
+//!   own to a signed-on session, with its own job, for a window that keeps
+//!   job state; it never signs off.
 //!
 //! `Hello` offers versions [`proto::MIN_VERSION`] to [`proto::VERSION`] (1
-//! to 3) and the server picks the highest both speak. An operation is sent
+//! to 4) and the server picks the highest both speak. An operation is sent
 //! only when the connection's version defines it ([`proto::Op::since`]) and
 //! `Hello`'s `services` lists its service; otherwise it is refused here with
 //! [`Error::Unsupported`] and nothing is sent ([`Connection::supports`]).
@@ -35,6 +38,7 @@
 //! [`Token`]: neither prints, both are wiped when dropped, and this crate
 //! logs neither, nor any request or reply body.
 
+pub mod attach;
 pub mod command;
 pub mod conn;
 pub mod session;
@@ -46,6 +50,7 @@ mod frames;
 use std::sync::Arc;
 use std::time::Duration;
 
+pub use attach::{Attached, Ended};
 pub use command::{CheckOutcome, CommandOutcome};
 pub use conn::{Closed, Connection, Event, Pending, Reply, runs_long};
 pub use error::Error;

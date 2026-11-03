@@ -173,22 +173,20 @@ leaves the PDF in `target/gdi-print/`.
 ### Spooled file goldens
 
 `qsaccess/tests/spool_goldens.rs` reads QS/400's test system's SCS files
-`QPJOBLOG`, `QSYSPRT`, `LANDSCAPE` and `MIXED` through qap-client in batches
-of 25 pages, written as received, and whole in one request. Both must give
-the same page model and text (checked against
+`QPJOBLOG`, `QSYSPRT`, `LANDSCAPE`, `MIXED` and `OVERFLOW` through qap-client
+in batches of 25 pages, written as received, and whole in one request. Both
+must give the same page model and text (checked against
 `qsaccess/tests/goldens/spool/<name>.pages` and `<name>.txt`) and the same
 PDF pages: with `pdftoppm` (required where `QSA_REQUIRE_PDFTOPPM=1`) both
 PDFs are rasterised and compared page for page. The goldens are text, the
 same on every platform; `QSA_BLESS=1` writes them.
 
-A batch that begins on a page started by overflowing the page length,
-rather than by a form feed, does not lay out as the whole file does:
-QS/400's leading state moves to the line with `X'344C'`, which this
-program's SCS reader takes as a relative move (`X'34C4'` is its absolute
-one), so such a page starts a line low. None of the four files has such a
-boundary at 25 pages; `qap-client/tests/version3.rs`
-`one_page_batches_render_the_whole_files_pages` shows it a page at a time
-and is ignored until QS/400 and this program agree on the code.
+`OVERFLOW`'s page 26 is begun by overflowing the page length, not by a form
+feed, exactly at a 25-page batch boundary: the second batch's leading state
+moves to the line with AVPP (`X'34C4'`), and the page lays out as in the
+whole file. `qap-client/tests/version3.rs`
+`one_page_batches_render_the_whole_files_pages` checks every page of every
+file read a page at a time.
 
 ## Wayland, by hand
 

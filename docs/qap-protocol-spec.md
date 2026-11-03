@@ -1,4 +1,4 @@
-<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit 3134e9ead985a74d89fa53008a13b6ef2fbd3d8d. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
+<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit dd1f61a4e93022bd53a4e6cd95b1badcd605bd22. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
 # QAP: Quartz Access Protocol, version 1 (draft)
 
 QAP is how QS/400 Access talks to QS/400 for everything except 5250 and printer sessions, which stay on TN5250E (RFC 4777). It is an original Quartz design: it takes nothing from any other access protocol or from any other protocol's sources.
@@ -13,7 +13,7 @@ This draft settles the decisions below. Anything it leaves open is listed under 
 | Security | TLS 1.3 only, no plaintext mode. Server certificate from the QS/400 certificate manager, application ID `QS400_ACCESS_SERVER`. The client validates it with its existing untrusted-certificate trust flow |
 | Framing and encoding | Wire, from the QS/400 repository's `ipc` crate, the same framing and serialization QSI uses. Types below are Wire types; enums use `wire_enum!`. If Wire cannot express something below, stop and ask; do not invent a second encoding |
 | Where the code lives | `qap-proto` (envelope and message types) lives in the QS/400 repository beside `ipc`. QS/400 Access pins both by commit |
-| Multiplexing | One connection carries many concurrent requests. Every request has a service ID and a request ID; replies carry the request ID, in the order operations finish, not the order requests came. No port mapper and no per-service ports. Lanes: `Command` requests run one at a time, in arrival order, in the connection job, because they share its job state (library list, `QTEMP`, job attributes); `Sql` (version 4) joins them in that lane. Every other operation runs concurrently, up to the outstanding limit, as the signed-on profile, without waiting for a command. `Ping` and `Cancel` are never queued behind anything |
+| Multiplexing | One connection carries many concurrent requests. Every request has a service ID and a request ID; replies carry the request ID, in the order operations finish, not the order requests came. No port mapper and no per-service ports. Lanes: `Command` requests and `Sql` operations 1 to 8 (version 4) run one at a time, in arrival order, in the connection job, because they share its job state (library list, `QTEMP`, job attributes, commitment definition, statements and cursors). Every other operation, `Sql` operations 9 to 11 (the catalog lists, which keep no state) included, runs concurrently, up to the outstanding limit, as the signed-on profile, without waiting for the lane. `Ping` and `Cancel` are never queued behind anything |
 | Versioning | Client hello sends the range of protocol versions it supports; server picks one or refuses. Version 1 is this document |
 | Server jobs | Listener job `QAPD` in subsystem `QSYSWRK`; one job per connection in `QUSRWRK`, running as `QUSER` until sign-on and as the signed-on user profile after it |
 | Server control | `STRTCPSVR SERVER(*QAP)`, `ENDTCPSVR SERVER(*QAP)`, autostart attribute; shown on Navigator's Servers page |
@@ -39,7 +39,7 @@ Every frame is one Wire-encoded `Envelope`. The envelope layout never changes be
 
 **Limits.** A frame is at most 1 MiB; larger results are sent as several reply frames with `More` set on all but the last. At most 64 outstanding requests per connection; beyond that the server replies `Busy`. The client sends `Ping` after 60 s without traffic; the server closes a connection after 300 s without frames. Closing a connection does not end the session: it can be resumed until its idle timeout.
 
-**Events (server to client, `request_id` 0).** `Connection` op 100 `ServerEnding` (status `ServerEnding`, message says why; the server closes after sending it) · `SignOn` op 100 `SessionEnded` (status `SessionExpired`, or `Ok` when ended by an operator, with a message).
+**Events (server to client, `request_id` 0).** `Connection` op 100 `ServerEnding` (status `ServerEnding`, message says why; the server closes after sending it) · `SignOn` op 100 `SessionEnded` (status `SessionExpired`, or `Ok` when ended by an operator or, from version 4, by `SignOff` on another of the session's connections, with a message).
 
 ## Phase 0 (this round): connection, sign-on, server information
 
@@ -93,7 +93,7 @@ Not in QAP: 5250 display and printer sessions (Telnet), the printer session's me
 - Bodies use only Wire types: structs, enums with explicit tags (one byte unless a wider tag is stated), lists, options, bytes, fixed-size byte arrays, integers, UTF-8 strings. Times are i64 milliseconds since 1970-01-01 UTC. A flag is a u8, 1 for yes and 0 for no; any other value gets `InvalidRequest`.
 - A request is one frame, so at most 1 MiB. Operations that send more (`WriteFile`, `Execute` with many rows) are repeated by the client over pieces; nothing splits a request. Replies over 1 MiB are split with `More` as in phase 0.
 - Lists that can be long take `start` (0-based) and `max` (0 for no limit) and answer `total`, the number of entries matching, beside the entries returned.
-- Every operation can also get `Error` (the message says what), `InvalidRequest` (a body that does not decode or a value out of range), `Busy`, and `Cancelled` when cancelled. The tables' Statuses column lists the others.
+- Every operation can also get `Error` (the message says what), `InvalidRequest` (a body that does not decode or a value out of range), `Busy`, and `Cancelled` when cancelled. The tables' Statuses column lists the others. For example, `ReleaseSpooledFile` of a file that is not held gets `Error` with `CPF3337`.
 - Each service, operation, status and event value is introduced by a protocol version (see Compatibility of new values). The services are planned for versions 2 to 6 in the order below; the `SignOn` additions with version 2. A version number is fixed only when QS/400 ships it.
 
 **New status values (u16), appended after `ServerEnding` 12.** `Exists` 13 (the name is taken) · `InUse` 14 (another job holds the object) · `SqlError` 15 (an SQL statement failed; the body is `SqlFailure`, the message the SQL message).
@@ -143,7 +143,7 @@ Commands run in the connection job, as the signed-on profile, with its job descr
 
 | Op | Statuses |
 | --- | --- |
-| `ListSpooledFiles`, `ListOutputQueues` | `Ok`; `NotFound` (the queue or library); `NotAuthorized` |
+| `ListSpooledFiles`, `ListOutputQueues` | `Ok`; `NotFound` (the queue or library, or for `ListSpooledFiles` an unknown user profile, `CPF2204`); `NotAuthorized` |
 | `ReadSpooledFile` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` (still `Open` or `Writing`); `Error` (the format cannot be made from this file's device type, for example `Scs` from `Afp`) |
 | `HoldSpooledFile`, `ReleaseSpooledFile`, `DeleteSpooledFile`, `MoveSpooledFile` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` (printing, for delete and move) |
 
@@ -156,13 +156,16 @@ Commands run in the connection job, as the signed-on profile, with its job descr
 - Clients read large files in page batches.
 - The `Text` and `Pdf` formats are optional per device type. A file whose format cannot be made gets `Error`, with a message saying so.
 
-### Service 5 `Sql`: SQL, the catalog and data transfer (planned version 4)
+### Service 5 `Sql`: SQL, the catalog and data transfer (version 4)
 
-Statements and cursors belong to the connection and end with it; changes not committed are rolled back when it closes. Data Transfer downloads with `Prepare`, `Execute` and `Fetch`, and uploads with an `INSERT` prepared once and `Execute` repeated over batches of rows, each request under 1 MiB.
+Statements run in the connection job through the system's database engine, as the signed-on profile, with the same authority checks as any SQL interface. Statements and cursors belong to the connection and end with it; changes not committed are rolled back when it closes. Data Transfer downloads with `Prepare`, `Execute` and `Fetch`, and uploads with an `INSERT` prepared once and `Execute` repeated over batches of rows, each request under 1 MiB.
 
 - `CommitLevel` enum: `None` 0, `ReadUncommitted` 1, `ReadCommitted` 2, `RepeatableRead` 3, `Serializable` 4.
 - `Naming` enum: `Sql` 0 (`schema.table`), `System` 1 (`library/file`).
-- `SqlValue` enum: `Null` 0, `Integer` 1 { `value` i64 }, `Decimal` 2 { `text` String (exact, `.` as the point) }, `Float` 3 { `text` String (shortest text that reads back as the same value) }, `Text` 4 { `text` String (character and graphic types, converted to UTF-8) }, `Binary` 5 { `data` bytes }, `Date` 6 { `ms` i64 (midnight UTC of the date) }, `Time` 7 { `ms` i64 (since midnight) }, `Timestamp` 8 { `ms` i64 (as if UTC), `micros` u16 (microseconds past `ms`, 0 to 999) }, `Boolean` 9 { `value` flag }.
+- `SqlValue` enum: `Null` 0, `Integer` 1 { `value` i64 }, `Decimal` 2 { `text` String (exact, `.` as the point) }, `Float` 3 { `text` String (shortest text that reads back as the same value) }, `Text` 4 { `text` String (character and graphic types, converted to UTF-8) }, `Binary` 5 { `data` bytes }, `Date` 6 { `ms` i64 (midnight UTC of the date) }, `Time` 7 { `ms` i64 (since midnight) }, `Timestamp` 8 { `ms` i64 (as if UTC), `picos` u32 (picoseconds past `ms`, 0 to 999 999 999) }, `Boolean` 9 { `value` flag }. `picos` carries the full fraction of `TIMESTAMP(12)`; the column's `scale` is the timestamp's precision (0 to 12), and digits past it are zero.
+- Character and graphic columns with CCSID 65535 are sent as `Binary`, the bytes as stored, and their `Column`'s `ccsid` is 65535. Parameters for them are sent as `Binary` too.
+- `DECFLOAT` is sent as `Decimal` whose `text` may use E notation (`1.5E-30`), or is `Infinity`, `-Infinity`, `NaN` or `sNaN`.
+- Every other type is sent as above: integer types as `Integer`, `DECIMAL` and `NUMERIC` as `Decimal`, `REAL` and `DOUBLE` as `Float`, other character and graphic types as `Text`, `BINARY`, `VARBINARY` and `BLOB` as `Binary`.
 - `Column` = { `name` String, `label` String, `sql_type` String (for example `DECIMAL`), `length` u32, `scale` u16, `nullable` flag, `ccsid` u16 }.
 - `SqlFailure` = { `sqlstate` String (five characters), `sqlcode` i32, `row` Option of u32 (the failing parameter row of an `Execute`) }.
 - `TableKind` enum: `Table` 0, `View` 1, `Alias` 2, `PhysicalFile` 3, `LogicalFile` 4.
@@ -187,6 +190,22 @@ Statements and cursors belong to the connection and end with it; changes not com
 | `SetOptions` | `Ok`; `InUse` (a transaction is open: commit or roll back first) |
 | `CloseCursor`, `Release` | `Ok`; `NotFound` |
 | `ListSchemas`, `ListTables`, `ListColumns` | `Ok`; `NotFound`; `NotAuthorized` |
+
+**Rules.**
+
+- Operations 1 to 8 run in the connection's lane, in arrival order, with `Command` requests (see Multiplexing). Operations 9 to 11 read the catalog with the user's authority, keep no state and run concurrently, also while a statement runs in the lane.
+- A reply larger than 1 MiB (`Fetch` rows, a catalog list) is split with `More`. `Fetch` returns at most `max_rows` rows (0 for no limit), fewer at the end of the result, with `end` 1 when the cursor has no more rows.
+- Cancel:
+  - a started `Execute` ends with `Cancelled`, its own body (`updated` the rows changed before the cancel, `cursor` none) and the SQL message for the cancel;
+  - a started `Fetch` ends with `Cancelled`, the rows produced before the cancel, `end` 0, and the cursor closed;
+  - a statement cancelled before it started gets `Cancelled` and an empty body, as any request.
+  - Changes a cancelled statement made under commitment control stay uncommitted until `Commit` or `Rollback`.
+- Commitment control:
+  - `SetOptions` is per connection; a connection starts with `None`, `Sql` naming and no default schema.
+  - Uncommitted changes are rolled back when the connection closes.
+  - A commit level other than `None` against a table that cannot use commitment control (for example one that is not journaled) gets the database's own `SqlError`. The client decides what to do.
+- A statement or type the database does not support gets the database's own `SqlError`, as it reports it.
+- An `Execute` over several parameter rows stops at the first row that fails: `SqlError`, with `SqlFailure.row` the 0-based index of that row. The rows before it stay changed (uncommitted under commitment control).
 
 ### Service 6 `Ifs`: Integrated File System files (planned version 5)
 
@@ -255,6 +274,30 @@ Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`).
 
 A ticket is 256 random bits for the session's own profile, kept by the server, good for one 5250 automatic sign-on within `expires_secs`, and only over Telnet with TLS. The client sends it, as 64 hexadecimal characters, where automatic sign-on otherwise carries the password; the client sends the RFC 4777 user variable, and the password variable carrying the ticket as 64 hexadecimal characters with an empty random-seed variable, and only over Telnet TLS. The client treats a ticket as it treats a token: never logged or stored, wiped after use.
 
+### `SignOn` addition (version 4)
+
+| Service | Op | Request body | Reply body | Allowed before sign-on |
+| --- | --- | --- | --- | --- |
+| SignOn | 7 `Attach` | `token` 32 bytes | `SignOnReply` (same token) | yes (as the first request after `Hello`) |
+
+| Op | Statuses |
+| --- | --- |
+| `Attach` | `Ok`; `SessionExpired` (no such session, or it timed out); `Busy` (the session has 16 connections); `InvalidRequest` (not the first request after `Hello`) |
+
+- `Attach` adds this connection to an existing session without taking the session from its other connections. `Resume` still moves the session's resumable connection, the one that signed on or last resumed, to the new one; attached connections stay.
+- Each attached connection has its own connection job, running as the session's profile, with its own job state: library list, `QTEMP`, commitment definition, statements and cursors.
+- A session has at most 16 connections, attached or not; beyond that `Attach` gets `Busy`.
+- The session's idle timer runs only while no connection is attached to it.
+- `SignOff` on any connection ends the session. That connection gets its reply and stays open, not signed on, as in version 1; every other connection of the session gets `SessionEnded` (status `Ok`, `TCP1A58`) and closes.
+
+### `Connection` addition (version 4)
+
+| Service | Op | Request body | Reply body | Allowed before sign-on |
+| --- | --- | --- | --- | --- |
+| Connection | 3 `JobInfo` | — | `job` JobId (the connection job as the system names it), `user` String (the profile it runs as now: the signed-on one, else the job's user) | yes |
+
+`JobInfo` is answered at once, never queued, as `Ping` is. A client that will `Attach` sends `Attach` first: it must be the first request after `Hello`.
+
 ### Compatibility of new values
 
 A Wire enum fails to decode on a tag it does not know, so an older client would reject a whole envelope carrying a newer `Status`, `Service` or `Kind` value, or a newer value of any enum in a body, before it could even read the `request_id`. Rule: **a value is sent only to a peer that negotiated a version that defines it.**
@@ -274,6 +317,10 @@ Version 2 is: `Command` (service 3) operations 1 `RunCommand`, 2 `CheckCommand` 
 ### Version 3 (fixed)
 
 Version 3 is: `Spool` (service 4) operations 1 `ListSpooledFiles` to 7 `ListOutputQueues`, as above, with the reading rules above; and the status `InUse` (14), which version 3 introduces. A version 1 or 2 peer never receives `InUse`, the `Spool` service or any `Spool` body. The server accepts versions 1 to 3 and picks the highest both sides support.
+
+### Version 4 (fixed)
+
+Version 4 is: `Sql` (service 5) operations 1 `SetOptions` to 11 `ListColumns`, with the types and rules above; `SignOn` operation 7 `Attach`; `Connection` operation 3 `JobInfo`; and the status `SqlError` (15), which version 4 introduces. `Sql` does not use `Exists`: a name that is taken is the database's `SqlError` (for example SQLSTATE `42710`), so `Exists` (13) stays for the version that first uses it. A version 1 to 3 peer never receives `SqlError`, the `Sql` service or any `Sql` body; where `SqlError` would apply it gets `Error` with the same message. The server accepts versions 1 to 4 and picks the highest both sides support.
 
 ## Open questions
 
@@ -307,7 +354,12 @@ to points the draft above leaves open:
 - A first request other than `Hello` gets `InvalidRequest` and the
   connection closes. `SignOn` or `Resume` on a signed-on connection
   gets `InvalidRequest`; the connection and session stay.
-- A connection idle for 300 s is closed without an event.
+- A connection idle for 300 s is closed without an event. Idle means
+  no frame either way and no request outstanding: a request still
+  running (a long command) keeps the connection.
+- Every close is logged by the connection job (`net/qapd`, target
+  `qapd`, level `info`): the connection, the job, the client's
+  address, the profile, the reason and the requests outstanding.
 - Sessions: `idle_timeout_secs` is `CHGQAPA IDLETIMO`. The timer runs
   only while no connection is attached; an attached session never
   expires. A session whose connection job ended without detaching
@@ -415,3 +467,182 @@ Version 3, as built on 2026-11-02 (decisions made in the build, for Cody to revi
   `DLTSPLF` refuses deleting one (`CPF3330`).
 - `ListOutputQueues` `*LIBL` is the connection job's library list;
   libraries in it that do not exist are passed over.
+
+Version 4, `Attach`, as built on 2026-11-02 (decisions made in the build, for Cody to review):
+
+- `Attach` must be the second request the connection routes, `Hello`
+  being the first. After any other request, a `Ping` or a failed
+  `Attach` included, it is `InvalidRequest` and the connection stays.
+  On a version 1 to 3 connection it is `InvalidRequest` too.
+- The session table (`qapd::sessions`) keeps one resumable job per
+  session (the one that signed on or last resumed) and a list of
+  attached jobs. `Resume` replaces the resumable job only; attached
+  jobs stay. The idle timer starts when the last connection of either
+  kind leaves. Dead jobs are swept from both, as before.
+- The limit of 16 counts both kinds. `Attach` beyond it is `Busy` with
+  `TCP1A59`. A `Resume` while the resumable connection is gone and 16
+  others are attached would make 17, so it is `Busy` with `TCP1A59`
+  too.
+- An attached job swaps to the profile as `Resume` does (`become_user`,
+  then the library list of the profile's job description). The rest of
+  its job state is its own (rpc 749 `qap_attach`).
+- When one job ends a session, the table records the session's other
+  jobs as ended, and how. Each connection job asks at its end poll (rpc
+  739 `qap_ended`, every 500 ms beside the `ENDJOB` check) and ends with
+  `Ending::Session`: `SessionEnded` with status `Ok`, then close
+  (`Closed::SessionEnded`), with no second sign-off or detach. A
+  connection of any version gets this event, since all its values are
+  version 1's.
+- `SignOff` on any connection: that connection gets `Ok` and stays
+  open, not signed on. The others get `TCP1A58`.
+- `ENDJOB` of one connection job of a session with several: as before,
+  that job sends `SessionEnded` with `TCP1A54` and ends the session
+  (`qap_signoff` with `operator` set). The session's other connections
+  then get `SessionEnded` with `TCP1A54` too, and close. `ENDTCPSVR`
+  is unchanged: every connection gets `ServerEnding`.
+- `TCP1A58` and `TCP1A59` are in `QTCPMSG`.
+
+Version 4 Sql, as built on 2026-11-02 (decisions made in the build, for Cody to review):
+
+- The lane: `Command` requests and `Sql` 1 to 8 (`Op::in_lane`) go to
+  the connection job's own thread in arrival order; `ListSchemas`,
+  `ListTables` and `ListColumns` run on the secondary threads. The
+  `Sql` rules live in `net/qapd/src/sql.rs` (`SqlStop`: `SqlError`
+  with `SqlFailure` and the SQL message, a `Refusal` for `NotFound`,
+  `NotAuthorized` and `InUse`, or `Cancelled` with the body so far).
+- Cancel: an `Execute` or `Fetch` the host finished after the client
+  cancelled still ends `Cancelled`: the cursor it opened or read is
+  closed, `cursor` none or `end` 0, with `SQL0952` (added to
+  `QSQLMSG`). The connection job asks the engine to end a running
+  statement with the file `/run/qs400/sqlcancel/<job number>`
+  (`stg::sql_cancel_path`); the engine looks for it every 64 rows it
+  reads (`SqlContext::interrupt`, `SQL0952`, SQLSTATE `57014`). The
+  lane also looks between parameter rows and between fetch batches of
+  100 rows.
+- Statements run through the job's embedded SQL (`sql_run`, the
+  job's own session in the storage service), so as the signed-on
+  profile with the store's authority checks. An authority failure is
+  now the engine's `SQL0551` (SQLSTATE `42501`) rather than
+  `SQL0901`; QAP answers it `NotAuthorized` with that message.
+  Every other failure is `SqlError` with the engine's SQLSTATE,
+  SQLCODE and its own text as the message text.
+- Statements and cursors are the job's embedded scope `QAP:LANE`; its
+  commitment definition is `*SQLQAP`, started at the first statement
+  under a commit level. `ReadUncommitted` is `*CHG`, `ReadCommitted`
+  `*CS`, `RepeatableRead` and `Serializable` `*ALL` (the engine has no
+  `*RR`). Cursors are opened `WITH HOLD`: they stay open across
+  `Commit` and `Rollback`. `Commit` and `Rollback` without commitment
+  control answer `Ok`.
+- `SetOptions` is `InUse` (`SQL0752`, added) once a statement other
+  than a query ran under a commit level since the last `Commit` or
+  `Rollback`. Otherwise the new level holds from the next statement:
+  the engine's commitment definition takes each statement's level
+  between units of work (as `SET TRANSACTION ISOLATION LEVEL`, which
+  the engine now has and refuses with `SQL0428`, SQLSTATE `25001`,
+  once the unit changed something). The default schema is `SET
+  SCHEMA` (none: `SET SCHEMA DEFAULT`); under `System` naming as
+  under `Sql`, a default schema qualifies unqualified table, view,
+  index and alias names in place of the library list, as IBM i's
+  `DFTRDBCOL` and `SET SCHEMA` do.
+- When the connection closes, and when the job runs as another
+  profile (sign-off, resume), the lane rolls back, ends the scope
+  `QAP:` (its cursors and statements go) and resets the options. The
+  job's end rolls back any commitment definition left as well.
+- Values by the engine's `DESCRIBE` (which now also gives each
+  entry's CCSID): integers `Integer`; `DECIMAL` and `NUMERIC` the
+  engine's exact text; `DECFLOAT` (SQLTYPE 996, `length` its 16 or 34
+  digits) `Decimal` with the engine's scientific text (`1.5E-30`,
+  `-12.50`) or `Infinity`, `-Infinity`, `NaN`, `sNaN`; `REAL` and
+  `DOUBLE` the shorter of the plain and E notation that reads back the
+  same; `CHAR`, `VARCHAR`, `GRAPHIC`, `VARGRAPHIC`, `CLOB` (408) and
+  `DBCLOB` (412) `Text`, with CCSID 37 (graphic and `DBCLOB` 1200) when
+  the field has none; a DDS `H` field, `FOR BIT DATA` or CCSID 65535
+  `Binary`, its CP037 bytes; `BINARY` (912), `VARBINARY` (908) and
+  `BLOB` (404) `Binary`, CCSID 65535; `BOOLEAN` (2436) `Boolean`;
+  dates, times and timestamps as milliseconds, a timestamp with the
+  picoseconds past them and `scale` its precision, 0 to 12 (SQLLEN
+  19, or 20 plus the precision). Parameters come back the same way: a
+  `Decimal` for a `DECFLOAT` column is read as `DECFLOAT(34)` (special
+  values too), `Binary` is bytes, `Boolean` a boolean, a `Timestamp`
+  keeps every picosecond for the column to cut to its precision. A
+  parameter the engine cannot take (a special value for a column that
+  is not `DECFLOAT`, digits past 63) is `SqlError` `22018`
+  (`SQL0302`) for its row.
+- Catalog lists read `QSYS2.SYSSCHEMAS` and `SYSTABLES` (indexes left
+  out; `T` table, `V` view, `A` alias, `P` physical file, `L`
+  logical file) on the thread's own link, match the `LIKE` pattern and
+  cut the page in the job, sorted by name. `ListColumns` prepares
+  `SELECT *` from the table and answers its `DESCRIBE`, as `Prepare`
+  does.
+- Column names and labels are the engine's `DESCRIBE`: `name` the
+  column's SQL name (the field's `ALIAS`, which `CREATE TABLE` keeps
+  for a name longer than its system name; else the system name),
+  `label` its heading (`LABEL ON` or DDS `COLHDG`) with each of its
+  three parts filled to 20 characters, as an SQLDA's label; a column
+  without a heading, or an expression, has its name as `label`. A
+  column renamed with `AS` keeps its heading.
+- The storage service is one thread, but a query (`Execute` of a
+  `SELECT`, opened as a cursor) takes turns with every other request
+  there: between batches of its scan it lets the other jobs' requests
+  and this connection's catalog lists in (`STORAGE_SERVICE.md` "Long
+  statements"). Still waiting on it: statements that change data
+  (`UPDATE` of many rows), queries under `RepeatableRead` and
+  `Serializable` (`*ALL`), the sort or join of a query once its rows
+  are read, and a query met while another runs, which goes first (the
+  earlier window waits for it).
+- Engine limits the build met, now lifted as IBM i has them:
+  `SMALLINT`, `INTEGER` and `BIGINT` columns made by SQL take their
+  whole 16, 32 and 64-bit range (a field flag, `DB_FORMAT.md`; a DDS
+  `B` field keeps its digits), `SYSCOLUMNS` giving `LENGTH` 2, 4, 8 and
+  `NUMERIC_PRECISION` 5, 10, 19. `REAL` and `DOUBLE` are IEEE binary
+  values (`1E300`, `-2.5E-308`), a literal with an exponent a `DOUBLE`,
+  a float beside a decimal a `DOUBLE` and beside a `DECFLOAT` a
+  `DECFLOAT`; their wire tags are 9 and 10 (`embed::to_wire`), and a
+  float's value reaches the client as it is. `CREATE ALIAS` makes the
+  `*FILE` alias (attribute `DDMF`, naming a table and a member if one
+  is given; `DB_FORMAT.md` `AliasAttr`), which queries and data changes
+  read through, `SYSTABLES` lists as `A` and `DROP ALIAS` (or `DLTF`)
+  deletes. `GRAPHIC` and `VARGRAPHIC` of CCSID 1200 or 13488 hold
+  UTF-16, so any Unicode literal (`G'..'`, `N'..'` or a plain string)
+  goes in. `VARBINARY` keys compare without padding (`X'01'` before
+  `X'0100'`). LOB space an `UPDATE` or `DELETE` leaves is freed at
+  once in a table that is not journaled and by `RGZPFM` in one that is
+  (a journal's before images and `RMVJRNCHG` still need it); `CPYF`,
+  `CPYTOIMPF` and `CPYFRMIMPF` copy LOB columns. `CURRENT
+  TIMESTAMP(p)` has its precision; `SYSCOLUMNS.DATA_TYPE` spells a
+  timestamp `TIMESTMP`; a predicate used as a value (`K = 1` in a select
+  list) is a `BOOLEAN` (SQLTYPE 2436), as on IBM i 7.5.
+
+The test system's database (`qapd::testing::sql`, for QS/400's tests
+and QS/400 Access's):
+
+- A small statement runner over tables in memory, not QS/400's engine:
+  its tables carry `DECFLOAT`, binary types, `BOOLEAN` and
+  `TIMESTAMP(12)`, which the client must meet. It runs `SELECT` of
+  `*` or columns with `WHERE col = x AND ...`, `INSERT ... VALUES`,
+  `UPDATE` and `DELETE` over one table; anything else is the syntax
+  error `SQL0104`, as a database that does not know the statement
+  reports it.
+- Its fixtures and the cases they give are in the module's
+  documentation: `HLINV.ASSETS` with Navigator's twelve assets in
+  service, `HLTEST.ALLTYPES`, journaled and unjournaled tables
+  (`SQL7008`, `55019`), slow tables for cancels, a table over 1 MiB,
+  keys for a multi-row failure (`SQL0803`), `HLPAY.SALARIES` (only
+  `ANN`), and enough schemas and tables for several pages.
+- A table the profile may not use is `NotAuthorized` with `SQL0551`
+  on `Prepare` and `ListColumns`, the status the operations' table
+  gives, as the real job answers the engine's `SQL0551`. The catalog
+  still lists it.
+- Ends from outside, for the client's tests: `System::end(Server)`
+  reaches every connection, open or opened later (each sends
+  `ServerEnding`); `System::end(Operator)` is one job's, as `ENDJOB`
+  is. `System::drop_connection(job)` and `drop_all()` close a
+  connection's socket on the server's side mid-request, as a network
+  drop would: no reply and no event. `System::crash` still injects a
+  panic. `System::wait_running(job, timeout)` tells a test when a
+  command runs, so a cancel needs no sleep.
+- Simplifications: no locks (other connections see changes before
+  they are committed); a rollback puts back each table the
+  transaction changed as it was at its first change; unqualified
+  names are in the default schema, else the profile's schema (`Sql`
+  naming) or `QGPL` then `HLINV` (`System` naming).

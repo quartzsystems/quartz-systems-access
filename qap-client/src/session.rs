@@ -25,13 +25,17 @@
 //!   refused here, before anything is sent, when the system's version does
 //!   not define it ([`Client::supports`]).
 //!
+//! - From version 4: [`Client::attach`] opens a connection of its own to
+//!   the session for a window ([`crate::Attached`]), and [`Client::job_info`]
+//!   names the shared connection's job.
+//!
 //! The session token is held as a [`Token`] only, and the profile kept for
 //! display has its token zeroed. A Telnet ticket is handed over as a
 //! [`Token`] too and never kept here.
 
 use ipc::Wire;
 use qap_proto::ops::command::{CommandDefinition, CommandText, DescribeCommand};
-use qap_proto::ops::connection::HelloReply;
+use qap_proto::ops::connection::{HelloReply, JobInfoReply};
 use qap_proto::ops::signon::{
     ChangePassword, PasswordStatus, Resume, SignOn, SignOnReply, TelnetTicketReply,
 };
@@ -39,6 +43,7 @@ use qap_proto::ops::system::SystemInfo;
 use qap_proto::types::ObjectName;
 use qap_proto::{Op, Secret, ServerMessage, Status, Token};
 
+use crate::attach::Attached;
 use crate::command::CheckOutcome;
 use crate::conn::{Closed, Connection, Event, Pending, supported};
 use crate::{Error, Target};
@@ -302,6 +307,27 @@ impl Client {
         let reply = self.request(Op::CheckCommand, &body)?.wait(timeout);
         self.absorb_events();
         CheckOutcome::from_reply(reply?)
+    }
+
+    /// `JobInfo` (version 4): the shared connection's job and the profile
+    /// it runs as.
+    pub fn job_info(&mut self) -> Result<JobInfoReply, Error> {
+        self.call(Op::JobInfo, &())
+    }
+
+    /// A connection of its own attached to this session (version 4), for a
+    /// window: no new sign-on, its own job. Refused here, before anything
+    /// is sent, when not signed on or when the system's version has no
+    /// `Attach`.
+    pub fn attach(&mut self) -> Result<Attached, Error> {
+        self.supports(Op::Attach)?;
+        let Some(token) = self.token.clone() else {
+            return Err(Error::Status {
+                status: Status::NotSignedOn,
+                message: None,
+            });
+        };
+        Attached::open(&self.target, &token)
     }
 
     /// `DescribeCommand` (version 2): the command's definition as the

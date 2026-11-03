@@ -34,7 +34,7 @@ commit. It is never edited here: a change goes to QS/400 first, and the copy
 is refreshed in the same commit as the re-pin (`ci/spec-mirror.sh` checks
 both).
 
-- **Versions.** The program offers QAP versions 1 to 3, and the server
+- **Versions.** The program offers QAP versions 1 to 4, and the server
   picks the highest both speak. Version 2 adds Run Command (the `Command`
   service: run, check and describe CL commands), the password expiry
   warning (`PasswordStatus`) and 5250 automatic sign-on by ticket
