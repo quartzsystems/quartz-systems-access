@@ -10,6 +10,7 @@
 //! - `.qsp`: a printer window, likewise.
 //! - `.qkm`: Load Keyboard Map, into an open session or new sessions.
 //! - `.qsm`: the Macro editor.
+//! - `.qdx`: a Data Transfer window with the request, ready to run.
 //!
 //! A file with another extension is recognised by its `[qsaccess]` kind.
 
@@ -28,6 +29,7 @@ pub enum Kind {
     Printer,
     Keymap,
     Macro,
+    Transfer,
 }
 
 /// The kind of file at `path`: by extension, else by its header.
@@ -40,6 +42,7 @@ pub fn kind_of(path: &Path) -> Result<Kind, FileError> {
         Some(qsp::EXTENSION) => return Ok(Kind::Printer),
         Some(qkm::EXTENSION) => return Ok(Kind::Keymap),
         Some(qsm::EXTENSION) => return Ok(Kind::Macro),
+        Some(qsa_transfer::request::EXTENSION) => return Ok(Kind::Transfer),
         _ => {}
     }
     let text = doc::read(path)?;
@@ -48,6 +51,7 @@ pub fn kind_of(path: &Path) -> Result<Kind, FileError> {
         (doc::PRINTER, Kind::Printer),
         (doc::KEYMAP, Kind::Keymap),
         (doc::MACRO, Kind::Macro),
+        (qsa_transfer::request::KIND, Kind::Transfer),
     ] {
         match doc::check_header(&text, kind) {
             Ok(()) => return Ok(k),
@@ -56,7 +60,7 @@ pub fn kind_of(path: &Path) -> Result<Kind, FileError> {
         }
     }
     Err(FileError::Invalid(
-        "it is not a session, keyboard map or macro file".into(),
+        "it is not a session, keyboard map, macro or transfer request file".into(),
     ))
 }
 
@@ -73,6 +77,7 @@ pub fn open_path(state: &Shared, path: &Path, parent: Option<&dyn WindowExt>) {
         }
         Ok(Kind::Keymap) => crate::session::loadmap::run(state, &path, parent),
         Ok(Kind::Macro) => crate::macros::open_file(state, &path, parent),
+        Ok(Kind::Transfer) => crate::transfer::open_request(state, &path, parent),
         Err(e) => {
             let m = e.message(&path);
             crate::log!("{m}");
@@ -93,6 +98,7 @@ mod tests {
         assert_eq!(kind_of(Path::new("a.qkm")).unwrap(), Kind::Keymap);
         assert_eq!(kind_of(Path::new("a.qsm")).unwrap(), Kind::Macro);
         assert_eq!(kind_of(Path::new("a.QSP")).unwrap(), Kind::Printer);
+        assert_eq!(kind_of(Path::new("a.qdx")).unwrap(), Kind::Transfer);
         let p = dir.join("mail-attachment.txt");
         std::fs::write(&p, "[qsaccess]\nkind = \"macro\"\nversion = 1\n").unwrap();
         assert_eq!(kind_of(&p).unwrap(), Kind::Macro);

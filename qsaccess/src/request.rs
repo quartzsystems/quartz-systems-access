@@ -25,6 +25,9 @@ pub struct Request {
     pub session_manager: bool,
     pub record: Option<PathBuf>,
     pub quit: bool,
+    /// `--session-token <system> <reply>`: `qsaccess run` asks for the
+    /// session on a system, answered on its reply endpoint.
+    pub session_token: Option<(String, String)>,
     /// Arguments not understood; logged.
     pub unknown: Vec<String>,
 }
@@ -45,6 +48,11 @@ impl Request {
                 "open" if r.open.is_empty() && !opening => opening = true,
                 "--session-manager" => r.session_manager = true,
                 "--quit" => r.quit = true,
+                crate::ipc::SESSION_TOKEN => {
+                    if let (Some(sys), Some(reply)) = (it.next(), it.next()) {
+                        r.session_token = Some((sys.clone(), reply.clone()));
+                    }
+                }
                 "--record" => {
                     if let Some(p) = it.next() {
                         r.record = Some(absolute(PathBuf::from(p)));
@@ -77,13 +85,20 @@ impl Request {
         if self.quit {
             out.push("--quit".to_owned());
         }
+        if let Some((sys, reply)) = &self.session_token {
+            out.extend([
+                crate::ipc::SESSION_TOKEN.to_owned(),
+                sys.clone(),
+                reply.clone(),
+            ]);
+        }
         out
     }
 
     /// Whether the request opens a window of its own, so the main window
     /// need not be shown for it.
     pub fn opens_window(&self) -> bool {
-        !self.open.is_empty() || self.session_manager || self.quit
+        !self.open.is_empty() || self.session_manager || self.quit || self.session_token.is_some()
     }
 }
 

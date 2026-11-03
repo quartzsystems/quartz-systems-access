@@ -58,6 +58,49 @@ QAP session and lists every message each sent, as the system sent it, with
 the job it ran in; Prompt (F4), Check, Cancel and a per-system history are
 there too. `docs/connecting.md` has the details.
 
+**Run SQL** and **Schemas** (Database) and **Data Transfer** (General) need
+QAP version 4. Run SQL runs SQL scripts with results a tab each, commitment
+control and the system's messages as sent; Schemas browses the catalog; Data
+Transfer moves rows between a table or query and CSV, TSV, XLSX, ODS or
+fixed-width files, exactly (decimals never go through floating point). Each
+Run SQL and Run Command window and each transfer has a connection of its own,
+attached to the session without a new sign-on, so a long query or command
+holds up nothing else; a window never signs off. `docs/connecting.md` has the
+details.
+
+### Transfer requests and `qsaccess run`
+
+A transfer can be saved as a `.qdx` request (**Save Request...** in either
+Data Transfer window): everything but passwords, which are never saved, with
+the file's path relative to the request when it is in the request's folder.
+Opening one (a double-click, or **Open Request...**) shows it ready to run.
+
+```
+qsaccess run <file.qdx>
+```
+
+runs a request without its window. If the program is running with a session
+on the request's system, the run uses that session (asked for over the
+per-user instance endpoint) with a connection of its own; otherwise it shows
+the Sign On dialog. Progress goes to stderr, and to a progress window with
+**Cancel**; the summary goes to stdout. A download replaces an existing
+output file even when the request says to ask. Exit codes:
+
+| Code | Meaning |
+|---|---|
+| 0 | The transfer is done. |
+| 1 | Bad arguments, or a request file that cannot be read or names a system not configured here. |
+| 2 | Sign-on cancelled or failed (or the system's QAP version has no `Sql`). |
+| 3 | The transfer failed (the summary says where, and the row to resume from). |
+| 4 | The transfer was cancelled. |
+
+Fully unattended runs, with no sign-on prompt, are not offered: passwords are
+never saved, so a run with no running program signed on to the system always
+asks for one. On Windows `qsaccess` is a windowed program, so `cmd.exe` does
+not wait for it: use `start /wait "" qsaccess run file.qdx` and then
+`%ERRORLEVEL%`, or in PowerShell
+`(Start-Process qsaccess -ArgumentList 'run','file.qdx' -Wait -PassThru).ExitCode`.
+
 A 5250 display session can sign on automatically over Telnet TLS with a
 one-time QAP ticket instead of a password (Session Properties, **Sign on
 automatically**); `docs/connecting.md` has what the system needs.
@@ -99,9 +142,9 @@ file name cannot hold `/`, so the program's shortcut is named
 On Linux, Just me installs to `~/.local/opt/quartz-access`, with links in
 `~/.local/bin` and menu entries, MIME types and icons under `~/.local/share`;
 All users (run the installer as root) installs to `/opt/quartz-access`, with
-links in `/usr/local/bin` and entries under `/usr/local/share`. `.qsd`, `.qkm`
-and `.qsm` are registered as `application/x-qsaccess-session`, `-keymap` and
-`-macro`, by name and by their `[qsaccess]` header. The installer runs
+links in `/usr/local/bin` and entries under `/usr/local/share`. `.qsd`, `.qkm`,
+`.qsm` and `.qdx` are registered as `application/x-qsaccess-session`, `-keymap`,
+`-macro` and `-transfer`, by name and by their `[qsaccess]` header. The installer runs
 `update-mime-database`, `update-desktop-database` and `xdg-mime default` when
 they are there, and warns (without failing) when they are not, or when
 `~/.local/bin` is not on `PATH`.

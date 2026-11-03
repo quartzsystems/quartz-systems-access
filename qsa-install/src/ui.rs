@@ -318,7 +318,7 @@ impl Wizard {
                 py + 52,
                 pw,
                 20,
-                "Open .qsd, .qsp, .qkm and .qsm files with QS/400 Access for Desktop",
+                "Open .qsd, .qsp, .qkm, .qsm and .qdx files with QS/400 Access for Desktop",
             );
             c.set_checked(true);
             opt = Some((a, b, c));
@@ -506,7 +506,7 @@ impl Wizard {
         let o = self.options();
         let yes = |b: bool| if b { "Yes" } else { "No" };
         format!(
-            "{}\n\nInstall for:\n    {}\n\nFolder:\n    {}\n\n{}:\n    {}\n\nDesktop shortcut:\n    {}\n\nOpen .qsd, .qsp, .qkm and .qsm files:\n    {}",
+            "{}\n\nInstall for:\n    {}\n\nFolder:\n    {}\n\n{}:\n    {}\n\nDesktop shortcut:\n    {}\n\nOpen .qsd, .qsp, .qkm, .qsm and .qdx files:\n    {}",
             match &self.existing {
                 Some(m) => format!("Upgrade {} to {}.", m.release, crate::RELEASE),
                 None => format!("Install {} {}.", crate::PRODUCT, crate::RELEASE),

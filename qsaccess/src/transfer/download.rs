@@ -61,6 +61,8 @@ pub enum Act {
     WidthSelected,
     SetWidth,
     BrowseFile,
+    OpenRequest,
+    SaveRequest,
     Run,
     Close,
 }
@@ -294,6 +296,11 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
         sheet_group,
         fixed_group,
     ) = parts.expect("built");
+    let mut open_request = controls::button(m, H - m - bh, bw + 34, bh, "Open Request...");
+    open_request.emit_to(tx, Act::OpenRequest);
+    let mut save_request =
+        controls::button(m + bw + 40, H - m - bh, bw + 34, bh, "Save Request...");
+    save_request.emit_to(tx, Act::SaveRequest);
     let status = StatusLine::new(m, H - m - bh - 26, W - 2 * m, 22);
     let mut run = controls::default_button(W - m - 2 * bw - 6, H - m - bh, bw, bh, "Run");
     run.emit_to(tx, Act::Run);
@@ -410,6 +417,7 @@ pub struct DownloadWindow {
     widths: RefCell<Vec<(String, usize)>>,
     sys: System,
     h: Option<Handle>,
+    state: Option<Shared>,
 }
 
 impl DownloadWindow {
@@ -425,6 +433,7 @@ impl DownloadWindow {
             widths: RefCell::new(Vec::new()),
             sys: system.clone(),
             h: None,
+            state: None,
         };
         win.fill(d);
         win
@@ -747,6 +756,12 @@ impl DownloadWindow {
                     self.w.file.clone().set_value(&p.display().to_string());
                 }
             }
+            Act::OpenRequest => {
+                if let Some(st) = &self.state {
+                    super::choose_request(st, self.parent());
+                }
+            }
+            Act::SaveRequest => self.save_request(),
             Act::Run => self.run(),
             Act::Close => self.w.window.clone().hide(),
         }
@@ -934,6 +949,7 @@ pub fn open(
     let d = preset.cloned().unwrap_or_default();
     let mut win = DownloadWindow::build(&sys, &d, &[]);
     win.h = Some(h);
+    win.state = Some(state.clone());
     let win = Rc::new(win);
     let profile = qap::signed_on(state, &sys.name).unwrap_or_default();
     win.report(&format!("{}: {profile}", sys.name), Status::Neutral);
@@ -969,4 +985,27 @@ fn tick() {
             TICKING.with(|t| t.set(false));
         }
     });
+}
+
+impl DownloadWindow {
+    /// Save Request: the request the controls make, to a `.qdx` file.
+    fn save_request(&self) {
+        let r = match self.request() {
+            Ok(x) => qsa_transfer::request::Request::Download {
+                system: self.sys.name.clone(),
+                download: x,
+            },
+            Err(t) => return self.report(&t, Status::Error),
+        };
+        match super::save_request(&r) {
+            Some(Ok(m)) => self.report(&m.to_string(), Status::Neutral),
+            Some(Err(t)) => self.report(&t, Status::Error),
+            None => {}
+        }
+    }
+}
+
+/// Whether any of these windows is open.
+pub fn any_open() -> bool {
+    WINDOWS.with(|v| v.borrow().iter().any(|w| w.w.window.shown()))
 }

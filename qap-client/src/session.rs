@@ -173,6 +173,14 @@ impl Client {
         self.token.is_some()
     }
 
+    /// A copy of the session's token, for a connection of another process
+    /// of the same user to attach to the session (`qsaccess run`, over the
+    /// per-user instance endpoint). It does not print and is wiped when
+    /// dropped; nothing here logs it.
+    pub fn session_token(&self) -> Option<Token> {
+        self.token.clone()
+    }
+
     /// Whether the server said it is ending and nothing has reconnected
     /// since.
     pub fn server_ending(&self) -> bool {

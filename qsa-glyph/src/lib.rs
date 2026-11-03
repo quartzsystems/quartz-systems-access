@@ -656,16 +656,19 @@ pub enum Icon {
     Macro,
     /// A printer session file (`.qsp`).
     PrinterSession,
+    /// A Data Transfer request file (`.qdx`).
+    Transfer,
 }
 
 impl Icon {
     /// Every icon, in a stable order.
-    pub const ALL: [Icon; 5] = [
+    pub const ALL: [Icon; 6] = [
         Icon::App,
         Icon::Session,
         Icon::KeyMap,
         Icon::Macro,
         Icon::PrinterSession,
+        Icon::Transfer,
     ];
 
     /// The icon's name: the file name stem it is written under. A file
@@ -677,6 +680,7 @@ impl Icon {
             Icon::KeyMap => "application-x-qsaccess-keymap",
             Icon::Macro => "application-x-qsaccess-macro",
             Icon::PrinterSession => "application-x-qsaccess-printer",
+            Icon::Transfer => "application-x-qsaccess-transfer",
         }
     }
 
@@ -688,6 +692,7 @@ impl Icon {
             Icon::KeyMap => Some(Glyph::Keyboard),
             Icon::Macro => Some(Glyph::Table),
             Icon::PrinterSession => Some(Glyph::Printer),
+            Icon::Transfer => Some(Glyph::Copy),
         }
     }
 }

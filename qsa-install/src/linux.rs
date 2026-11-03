@@ -22,7 +22,7 @@ use crate::manifest::{Item, Manifest, Scope};
 use crate::plan::{Options, home};
 
 /// The MIME types registered: (type, glob, comment, `[qsaccess]` kind).
-pub const MIME_TYPES: [(&str, &str, &str, &str); 4] = [
+pub const MIME_TYPES: [(&str, &str, &str, &str); 5] = [
     (
         "application/x-qsaccess-session",
         "*.qsd",
@@ -46,6 +46,12 @@ pub const MIME_TYPES: [(&str, &str, &str, &str); 4] = [
         "*.qsm",
         "QS/400 macro",
         "macro",
+    ),
+    (
+        "application/x-qsaccess-transfer",
+        "*.qdx",
+        "QS/400 Data Transfer request",
+        "transfer",
     ),
 ];
 

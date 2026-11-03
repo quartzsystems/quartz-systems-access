@@ -104,6 +104,29 @@ pub fn start(endpoint: &Endpoint, args: &[String]) -> io::Result<Startup> {
     }
 }
 
+/// The argument that asks the running instance for its session on a
+/// system: `--session-token <system> <reply endpoint>`. It answers on the
+/// reply endpoint with one frame: the token as hex, or nothing when it has
+/// no session on the system.
+pub const SESSION_TOKEN: &str = "--session-token";
+
+/// A reply endpoint's name: the instance endpoint's own name, then
+/// `-reply-` and the asking process's ID, so the instance answers only an
+/// endpoint of the same user.
+pub fn reply_name(main: &Endpoint, pid: u64) -> String {
+    format!("{}-reply-{pid}", main.id())
+}
+
+/// The reply endpoint `name`, if it is one of `main`'s (see
+/// [`reply_name`]).
+pub fn reply_endpoint(main: &Endpoint, name: &str) -> Option<Endpoint> {
+    let pid = name.strip_prefix(&format!("{}-reply-", main.id()))?;
+    if pid.is_empty() || !pid.bytes().all(|b| b.is_ascii_digit()) {
+        return None;
+    }
+    Some(Endpoint::from_id(name))
+}
+
 #[cfg(unix)]
 pub use unix::{Endpoint, Server};
 #[cfg(windows)]
@@ -147,6 +170,16 @@ mod unix {
         /// The socket path.
         pub fn path(&self) -> &Path {
             &self.path
+        }
+
+        /// The endpoint as a string another process can be given.
+        pub fn id(&self) -> String {
+            self.path.display().to_string()
+        }
+
+        /// The endpoint [`Endpoint::id`] gave.
+        pub fn from_id(id: &str) -> Endpoint {
+            Endpoint { path: id.into() }
         }
 
         /// Whether an instance is listening here. Nothing is sent: the
@@ -328,6 +361,18 @@ mod windows {
             &self.name
         }
 
+        /// The endpoint as a string another process can be given.
+        pub fn id(&self) -> String {
+            self.name.clone()
+        }
+
+        /// The endpoint [`Endpoint::id`] gave.
+        pub fn from_id(id: &str) -> Endpoint {
+            Endpoint {
+                name: id.to_owned(),
+            }
+        }
+
         /// Whether an instance is listening here. Nothing is sent: the
         /// instance sees an empty connection and ignores it.
         pub fn is_running(&self) -> bool {
@@ -480,6 +525,18 @@ mod windows {
             }
         }
     }
+}
+
+static THIS: std::sync::OnceLock<Endpoint> = std::sync::OnceLock::new();
+
+/// Keeps this instance's endpoint, for checking reply endpoints against.
+pub fn remember(e: &Endpoint) {
+    let _ = THIS.set(e.clone());
+}
+
+/// This instance's endpoint, once kept.
+pub fn remembered() -> Option<&'static Endpoint> {
+    THIS.get()
 }
 
 #[cfg(test)]

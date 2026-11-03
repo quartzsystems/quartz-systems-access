@@ -12,7 +12,8 @@
 //!
 //! - File types: ProgIDs `QuartzSystems.Access.Session.1`,
 //!   `QuartzSystems.Access.PrinterSession.1`,
-//!   `QuartzSystems.Access.KeyMap.1` and `QuartzSystems.Access.Macro.1`
+//!   `QuartzSystems.Access.KeyMap.1`, `QuartzSystems.Access.Macro.1` and
+//!   `QuartzSystems.Access.Transfer.1`
 //!   under `Software\Classes`, each with `DefaultIcon` and
 //!   `shell\open\command` = `"<dir>\qsaccess.exe" open "%1"`; then
 //!   `SHChangeNotify(SHCNE_ASSOCCHANGED)`.
@@ -51,7 +52,7 @@ use crate::manifest::{Hive, Item, Manifest, Scope};
 use crate::plan::Options;
 
 /// The file types registered: (extension, ProgID, description, icon).
-pub const FILE_TYPES: [(&str, &str, &str, &str); 4] = [
+pub const FILE_TYPES: [(&str, &str, &str, &str); 5] = [
     (
         ".qsd",
         "QuartzSystems.Access.Session.1",
@@ -75,6 +76,12 @@ pub const FILE_TYPES: [(&str, &str, &str, &str); 4] = [
         "QuartzSystems.Access.Macro.1",
         "QS/400 Macro",
         "application-x-qsaccess-macro",
+    ),
+    (
+        ".qdx",
+        "QuartzSystems.Access.Transfer.1",
+        "QS/400 Data Transfer Request",
+        "application-x-qsaccess-transfer",
     ),
 ];
 

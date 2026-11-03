@@ -914,6 +914,11 @@ fn tick() {
     });
 }
 
+/// Whether any of these windows is open.
+pub fn any_open() -> bool {
+    WINDOWS.with(|v| v.borrow().iter().any(|w| w.w.window.shown()))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

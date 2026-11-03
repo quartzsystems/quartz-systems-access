@@ -64,6 +64,11 @@ fn main() {
         _ => tn5250::log::Level::Debug,
     };
     tn5250::log::set_sink(level, |l, text| log::line(&format!("{} {text}", l.name())));
+    // `qsaccess run <file.qdx>`: a saved transfer, then exit.
+    if args.rest.first().map(String::as_str) == Some("run") {
+        let code = qsaccess::transfer::cli::run(&args.rest[1..], dir);
+        std::process::exit(code as i32);
+    }
     let mut request = Request::parse(&args.rest);
     if request.record.is_none()
         && let Some(p) = std::env::var_os("QSACCESS_RECORD")
@@ -80,8 +85,10 @@ fn main() {
     let tool_mode = args.ui_sampler.is_some() || args.snapshot.is_some();
     let mut server = None;
     if !tool_mode {
-        let started = ipc::Endpoint::for_user(dir.as_ref().map(|d| d.path()))
-            .and_then(|ep| ipc::start(&ep, &request.to_args()));
+        let started = ipc::Endpoint::for_user(dir.as_ref().map(|d| d.path())).and_then(|ep| {
+            ipc::remember(&ep);
+            ipc::start(&ep, &request.to_args())
+        });
         match started {
             Ok(ipc::Startup::Secondary) => {
                 qsaccess::log!("handed the request to the running instance; exiting");
@@ -165,6 +172,7 @@ fn main() {
         qsaccess::session::pump();
         qsaccess::printer::pump();
         qsaccess::splf::pump();
+        qsaccess::runsql::pump();
         qsaccess::manager::pump();
         qsaccess::macros::editor::pump();
         qsaccess::qap::pump(&ui);
@@ -180,6 +188,10 @@ fn main() {
             && !qsaccess::splf::any_open()
             && !qsaccess::manager::shown()
             && !qsaccess::macros::editor::any_open()
+            && !qsaccess::runsql::any_open()
+            && !qsaccess::schemas::any_open()
+            && !qsaccess::transfer::download::any_open()
+            && !qsaccess::transfer::upload::any_open()
         {
             break;
         }
@@ -217,6 +229,10 @@ fn serve(ui: &Ui, state: &Shared, r: &Request, main_shown: &mut bool) {
     }
     if let Some(p) = &r.record {
         state.borrow_mut().record_next = Some(p.clone());
+    }
+    if let Some((system, reply)) = &r.session_token {
+        qsaccess::transfer::cli::answer(state, system, reply);
+        return;
     }
     let parent = ui.window.shown().then_some(&ui.window);
     for p in &r.open {

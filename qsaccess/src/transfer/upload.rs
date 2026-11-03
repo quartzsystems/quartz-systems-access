@@ -68,6 +68,8 @@ pub enum Act {
     MapByPosition,
     MappingSelected,
     SetMapping,
+    OpenRequest,
+    SaveRequest,
     Run,
     Close,
 }
@@ -267,6 +269,11 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
         p = Some((once, every, batches, without, resume, dates, point, bits));
     });
     let (once, every, batches, without, resume, dates, point, bits) = p.expect("built");
+    let mut open_request = controls::button(m, H - m - bh, bw + 34, bh, "Open Request...");
+    open_request.emit_to(tx, Act::OpenRequest);
+    let mut save_request =
+        controls::button(m + bw + 40, H - m - bh, bw + 34, bh, "Save Request...");
+    save_request.emit_to(tx, Act::SaveRequest);
     let status = StatusLine::new(m, H - m - bh - 26, W - 2 * m, 22);
     let mut run = controls::default_button(W - m - 2 * bw - 6, H - m - bh, bw, bh, "Run");
     run.emit_to(tx, Act::Run);
@@ -315,6 +322,7 @@ pub struct UploadWindow {
     mapping: RefCell<Vec<Map>>,
     sys: System,
     h: Option<Handle>,
+    state: Option<Shared>,
 }
 
 impl UploadWindow {
@@ -331,6 +339,7 @@ impl UploadWindow {
             mapping: RefCell::new(u.mapping.clone()),
             sys: system.clone(),
             h: None,
+            state: None,
         };
         win.fill(u);
         win.show_preview();
@@ -730,6 +739,12 @@ impl UploadWindow {
                 self.show_mapping();
                 self.w.mapping.clone().select(Some(i));
             }
+            Act::OpenRequest => {
+                if let Some(st) = &self.state {
+                    super::choose_request(st, self.parent());
+                }
+            }
+            Act::SaveRequest => self.save_request(),
             Act::Run => self.run(),
             Act::Close => self.w.window.clone().hide(),
         }
@@ -946,6 +961,7 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str, preset
     let u = preset.cloned().unwrap_or_default();
     let mut win = UploadWindow::build(&sys, &u, &[], Sheet::default());
     win.h = Some(h);
+    win.state = Some(state.clone());
     let win = Rc::new(win);
     if !u.schema.is_empty() {
         win.get_columns();
@@ -983,4 +999,27 @@ fn tick() {
             TICKING.with(|t| t.set(false));
         }
     });
+}
+
+impl UploadWindow {
+    /// Save Request: the request the controls make, to a `.qdx` file.
+    fn save_request(&self) {
+        let r = match self.request() {
+            Ok(x) => qsa_transfer::request::Request::Upload {
+                system: self.sys.name.clone(),
+                upload: x,
+            },
+            Err(t) => return self.report(&t, Status::Error),
+        };
+        match super::save_request(&r) {
+            Some(Ok(m)) => self.report(&m.to_string(), Status::Neutral),
+            Some(Err(t)) => self.report(&t, Status::Error),
+            None => {}
+        }
+    }
+}
+
+/// Whether any of these windows is open.
+pub fn any_open() -> bool {
+    WINDOWS.with(|v| v.borrow().iter().any(|w| w.w.window.shown()))
 }

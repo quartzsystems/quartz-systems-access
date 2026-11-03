@@ -13,6 +13,7 @@
 //!   `QAD7032`).
 //! - Before QAP version 4 the windows do not open: `QAD5001`.
 
+pub mod cli;
 pub mod download;
 pub mod upload;
 
@@ -338,6 +339,75 @@ pub fn kind_name(k: qap_client::proto::ops::sql::TableKind) -> &'static str {
         TableKind::Alias => "Alias",
         TableKind::PhysicalFile => "Physical file",
         TableKind::LogicalFile => "Logical file",
+    }
+}
+
+/// The file pattern of request files.
+pub const REQUEST_PATTERN: &str = "Transfer requests (*.qdx)\tAll Files (*)";
+
+/// Opens the request at `path` (a double-click, File > Open, a window's
+/// Open Request): the window for its direction, filled in, ready to run.
+pub fn open_request(state: &Shared, path: &std::path::Path, parent: Option<&dyn WindowExt>) {
+    match qsa_transfer::request::load(path) {
+        Ok(r) => {
+            if state.borrow().systems.get(r.system()).is_none() {
+                let m = qsa_msg::message(id::SYSTEM_NOT_CONFIGURED, &[r.system()]);
+                crate::log!("{m}");
+                msgdetails::show_message(parent, &m);
+                return;
+            }
+            crate::log!("opening request {}", path.display());
+            match r {
+                qsa_transfer::request::Request::Download {
+                    system,
+                    download: d,
+                } => {
+                    download::open(parent, state, &system, Some(&d));
+                }
+                qsa_transfer::request::Request::Upload { system, upload: u } => {
+                    upload::open(parent, state, &system, Some(&u));
+                }
+            }
+        }
+        Err(e) => {
+            let m = qsa_msg::message(
+                id::SESSION_FILE_UNREADABLE,
+                &[&path.display().to_string(), &e.to_string()],
+            );
+            crate::log!("{m}");
+            msgdetails::show_message(parent, &m);
+        }
+    }
+}
+
+/// Save Request: asks where, writes `r` there; `QAD7040` when saved.
+pub fn save_request(r: &qsa_transfer::request::Request) -> Option<Result<Message, String>> {
+    let stem = r.file().file_stem().map_or_else(
+        || "transfer".to_owned(),
+        |s| s.to_string_lossy().into_owned(),
+    );
+    let mut p = crate::files::choose_save(
+        "Save Transfer Request",
+        REQUEST_PATTERN,
+        &format!("{stem}.qdx"),
+    )?;
+    if p.extension().is_none() {
+        p.set_extension(qsa_transfer::request::EXTENSION);
+    }
+    Some(match qsa_transfer::request::save(r, &p) {
+        Ok(()) => {
+            let m = qsa_msg::message(id::REQUEST_SAVED, &[&p.display().to_string()]);
+            crate::log!("{m}");
+            Ok(m)
+        }
+        Err(e) => Err(format!("{} cannot be written: {e}", p.display())),
+    })
+}
+
+/// Open Request: asks for a request file and opens it.
+pub fn choose_request(state: &Shared, parent: Option<&dyn WindowExt>) {
+    if let Some(p) = crate::files::choose_open("Open Transfer Request", REQUEST_PATTERN) {
+        open_request(state, &p, parent);
     }
 }
 
