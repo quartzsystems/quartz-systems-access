@@ -21,6 +21,17 @@
 //!   `QAD5013`); not authorized shows the system's escape message.
 //! - Against a system whose QAP version has no `Command` service, the window
 //!   opens with everything but Close disabled and `QAD5001` saying why.
+//! - From QAP version 4 each window has a connection of its own, attached
+//!   to the session ([`qap::attach`]): commands run and are checked in its
+//!   own job, so a long command never waits behind, or holds up, another
+//!   window. The title and the job line name that job, and the status line
+//!   says so (`QAD7001`); a session with its 16 connections refuses another
+//!   (`QAD7003`). Prompt reads command definitions on the session's shared
+//!   connection. Closing the window closes the connection and never signs
+//!   off. A command whose connection is lost is not run again (`QAD7010`);
+//!   when the session ends (`SessionEnded`), the window shows the system's
+//!   message and offers to sign on again. Before version 4, commands run on
+//!   the shared connection, as they did (`QAD7002`).
 
 use fltk::app;
 use fltk::enums::{Align, Event, Key};
@@ -30,7 +41,7 @@ use fltk::prelude::*;
 use fltk::window::Window;
 use qap_client::proto::types::JobId;
 use qap_client::proto::{Op, ServerMessage};
-use qap_client::{CommandOutcome, Error, Pending, Status as QapStatus};
+use qap_client::{Attached, CheckOutcome, CommandOutcome, Error, Pending, Status as QapStatus};
 use qsa_config::settings::redact_command;
 use qsa_msg::{Message, id};
 use qsa_ui::chan::{self, Emit};
@@ -323,22 +334,37 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
     let Some(sys) = state.borrow().systems.get(system).cloned() else {
         return;
     };
-    let Some(h) = qap::session(parent, state, &sys.name) else {
+    let Some(mut h) = qap::session(parent, state, &sys.name) else {
         return;
     };
+    let has = lock(&h).version().unwrap_or(1);
+    let can = |h: &Handle, op: Op| lock(h).supports(op).is_ok();
+    // From version 4, a connection of the window's own.
+    let mut own: Option<Attached> = None;
+    if can(&h, Op::RunCommand) && can(&h, Op::Attach) {
+        own = Some(match qap::attach(parent, &h, &sys, "Run Command") {
+            Some(a) => a,
+            None => return,
+        });
+    }
     let (mut d, rx) = build_with(&sys.name);
     center_on(&mut d.window, parent);
     show_placed(&mut d.window);
     let _ = d.command.take_focus();
 
-    let has = lock(&h).version().unwrap_or(1);
-    let can = |op: Op| lock(&h).supports(op).is_ok();
-    if !can(Op::RunCommand) {
+    if !can(&h, Op::RunCommand) {
         let m = qap::version_needed("Run Command", &sys.name, Op::RunCommand, has);
         crate::log!("{m}");
         d.status.set(&m.to_string(), Status::Error);
         d.disable();
+    } else if let Some(a) = &own {
+        show_job(&mut d, &sys.name, a);
+    } else {
+        let m = qsa_msg::message(id::ATTACH_NEEDS_VERSION_4, &["Run Command"]);
+        crate::log!("{m}");
+        d.status.set(&m.to_string(), Status::Neutral);
     }
+    let mut ended = false;
 
     let mut lines: Vec<Line> = Vec::new();
     let mut running: Option<Running> = None;
@@ -350,8 +376,33 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
             && let Some(done) = r.pending.try_wait()
         {
             let r = running.take().expect("checked");
-            finish(&mut d, &mut lines, &sys.name, &r.command, done);
+            finish(&mut d, &mut lines, &sys, own.is_some(), &r.command, done);
             d.running(false);
+        }
+        // The session ended under the window's own connection.
+        if !ended && let Some(why) = own.as_mut().and_then(|a| a.poll().cloned()) {
+            ended = true;
+            if let Some(r) = running.take() {
+                finish(
+                    &mut d,
+                    &mut lines,
+                    &sys,
+                    true,
+                    &r.command,
+                    Err(Error::Closed(qap_client::Closed::Quietly)),
+                );
+            }
+            d.running(false);
+            if session_ended(&mut d, state, &sys, &why)
+                && let Some(nh) = qap::session(Some(&d.window), state, &sys.name)
+                && let Some(a) = qap::attach(Some(&d.window), &nh, &sys, "Run Command")
+            {
+                h = nh;
+                show_job(&mut d, &sys.name, &a);
+                own = Some(a);
+                ended = false;
+                d.running(false);
+            }
         }
         match rx.recv() {
             Some(Request::Close) => {
@@ -369,7 +420,7 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
                 d.command
                     .set_value(history.get(pos).map_or("", String::as_str));
             }
-            Some(Request::Run) if running.is_none() && can(Op::RunCommand) => {
+            Some(Request::Run) if running.is_none() && !ended && can(&h, Op::RunCommand) => {
                 let command = d.command.value().trim().to_owned();
                 if command.is_empty() {
                     d.status.set("Type a command to run.", Status::Error);
@@ -381,7 +432,11 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
                 lines.push(Line::Ran(command.clone()));
                 d.list.set_rows(rows(&lines));
                 crate::log!("Run Command on {}: {}", sys.name, redact_command(&command));
-                match qap::busy(|| lock(&h).run_command(&command)) {
+                let sent = match own.as_mut() {
+                    Some(a) => qap::busy(|| a.run_command(&command)),
+                    None => qap::busy(|| lock(&h).run_command(&command)),
+                };
+                match sent {
                     Ok(pending) => {
                         d.status.set(
                             &format!("Running {}...", command_name(&command)),
@@ -390,7 +445,7 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
                         d.running(true);
                         running = Some(Running { command, pending });
                     }
-                    Err(e) => failed(&mut d, &sys, &e),
+                    Err(e) => failed(&mut d, &sys, own.is_some(), &e),
                 }
             }
             Some(Request::Cancel) => {
@@ -402,8 +457,8 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
                     );
                 }
             }
-            Some(Request::Check) if running.is_none() => {
-                if !can(Op::CheckCommand) {
+            Some(Request::Check) if running.is_none() && !ended => {
+                if !can(&h, Op::CheckCommand) {
                     let m = qap::version_needed("Check", &sys.name, Op::CheckCommand, has);
                     d.status.set(&m.to_string(), Status::Error);
                     continue;
@@ -413,10 +468,18 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
                     d.status.set("Type a command to check.", Status::Error);
                     continue;
                 }
-                check(&mut d, &h, &mut lines, &sys, &command);
+                d.status.set(
+                    &format!("Checking {}...", command_name(&command)),
+                    Status::Neutral,
+                );
+                let r = match own.as_mut() {
+                    Some(a) => qap::busy(|| a.check_command(&command)),
+                    None => qap::busy(|| lock(&h).check_command(&command)),
+                };
+                checked(&mut d, &mut lines, &sys, own.is_some(), &command, r);
             }
             Some(Request::Prompt) if running.is_none() => {
-                if !can(Op::DescribeCommand) {
+                if !can(&h, Op::DescribeCommand) {
                     let m = qap::version_needed("Prompt", &sys.name, Op::DescribeCommand, has);
                     d.status.set(&m.to_string(), Status::Error);
                     continue;
@@ -436,7 +499,8 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
             Some(Request::Clear) if running.is_none() => {
                 lines.clear();
                 d.list.set_rows(rows(&lines));
-                d.job.set_label(&job_text(None));
+                d.job
+                    .set_label(&job_text(own.as_ref().map(|a| &a.job().job)));
                 d.status.set("", Status::Neutral);
             }
             Some(Request::Details) => details(&d, &lines),
@@ -455,21 +519,50 @@ fn remember(state: &Shared, system: &str, command: &str) {
     }
 }
 
-/// A run's reply, into the results and the status line.
+/// The window's own connection, in its title, job line and status line
+/// (`QAD7001`).
+fn show_job(d: &mut RunCommandWindow, system: &str, a: &Attached) {
+    let job = &a.job().job;
+    d.window
+        .set_label(&qap::window_title("Run Command", system, Some(job)));
+    d.job.set_label(&job_text(Some(job)));
+    d.job.redraw();
+    let m = qap::attached_message(system, "Run Command", job);
+    d.status.set(&m.to_string(), Status::Neutral);
+}
+
+/// The session ended under the window's own connection: the system's
+/// message, Run and Check off, and the offer to sign on again. True when
+/// the user chose to.
+fn session_ended(
+    d: &mut RunCommandWindow,
+    state: &Shared,
+    sys: &qsa_config::System,
+    why: &qap_client::Ended,
+) -> bool {
+    d.run.set_enabled(false);
+    d.check.set_enabled(false);
+    let x = qap::ended(sys, why);
+    crate::log!("{}", x.line());
+    d.status.set(&x.line(), Status::Error);
+    // The session is gone for every tool: forget its client.
+    state.borrow_mut().qap.forget_ended(&sys.name);
+    qap::offer_sign_on(Some(&d.window), &x)
+}
+
+/// A run's reply, into the results and the status line. `own`: it ran on
+/// the window's own connection.
 fn finish(
     d: &mut RunCommandWindow,
     lines: &mut Vec<Line>,
-    system: &str,
+    sys: &qsa_config::System,
+    own: bool,
     command: &str,
     done: Result<qap_client::Reply, Error>,
 ) {
     let o = match done.and_then(CommandOutcome::from_reply) {
         Ok(o) => o,
-        Err(e) => {
-            let sys = qsa_config::System::new(system);
-            failed(d, &sys, &e);
-            return;
-        }
+        Err(e) => return failed(d, sys, own, &e),
     };
     if o.job.is_some() {
         d.job.set_label(&job_text(o.job.as_ref()));
@@ -478,33 +571,40 @@ fn finish(
     lines.extend(o.messages.iter().cloned().map(Line::Message));
     d.list.set_rows(rows(lines));
     let (text, status) = outcome_status(command, &o);
-    crate::log!("Run Command on {system}: {}: {text}", command_name(command));
+    crate::log!(
+        "Run Command on {}: {}: {text}",
+        sys.name,
+        command_name(command)
+    );
     d.status.set(&text, status);
 }
 
-/// A request that failed before or instead of an answer.
-fn failed(d: &mut RunCommandWindow, sys: &qsa_config::System, e: &Error) {
-    let x = qap::explain(sys, e);
-    crate::log!("{}", x.line());
-    d.status.set(&x.line(), Status::Error);
+/// A request that failed before or instead of an answer. On the window's
+/// own connection, a connection lost under it is `QAD7010`: nothing is run
+/// again.
+fn failed(d: &mut RunCommandWindow, sys: &qsa_config::System, own: bool, e: &Error) {
+    let line = match e {
+        Error::Closed(c) if own && c.resumable() => {
+            qsa_msg::message(id::STATEMENT_LOST, &[&sys.name]).to_string()
+        }
+        e => qap::explain(sys, e).line(),
+    };
+    crate::log!("{line}");
+    d.status.set(&line, Status::Error);
 }
 
-/// Check: the command's syntax, nothing run.
-fn check(
+/// Check's answer: the command's syntax, nothing run.
+fn checked(
     d: &mut RunCommandWindow,
-    h: &Handle,
     lines: &mut Vec<Line>,
     sys: &qsa_config::System,
+    own: bool,
     command: &str,
+    r: Result<CheckOutcome, Error>,
 ) {
-    d.status.set(
-        &format!("Checking {}...", command_name(command)),
-        Status::Neutral,
-    );
-    let r = qap::busy(|| lock(h).check_command(command));
     let o = match r {
         Ok(o) => o,
-        Err(e) => return failed(d, sys, &e),
+        Err(e) => return failed(d, sys, own, &e),
     };
     lines.push(Line::Checked(command.to_owned()));
     lines.extend(o.messages.iter().cloned().map(Line::Message));

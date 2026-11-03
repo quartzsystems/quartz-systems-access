@@ -26,8 +26,9 @@ use fltk::app;
 use fltk::prelude::*;
 use qap_client::proto::ops::command::CommandDefinition;
 use qap_client::proto::ops::signon::PasswordStatus;
+use qap_client::proto::types::JobId;
 use qap_client::proto::{Op, ServerMessage};
-use qap_client::{Client, Closed, Error, Notice, Status, Target};
+use qap_client::{Attached, Client, Closed, Ended, Error, Notice, Status, Target};
 use qsa_config::{AddressLookup, System};
 use qsa_msg::{Message, id};
 use qsa_net::{ConnectError, TlsError};
@@ -190,6 +191,15 @@ impl Registry {
         self.map.remove(&key(system)).map(|e| e.client)
     }
 
+    /// Forgets `system`'s client once a window's own connection saw the
+    /// session end: it is over for every tool, so the next one signs on,
+    /// whether or not the shared connection has heard yet.
+    pub fn forget_ended(&mut self, system: &str) {
+        if self.map.remove(&key(system)).is_some() {
+            crate::log!("QAP session on {system} ended; the next tool signs on again");
+        }
+    }
+
     /// The systems with a client, by key.
     pub fn keys(&self) -> Vec<String> {
         self.map.keys().cloned().collect()
@@ -349,6 +359,75 @@ pub fn session(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) -> 
     state.borrow_mut().qap.signed_on_client(system)
 }
 
+/// A job as the system names it: `number/user/name`.
+pub fn job_name(job: &JobId) -> String {
+    format!("{}/{}/{}", job.number, job.user, job.name)
+}
+
+/// A window's title: `function - system (job)`.
+pub fn window_title(function: &str, system: &str, job: Option<&JobId>) -> String {
+    match job {
+        Some(j) => format!("{function} - {system} ({})", job_name(j)),
+        None => format!("{function} - {system}"),
+    }
+}
+
+/// `QAD7001`: `function` has its own connection to `system`, in `job`.
+pub fn attached_message(system: &str, function: &str, job: &JobId) -> Message {
+    qsa_msg::message(id::ATTACHED, &[system, function, &job_name(job)])
+}
+
+/// Attaches a connection of its own to `h`'s session for `function` on
+/// `system` (version 4), off the GUI thread. A failure is shown and logged:
+/// the session's 16 connections in use (`Busy`, `TCP1A59`) as `QAD7003`,
+/// anything else as [`explain`] says. `QAD7001` is logged on success.
+pub fn attach(
+    parent: Option<&dyn WindowExt>,
+    h: &Handle,
+    system: &System,
+    function: &str,
+) -> Option<Attached> {
+    match busy(|| lock(h).attach()) {
+        Ok(a) => {
+            crate::log!("{}", attached_message(&system.name, function, &a.job().job));
+            Some(a)
+        }
+        Err(e) => {
+            show(parent, &explain(system, &e));
+            None
+        }
+    }
+}
+
+/// Why the session under a window's own connection is over, as messages:
+/// the system's own (`TCP1A58` another connection signed off, `TCP1A54` an
+/// operator ended a job of the session) as it was sent, with this program's
+/// for the case.
+pub fn ended(system: &System, why: &Ended) -> Explained {
+    let context = match why {
+        Ended::Server(_) => id::QAP_SERVER_ENDING,
+        Ended::Session(Some(m)) if m.id == "TCP1A54" => id::SESSION_ENDED_BY_OPERATOR,
+        Ended::Session(Some(m)) if m.id == "TCP1A58" => id::SIGNED_OFF,
+        _ => id::QAP_SESSION_EXPIRED,
+    };
+    Explained {
+        message: qsa_msg::message(context, &[&system.name]),
+        server: why.message().cloned(),
+    }
+}
+
+/// Shows `x` with Sign On... and Close; true when the user chose to sign
+/// on.
+pub fn offer_sign_on(parent: Option<&dyn WindowExt>, x: &Explained) -> bool {
+    crate::log!("{}", x.message);
+    let buttons = ["Sign On...", "Close"];
+    let choice = match &x.server {
+        Some(sm) => msgdetails::ask_system_message(parent, Some(&x.message), &shown(sm), &buttons),
+        None => msgdetails::ask_message(parent, &x.message, &buttons),
+    };
+    choice == 0
+}
+
 /// What a version-2 or version-3 function is called where the user sees
 /// it, for `QAD5001`.
 pub fn function_name(op: Op) -> &'static str {
@@ -365,6 +444,15 @@ pub fn function_name(op: Op) -> &'static str {
         | Op::DeleteSpooledFile
         | Op::MoveSpooledFile
         | Op::ListOutputQueues => "Printer Output",
+        Op::SetOptions
+        | Op::Prepare
+        | Op::Execute
+        | Op::Fetch
+        | Op::CloseCursor
+        | Op::Release
+        | Op::Commit
+        | Op::Rollback => "Run SQL",
+        Op::ListSchemas | Op::ListTables | Op::ListColumns => "Schemas",
         _ => "This function",
     }
 }
@@ -443,6 +531,7 @@ pub fn explain(system: &System, e: &Error) -> Explained {
             status: Status::SessionExpired,
             ..
         } => m(id::QAP_SESSION_EXPIRED, &[sys]),
+        e if no_more_connections(e) => m(id::NO_MORE_CONNECTIONS, &[sys]),
         Error::Status {
             status,
             message: Some(sm),
@@ -469,10 +558,21 @@ pub fn explain(system: &System, e: &Error) -> Explained {
         }
         e => m(id::UNEXPECTED_REPLY, &["QAP", sys, &e.to_string()]),
     };
-    Explained {
-        message,
-        server: e.server_message().cloned(),
-    }
+    // QAD7003 is shown for TCP1A59; the system's line goes to the log.
+    let server = if no_more_connections(e) {
+        if let Some(sm) = e.server_message() {
+            crate::log!("{}: {}", sm.id, sm.text);
+        }
+        None
+    } else {
+        e.server_message().cloned()
+    };
+    Explained { message, server }
+}
+
+/// `Busy` with `TCP1A59`: the session has its 16 connections.
+pub fn no_more_connections(e: &Error) -> bool {
+    e.status() == Some(Status::Busy) && e.server_message().is_some_and(|m| m.id == "TCP1A59")
 }
 
 /// Shows a failure: the system's message alone and as it was sent when there

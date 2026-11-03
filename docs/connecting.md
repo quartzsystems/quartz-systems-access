@@ -129,6 +129,19 @@ and only Close works.
   cancel's own message (`CPF1907`) last, with the job.
 - A command runs for as long as it takes: no timeout cancels it, and other
   tools on the same system go on meanwhile.
+- **Its own connection** (QAP version 4). Each Run Command window has a
+  connection of its own to the system, attached to the session without a
+  new sign-on: commands run and are checked in its own job, with its own
+  library list and `QTEMP`, so a long command never waits behind, or holds
+  up, another window. The title and the job line name the job, and the
+  status line says so when the window opens (`QAD7001`). A session has at
+  most 16 connections; one more is refused with `QAD7003`. Closing the
+  window closes its connection and ends its job; it never signs off. A
+  command whose connection is lost is not run again (`QAD7010`). When the
+  session ends (a sign-off, or an operator ending one of its jobs), the
+  window shows the system's message and offers **Sign On...**. On a system
+  before version 4, commands run on the session's shared connection, as
+  before (`QAD7002`).
 - **Check** checks the command without running it and lists the check's
   messages; `QAD5020` when it has errors.
 - **Prompt** (F4) builds the command from its definition, below.

@@ -111,3 +111,40 @@ impl CheckOutcome {
         self.status == Status::Ok
     }
 }
+
+impl crate::Attached {
+    /// Starts `RunCommand` in this connection's own job. Wait on the
+    /// [`crate::Pending`] and read it with [`CommandOutcome::from_reply`];
+    /// never sent again after a drop.
+    pub fn run_command(&mut self, command: &str) -> Result<crate::Pending, Error> {
+        self.request(
+            qap_proto::Op::RunCommand,
+            &qap_proto::ops::command::CommandText {
+                command: command.to_owned(),
+            },
+        )
+    }
+
+    /// `CheckCommand` in this connection's own job: the command's syntax
+    /// checked, nothing run. Sent once more on a new connection after a
+    /// drop, as it changes nothing.
+    pub fn check_command(&mut self, command: &str) -> Result<CheckOutcome, Error> {
+        let timeout = self.target().options.reply_timeout;
+        let body = qap_proto::ops::command::CommandText {
+            command: command.to_owned(),
+        };
+        let op = qap_proto::Op::CheckCommand;
+        let mut reply = self.request(op, &body)?.wait(timeout);
+        if let Err(e) = &reply
+            && crate::conn::lost_and_retryable(e, op)
+            && self.ended().is_none()
+        {
+            qsa_net::info!(
+                "qap: {}: {op:?} lost with its connection ({e}); sending it once more",
+                self.target().host
+            );
+            reply = self.request(op, &body)?.wait(timeout);
+        }
+        CheckOutcome::from_reply(reply?)
+    }
+}
