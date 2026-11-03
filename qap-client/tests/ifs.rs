@@ -739,3 +739,41 @@ fn not_before_version_5() {
         e => panic!("{e:?}"),
     }
 }
+
+#[test]
+fn a_session_at_version_4_sends_nothing_of_ifs_and_sql_still_works() {
+    let s = start(cfg());
+    let mut t = s.target();
+    t.options.max_version = 4;
+    let mut c = Client::new(t);
+    c.sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    assert_eq!(c.version(), Some(4));
+    let frames = c.connection().unwrap().frames_received();
+    for op in [
+        Op::ListDirectory,
+        Op::GetInfo,
+        Op::ReadFile,
+        Op::WriteFile,
+        Op::CreateDirectory,
+        Op::Delete,
+        Op::Rename,
+        Op::Copy,
+    ] {
+        match c.supports(op).unwrap_err() {
+            Error::Unsupported { needs, has, .. } => assert_eq!((needs, has), (5, 4)),
+            e => panic!("{e:?}"),
+        }
+    }
+    assert!(matches!(
+        c.list_directory("/home/BOB", "*", 0, 0),
+        Err(Error::Unsupported { .. })
+    ));
+    assert_eq!(
+        c.connection().unwrap().frames_received(),
+        frames,
+        "nothing was sent"
+    );
+    let mut q = c.sql_connection().unwrap();
+    let p = q.prepare("SELECT * FROM HLINV.ASSETS").unwrap();
+    assert!(!p.columns.is_empty());
+}

@@ -184,6 +184,17 @@ fn a_version_2_system_has_no_sql_and_run_command_keeps_the_shared_connection() {
     for op in [Op::Prepare, Op::ListSchemas, Op::Attach, Op::JobInfo] {
         assert!(lock(&h).supports(op).is_err(), "{op:?}");
     }
+    // Nor the Integrated File System (version 5).
+    let m = qsaccess::ifs::blocked("127.0.0.1", Some(2)).unwrap();
+    assert_eq!(
+        m.text,
+        "Integrated File System needs QAP version 5; system 127.0.0.1 has version 2."
+    );
+    let e = qap_client::Files::get_info(&mut *lock(&h), "/home/BOB").unwrap_err();
+    assert_eq!(
+        qap::explain(&sys, &e).message.text,
+        "Integrated File System needs QAP version 5; system 127.0.0.1 has version 2."
+    );
     let e = lock(&h).sql_connection().unwrap_err();
     assert_eq!(qap::explain(&sys, &e).message.id, id::QAP_VERSION_NEEDED);
     assert!(lock(&h).attach().is_err());
@@ -194,6 +205,14 @@ fn a_version_2_system_has_no_sql_and_run_command_keeps_the_shared_connection() {
         closed.lock().unwrap().is_empty(),
         "one connection, nothing refused"
     );
+}
+
+#[test]
+fn a_version_4_system_has_no_integrated_file_system() {
+    let m = qsaccess::ifs::blocked("127.0.0.1", Some(4)).unwrap();
+    assert_eq!(m.id, id::QAP_VERSION_NEEDED);
+    assert!(qsaccess::ifs::blocked("127.0.0.1", Some(5)).is_none());
+    assert!(qsaccess::ifs::blocked("127.0.0.1", None).is_none());
 }
 
 #[test]

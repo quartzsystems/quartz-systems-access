@@ -72,11 +72,19 @@ pub enum Glyph {
     Keyboard,
     /// A padlock: the connection is encrypted.
     Lock,
+    /// A sheet with a folded corner: a file.
+    Document,
+    /// A green arrow up: the folder above.
+    Up,
+    /// A blue arrow down onto a tray: copy to this computer.
+    Download,
+    /// A blue arrow up from a tray: copy to the system.
+    Upload,
 }
 
 impl Glyph {
     /// Every glyph, in a stable order.
-    pub const ALL: [Glyph; 15] = [
+    pub const ALL: [Glyph; 19] = [
         Glyph::Terminal,
         Glyph::Printer,
         Glyph::Table,
@@ -92,6 +100,10 @@ impl Glyph {
         Glyph::Keypad,
         Glyph::Keyboard,
         Glyph::Lock,
+        Glyph::Document,
+        Glyph::Up,
+        Glyph::Download,
+        Glyph::Upload,
     ];
 
     /// Short lower-case name, used in file names and tests.
@@ -112,6 +124,10 @@ impl Glyph {
             Glyph::Keypad => "keypad",
             Glyph::Keyboard => "keyboard",
             Glyph::Lock => "lock",
+            Glyph::Document => "document",
+            Glyph::Up => "up",
+            Glyph::Download => "download",
+            Glyph::Upload => "upload",
         }
     }
 }
@@ -464,6 +480,97 @@ fn draw(glyph: Glyph, c: &mut Canvas) {
             }
             c.dot(9.75, 12.5, 0.85, LED_BLUE);
             c.stroke(&[(5.0, 12.5), (7.75, 12.5)], 0.5, GRAPHITE_EDGE);
+        }
+        Glyph::Document => {
+            // A sheet, its top right corner folded down, and lines of text.
+            c.polygon(
+                &[
+                    (2.25, 0.75),
+                    (10.0, 0.75),
+                    (13.75, 4.5),
+                    (13.75, 15.25),
+                    (2.25, 15.25),
+                ],
+                Flat(PAPER_EDGE),
+            );
+            c.polygon(
+                &[
+                    (2.25 + t, 0.75 + t),
+                    (10.0 - t / 2.0, 0.75 + t),
+                    (13.75 - t, 4.5 + t / 2.0),
+                    (13.75 - t, 15.25 - t),
+                    (2.25 + t, 15.25 - t),
+                ],
+                Shade(PAPER, PAPER_SHADE),
+            );
+            c.polygon(&[(9.5, 0.75), (13.75, 5.0), (9.5, 5.0)], Flat(PAPER_EDGE));
+            c.polygon(
+                &[
+                    (9.5 + t, 1.75 + t),
+                    (12.75 - t / 2.0, 5.0 - t),
+                    (9.5 + t, 5.0 - t),
+                ],
+                Flat(PAPER_SHADE),
+            );
+            for y in [7.5, 9.5, 11.5, 13.25] {
+                c.stroke(&[(4.25, y), (11.75, y)], 0.6, RULE);
+            }
+        }
+        Glyph::Up => {
+            // An arrow up: head and shaft.
+            let head = [
+                (8.0, 1.25),
+                (14.25, 7.75),
+                (10.5, 7.75),
+                (10.5, 14.75),
+                (5.5, 14.75),
+                (5.5, 7.75),
+                (1.75, 7.75),
+            ];
+            c.polygon(&head, Flat(GREEN_EDGE));
+            let s = t;
+            c.polygon(
+                &[
+                    (8.0, 1.25 + 1.4 * s),
+                    (14.25 - 2.3 * s, 7.75 - s),
+                    (10.5 - s, 7.75 - s),
+                    (10.5 - s, 14.75 - s),
+                    (5.5 + s, 14.75 - s),
+                    (5.5 + s, 7.75 - s),
+                    (1.75 + 2.3 * s, 7.75 - s),
+                ],
+                Shade(LED_GREEN, GREEN),
+            );
+        }
+        Glyph::Download | Glyph::Upload => {
+            // A tray, and a blue arrow into it (down) or out of it (up).
+            c.boxed(
+                [0.75, 11.0, 14.5, 4.25],
+                0.5,
+                t,
+                STEEL_EDGE,
+                Shade(STEEL_LIGHT, STEEL),
+            );
+            let down = glyph == Glyph::Download;
+            let (tip, base, neck) = if down {
+                (11.0, 0.75, 6.0)
+            } else {
+                (0.75, 10.25, 5.75)
+            };
+            let arrow = |inset: f32| -> Vec<(f32, f32)> {
+                let dir = if down { 1.0 } else { -1.0 };
+                vec![
+                    (8.0, tip - dir * 1.4 * inset),
+                    (13.5 - 2.3 * inset, neck + dir * inset * 0.0),
+                    (10.25 - inset, neck),
+                    (10.25 - inset, base + dir * inset),
+                    (5.75 + inset, base + dir * inset),
+                    (5.75 + inset, neck),
+                    (2.5 + 2.3 * inset, neck),
+                ]
+            };
+            c.polygon(&arrow(0.0), Flat(BLUE_EDGE));
+            c.polygon(&arrow(t), Shade(BLUE_LIGHT, BLUE));
         }
         Glyph::Check => {
             c.stroke(&[(2.5, 8.5), (6.25, 12.25), (13.5, 3.75)], 3.0, GREEN_EDGE);

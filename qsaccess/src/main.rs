@@ -188,6 +188,7 @@ fn main() {
             && !qsaccess::macros::editor::any_open()
             && !qsaccess::runsql::any_open()
             && !qsaccess::schemas::any_open()
+            && !qsaccess::ifs::any_open()
             && !qsaccess::transfer::download::any_open()
             && !qsaccess::transfer::upload::any_open()
         {

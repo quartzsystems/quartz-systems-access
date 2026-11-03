@@ -1,6 +1,6 @@
 [package]
 name = "qsa-transfer"
-description = "Data Transfer for QS/400 Access for Desktop: files to and from the system's tables, and .qdx requests"
+description = "Data Transfer for QS/400 Access for Desktop: files to and from the system's tables and its integrated file system, and .qdx requests"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -12,10 +12,14 @@
 //!   caller sorts and shows which way with [`ListTable::set_sort`].
 //! - [`ListTable::set_icons`] puts a 16-pixel glyph at the start of each
 //!   row.
+//! - [`ListTable::on_drop`] takes files dropped on the list from the
+//!   desktop's file manager; [`ListTable::near_end`] says when the rows in
+//!   view reach the last ones, for a list that loads more as it scrolls.
 
 use std::cell::RefCell;
 use std::collections::BTreeSet;
 use std::ffi::{CStr, CString};
+use std::path::PathBuf;
 use std::rc::Rc;
 
 use fltk::app;
@@ -77,6 +81,7 @@ struct Model {
     on_activate: Option<Callback>,
     on_context: Option<Callback>,
     on_header: Option<Box<dyn FnMut(usize)>>,
+    on_drop: Option<Box<dyn FnMut(Vec<PathBuf>)>>,
 }
 
 impl Model {
@@ -147,6 +152,7 @@ impl ListTable {
             on_activate: None,
             on_context: None,
             on_header: None,
+            on_drop: None,
         }));
 
         let m = model.clone();
@@ -314,6 +320,24 @@ impl ListTable {
             }
             Event::Focus | Event::Unfocus => {
                 t.redraw();
+                true
+            }
+            // Files from the desktop: taken when someone wants them.
+            Event::DndEnter | Event::DndDrag | Event::DndLeave | Event::DndRelease => {
+                m.borrow().on_drop.is_some()
+            }
+            Event::Paste if m.borrow().on_drop.is_some() => {
+                let paths = dropped_paths(&app::event_text());
+                let cb = m.borrow_mut().on_drop.take();
+                if let Some(mut cb) = cb {
+                    if !paths.is_empty() {
+                        cb(paths);
+                    }
+                    let mut mm = m.borrow_mut();
+                    if mm.on_drop.is_none() {
+                        mm.on_drop = Some(cb);
+                    }
+                }
                 true
             }
             Event::Move => {
@@ -484,10 +508,70 @@ impl ListTable {
         self.model.borrow_mut().on_context = Some(Box::new(cb));
     }
 
+    /// Calls `cb` with the paths of files dropped on the list from the
+    /// desktop's file manager.
+    pub fn on_drop(&mut self, cb: impl FnMut(Vec<PathBuf>) + 'static) {
+        self.model.borrow_mut().on_drop = Some(Box::new(cb));
+    }
+
+    /// Whether the rows in view reach within `margin` rows of the last one
+    /// (an empty list never does).
+    pub fn near_end(&self, margin: usize) -> bool {
+        let n = self.len();
+        if n == 0 {
+            return false;
+        }
+        let top = usize::try_from(self.table.top_row()).unwrap_or(0);
+        let visible =
+            usize::try_from((self.table.h() - Self::HEADER_H) / theme::ROW_H).unwrap_or(0);
+        top + visible + margin >= n
+    }
+
     /// The underlying table.
     pub fn table(&self) -> &TableRow {
         &self.table
     }
+}
+
+/// The local paths in what a file drop pastes: one per line, as paths
+/// (Windows) or `file://` URIs (Linux file managers), percent-escapes
+/// undone. Anything else is left out.
+pub fn dropped_paths(text: &str) -> Vec<PathBuf> {
+    text.lines()
+        .map(|l| l.trim_end_matches('\r').trim())
+        .filter(|l| !l.is_empty())
+        .filter_map(|l| match l.strip_prefix("file://") {
+            // file:///home/x or file://localhost/home/x.
+            Some(rest) => {
+                let path = rest.strip_prefix("localhost").unwrap_or(rest);
+                path.starts_with('/').then(|| PathBuf::from(unescape(path)))
+            }
+            None if l.contains("://") => None,
+            None => Some(PathBuf::from(l)),
+        })
+        .collect()
+}
+
+/// `%XX` escapes undone; bytes that are not UTF-8 made lossy.
+fn unescape(s: &str) -> String {
+    let b = s.as_bytes();
+    let mut out = Vec::with_capacity(b.len());
+    let mut i = 0;
+    while i < b.len() {
+        if b[i] == b'%'
+            && i + 2 < b.len()
+            && let Some(v) = std::str::from_utf8(&b[i + 1..i + 3])
+                .ok()
+                .and_then(|h| u8::from_str_radix(h, 16).ok())
+        {
+            out.push(v);
+            i += 3;
+        } else {
+            out.push(b[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 fn set_selection(t: &mut TableRow, m: &Rc<RefCell<Model>>, row: Option<usize>) {
@@ -587,4 +671,31 @@ fn intern(text: &str) -> &'static CStr {
     let t: &'static CStr = Box::leak(CString::new(clean).expect("no NUL left").into_boxed_c_str());
     tips.push(t);
     t
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dropped_paths_from_both_desktops() {
+        assert_eq!(
+            dropped_paths("C:\\Users\\a\\b.txt\r\nC:\\c d.txt"),
+            [
+                PathBuf::from("C:\\Users\\a\\b.txt"),
+                PathBuf::from("C:\\c d.txt")
+            ]
+        );
+        assert_eq!(
+            dropped_paths(
+                "file:///home/bob/a%20b.txt\nfile://localhost/tmp/x\nhttp://example.net/y\n"
+            ),
+            [PathBuf::from("/home/bob/a b.txt"), PathBuf::from("/tmp/x")]
+        );
+        assert_eq!(
+            dropped_paths("file:///t/%E2%82%AC%2"),
+            [PathBuf::from("/t/\u{20ac}%2")]
+        );
+        assert!(dropped_paths("").is_empty());
+    }
 }

@@ -13,8 +13,12 @@
 //! - [`writer`]: the files written as rows come.
 //! - [`download`]: a table's or a query's rows to a file, streamed in
 //!   blocks, the file renamed into place only at the end.
+//! - [`files`]: files and folders of the integrated file system (QAP
+//!   version 5): folders counted, deleted and copied on the system an
+//!   entry at a time.
 
 pub mod download;
+pub mod files;
 pub mod format;
 pub mod text;
 pub mod writer;

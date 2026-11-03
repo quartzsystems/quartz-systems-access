@@ -116,6 +116,9 @@ pub struct Ui {
     /// The links of the tasks that need the Sql service (Data Transfer,
     /// Schemas, Run SQL), dimmed for a system whose version has none.
     sql_links: Vec<(Task, Widget)>,
+    /// The Integrated File System link, dimmed for a system whose QAP
+    /// version has no Ifs service.
+    ifs_link: Widget,
 }
 
 impl Ui {
@@ -207,6 +210,15 @@ impl Ui {
                     self.refresh_systems();
                 }
             }
+            Task::IntegratedFileSystem => {
+                if self.state.borrow().systems.is_empty() {
+                    crate::sysconfig::open(self);
+                }
+                if let Some(system) = self.selected_system() {
+                    crate::ifs::open(self.parent(), &self.state, &system);
+                    self.refresh_systems();
+                }
+            }
             _ => self.not_available(),
         }
     }
@@ -275,6 +287,14 @@ impl Ui {
             let text = why.as_ref().map(ToString::to_string).unwrap_or_default();
             TaskPane::set_link_dimmed(&mut link.clone(), why.is_some(), &text);
         }
+        let why = crate::ifs::blocked(system, version);
+        let text = why.as_ref().map(ToString::to_string).unwrap_or_default();
+        TaskPane::set_link_dimmed(&mut self.ifs_link.clone(), why.is_some(), &text);
+    }
+
+    /// Whether the task pane's Integrated File System is dimmed.
+    pub fn ifs_dimmed(&self) -> bool {
+        self.ifs_link.label_color() == qsa_ui::theme::colors::DISABLED_TEXT
     }
 
     /// Whether the task pane's link for `task` (Data Transfer, Schemas or
@@ -593,6 +613,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
     });
     let system = system.expect("system row is built");
     let mut printer_output = None;
+    let mut ifs_link = None;
     let mut sql_links = Vec::new();
     pane.add_rule();
     for (title, tasks) in TASK_GROUPS {
@@ -607,7 +628,10 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
                         sql_links.push((task, link.clone()));
                     }
                     if task == Task::PrinterOutput {
-                        printer_output = Some(link);
+                        printer_output = Some(link.clone());
+                    }
+                    if task == Task::IntegratedFileSystem {
+                        ifs_link = Some(link);
                     }
                 }
             }
@@ -632,6 +656,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
         recent_gen: Rc::new(Cell::new(None)),
         printer_output: printer_output.expect("the General group has Printer Output"),
         sql_links,
+        ifs_link: ifs_link.expect("the General group has Integrated File System"),
     };
     ui.refresh_systems();
     ui.refresh_recent();

@@ -9,6 +9,7 @@ pub mod about;
 pub mod app;
 pub mod chgpwd;
 pub mod files;
+pub mod ifs;
 pub mod ipc;
 pub mod localtime;
 pub mod log;

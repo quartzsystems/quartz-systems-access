@@ -1026,6 +1026,114 @@ fn schemas_views() -> Vec<(String, Window)> {
     ]
 }
 
+/// The Integrated File System window's views: a home folder with links
+/// (one broken, in red), a large folder's first page, a folder the profile
+/// may not read, and the two delete confirmations.
+fn ifs_views() -> Vec<(String, Window)> {
+    use qap_client::proto::ops::ifs::EntryKind::{Directory, File, Symlink};
+    use qsaccess::ifs::model::{Row, Target};
+    use qsaccess::ifs::{Ifs, entry};
+    let sys = System::new("sys1.example.net");
+    let home = "/home/BOB";
+    let row = |name: &str, kind, size, ccsid| Row {
+        path: format!("{home}/{name}"),
+        entry: entry(name, kind, size, ccsid),
+        link: None,
+    };
+    let link = |name: &str, to: Target| Row {
+        link: Some(to),
+        ..row(name, Symlink, 0, 0)
+    };
+    let mut rows = vec![
+        row("many", Directory, 8192, 0),
+        row("text", Directory, 8192, 0),
+        row("tree", Directory, 8192, 0),
+        row("big.bin", File, 200 << 20, 65535),
+        row("checkedout.txt", File, 19, 1208),
+        row("locked.txt", File, 20, 1208),
+        row("notes.txt", File, 4211, 37),
+        link(
+            "link1208",
+            Target::To(
+                "/home/BOB/text/text1208.txt".into(),
+                entry("text1208.txt", File, 80, 1208),
+            ),
+        ),
+        link("broken", Target::Broken("/home/BOB/gone.txt".into())),
+    ];
+    for (i, r) in rows.iter_mut().enumerate() {
+        r.entry.modified += i as i64 * 3_600_000;
+    }
+    let home_view = Ifs::build(&sys, home, home, rows, 9, None);
+    let many: Vec<Row> = (0..500)
+        .map(|i| Row {
+            path: format!("/home/BOB/many/f{i:04}.txt"),
+            entry: entry(&format!("f{i:04}.txt"), File, 10, 1208),
+            link: None,
+        })
+        .collect();
+    let large = Ifs::build(&sys, home, "/home/BOB/many", many, 1200, None);
+    let private = Ifs::build(
+        &sys,
+        home,
+        "/home/ANN/private",
+        Vec::new(),
+        0,
+        Some("CPFA09C: Not authorized to object. Object is /home/ANN/private."),
+    );
+    let broken = Ifs::build(
+        &sys,
+        home,
+        home,
+        vec![
+            link("broken", Target::Broken("/home/BOB/gone.txt".into())),
+            link(
+                "link1208",
+                Target::To(
+                    "/home/BOB/text/text1208.txt".into(),
+                    entry("text1208.txt", File, 80, 1208),
+                ),
+            ),
+        ],
+        2,
+        None,
+    );
+    let files = qsaccess::ifs::delete_files_text(&[
+        row("notes.txt", File, 4211, 37),
+        row("locked.txt", File, 20, 1208),
+        row("big.bin", File, 200 << 20, 65535),
+    ]);
+    let folder = qsaccess::ifs::delete_folders_text(
+        &[
+            row("tree", Directory, 8192, 0),
+            row("notes.txt", File, 4211, 37),
+        ],
+        &[(
+            "/home/BOB/tree".into(),
+            qsa_transfer::files::Counts {
+                files: 7,
+                folders: 4,
+                bytes: 7 * 30,
+            },
+        )],
+    );
+    let confirm = |text: &str| {
+        qsa_ui::MessageBox::new("Confirm Delete", text)
+            .glyph(qsa_ui::Glyph::Cross)
+            .buttons(&["Delete", "Cancel"], 1, 1)
+            .build()
+            .0
+    };
+    vec![
+        ("ifs-home".to_owned(), home_view.w.window.clone()),
+        ("ifs-large-folder".to_owned(), large.w.window.clone()),
+        ("ifs-unauthorized".to_owned(), private.w.window.clone()),
+        ("ifs-broken-link".to_owned(), broken.w.window.clone()),
+        ("ifs-delete-files".to_owned(), confirm(&files)),
+        ("ifs-delete-folder".to_owned(), confirm(&folder)),
+    ]
+}
+
 /// A Prompt form for one of QS/400's test commands.
 fn prompt_form(name: &str) -> qsaccess::prompt::form::Form {
     let c = qapd::testing::commands::find(name).expect("a test command");
@@ -1198,6 +1306,7 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     out.extend(download_views());
     out.extend(upload_views());
     out.extend(schemas_views());
+    out.extend(ifs_views());
     out.extend(printer_output_views(state));
     out.extend(prompt_views());
     out.push((

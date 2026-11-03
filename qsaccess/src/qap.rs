@@ -453,6 +453,14 @@ pub fn function_name(op: Op) -> &'static str {
         | Op::Commit
         | Op::Rollback => "Run SQL",
         Op::ListSchemas | Op::ListTables | Op::ListColumns => "Schemas",
+        Op::ListDirectory
+        | Op::GetInfo
+        | Op::ReadFile
+        | Op::WriteFile
+        | Op::CreateDirectory
+        | Op::Delete
+        | Op::Rename
+        | Op::Copy => crate::ifs::FUNCTION,
         _ => "This function",
     }
 }
