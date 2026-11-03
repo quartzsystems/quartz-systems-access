@@ -504,6 +504,19 @@ impl SqlConnection {
         r
     }
 
+    /// `ListColumns` on this connection: a table's columns, in order.
+    /// `NotAuthorized` (`SQL0551`) for one the profile may not read.
+    pub fn list_columns(&mut self, schema: &str, table: &str) -> Result<Vec<Column>, Error> {
+        let c: Columns = self.a.call(
+            Op::ListColumns,
+            &ListColumns {
+                schema: schema.to_owned(),
+                table: table.to_owned(),
+            },
+        )?;
+        Ok(c.columns)
+    }
+
     /// Closes the connection: the server rolls back what is uncommitted.
     /// It never signs off.
     pub fn close(&mut self) {

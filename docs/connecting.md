@@ -271,6 +271,38 @@ with a summary: `QAD7030` complete, `QAD7031` failed, `QAD7032` cancelled.
 Run SQL's **Results > Export...** writes the result shown the same way, in the
 format its file name's extension says.
 
+### To the system
+
+- **Input.** A CSV, TSV, XLSX or ODS file (with its sheet) or a fixed-width
+  one, whether its first row has the column names, and a text file's
+  encoding (UTF-8, UTF-16 or Windows-1252). **Preview** shows the first 50
+  rows.
+- **Target.** The table (type it, or **Browse...**), and **Append** or
+  **Replace** (the table's rows deleted, then the file's inserted, in the
+  same transaction under commitment control). Without commitment control
+  the delete cannot be undone: the program says so before the run.
+- **Mapping.** Each target column's source column, by name (**Map by
+  Name**, the default with a header row) or by position (**Map by
+  Position**), or chosen by hand; unmapped columns get their defaults. The
+  grid shows the first value of each column that does not fit, from the
+  preview (`QAD7035`).
+- **Commit.**
+  - One transaction (the default): the rows are committed at the end, and a
+    failure keeps nothing. The report names the failing row, its line in the
+    file, and the system's message (`QAD7031`).
+  - Commit every N batches: a failure rolls back the batches not yet
+    committed, says how many rows were committed, and offers **Resume from
+    Row X** (`QAD7033`), X being the first row not committed (not the
+    failing row). It is kept with the request.
+  - A table that cannot use commitment control (`SQL7008`, for example one
+    that is not journaled) stops the first run with the system's message and
+    offers **Upload Without Commitment Control** (`QAD7034`). Without it a
+    failure leaves every row before the failing one in the table, so
+    **Resume from Row X** offers the failing row.
+- **Run.** An `INSERT` is prepared once, then sent with as many rows a
+  request as fit under 1 MiB, with progress and **Cancel**; a cancel is a
+  failed run.
+
 ## Printer Output
 
 **Printer Output** in the task pane's General group lists the spooled files

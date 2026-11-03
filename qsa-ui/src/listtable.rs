@@ -339,6 +339,22 @@ impl ListTable {
             tips.iter().map(|t| t.as_deref().map(intern)).collect();
     }
 
+    /// New columns: (title, width). The rows go.
+    pub fn set_columns(&mut self, columns: &[(&str, i32)]) {
+        {
+            let mut m = self.model.borrow_mut();
+            m.headers = columns.iter().map(|(t, _)| (*t).to_owned()).collect();
+            m.header_tips.clear();
+            m.sort = None;
+        }
+        self.set_rows(Vec::new());
+        self.table.set_cols(columns.len() as i32);
+        for (i, (_, w)) in columns.iter().enumerate() {
+            self.table.set_col_width(i as i32, *w);
+        }
+        self.table.redraw();
+    }
+
     /// The column of the last click in the rows.
     pub fn clicked_column(&self) -> Option<usize> {
         self.model.borrow().clicked_col

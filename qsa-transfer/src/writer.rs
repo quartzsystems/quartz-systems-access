@@ -34,6 +34,12 @@ pub enum WriteError {
     /// A value longer than its fixed-width column.
     #[error("the value of {column} is longer than its width, {width}")]
     TooWide { column: String, width: usize },
+    /// A value of this column has control characters ODS cannot hold
+    /// (CCSID 65535 data shown as text): write that data as hex.
+    #[error(
+        "a value of {0} has control characters an ODS file cannot hold; write CCSID 65535 data as hex"
+    )]
+    Unwritable(String),
 }
 
 impl From<rust_xlsxwriter::XlsxError> for WriteError {
@@ -445,6 +451,14 @@ impl Sink for OdsSink {
         for (v, c) in values.iter().zip(&self.columns) {
             match value::sheet_cell(v, c, &self.style) {
                 Cell::Empty => r.push_str("<table:table-cell/>"),
+                // XML cannot hold most control characters: refused, never
+                // dropped (CCSID 65535 data shown as text can have them).
+                Cell::Text(t)
+                    if t.chars()
+                        .any(|ch| (ch as u32) < 0x20 && !matches!(ch, '\t' | '\n' | '\r')) =>
+                {
+                    return Err(WriteError::Unwritable(c.name.clone()));
+                }
                 Cell::Text(t) => r.push_str(&format!(
                     "<table:table-cell office:value-type=\"string\">{}</table:table-cell>",
                     ods_text(&t)

@@ -161,7 +161,31 @@ impl Ui {
                     crate::sysconfig::open(self);
                 }
                 if let Some(system) = self.selected_system() {
-                    crate::transfer::download::open(self.parent(), &self.state, &system, None);
+                    // Which way: a menu at the link.
+                    let items = ["Transfer from System...", "Transfer to System..."];
+                    let menu = fltk::menu::MenuItem::new(&items);
+                    let chosen = menu
+                        .popup(fltk::app::event_x(), fltk::app::event_y())
+                        .and_then(|i| i.label());
+                    match chosen.as_deref() {
+                        Some("Transfer from System...") => {
+                            crate::transfer::download::open(
+                                self.parent(),
+                                &self.state,
+                                &system,
+                                None,
+                            );
+                        }
+                        Some("Transfer to System...") => {
+                            crate::transfer::upload::open(
+                                self.parent(),
+                                &self.state,
+                                &system,
+                                None,
+                            );
+                        }
+                        _ => {}
+                    }
                     self.refresh_systems();
                 }
             }

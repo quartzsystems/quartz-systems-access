@@ -6,6 +6,7 @@
 //! computer ([`qsa_transfer`]), from the task pane's General group.
 //!
 //! - [`download`]: from the system to a file.
+//! - [`upload`]: from a file to the system.
 //! - Every run has a connection of its own, attached to the session, and
 //!   closes it when done; it runs on a thread of its own with a progress
 //!   dialog and Cancel, and ends with a summary (`QAD7030`, `QAD7031`,
@@ -13,6 +14,7 @@
 //! - Before QAP version 4 the windows do not open: `QAD5001`.
 
 pub mod download;
+pub mod upload;
 
 use std::cell::Cell as StdCell;
 use std::rc::Rc;

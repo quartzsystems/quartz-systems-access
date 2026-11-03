@@ -21,3 +21,7 @@ pub mod writer;
 
 pub use download::{Download, Failure, Progress, Source, Summary};
 pub use format::{Dates, Encoding, Existing, FileOptions, Format};
+pub mod reader;
+pub mod upload;
+
+pub use upload::{Commit, Map, Mode, SourceColumn, Upload};
