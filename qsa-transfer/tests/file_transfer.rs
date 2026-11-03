@@ -457,3 +457,105 @@ fn folders_make_a_job_per_file() {
         b"/home/BOB/tree/docs/old/notes.txt"
     );
 }
+
+#[test]
+fn a_saved_request_plans_its_files() {
+    use qsa_transfer::files::transfer::plan_request;
+    use qsa_transfer::request::FilesRequest;
+    let s = start(cfg());
+    let mut c = bob(&s);
+    let d = dir("request");
+    let req = |direction, local: Vec<PathBuf>, remote: &str, recurse| FilesRequest {
+        direction,
+        local,
+        remote: remote.into(),
+        recurse,
+        options: binary(),
+    };
+    let names = |jobs: &[Job]| -> Vec<String> { jobs.iter().map(Job::name).collect() };
+    // Down: a pattern in the folder, a file, a folder with and without its
+    // folders.
+    let r = req(
+        Direction::Download,
+        vec![d.join("a")],
+        "/home/BOB/text/text*.txt",
+        true,
+    );
+    let jobs = plan_request(&mut c, &r).unwrap();
+    assert_eq!(
+        names(&jobs),
+        [
+            "text1208.txt",
+            "text273.txt",
+            "text37.txt",
+            "text819.txt",
+            "text939.txt"
+        ]
+    );
+    assert!(jobs.iter().all(|j| j.local.starts_with(d.join("a"))));
+    let r = req(
+        Direction::Download,
+        vec![d.join("b")],
+        &text_file(37),
+        false,
+    );
+    assert_eq!(names(&plan_request(&mut c, &r).unwrap()), ["text37.txt"]);
+    let r = req(Direction::Download, vec![d.join("c")], TREE, false);
+    assert_eq!(names(&plan_request(&mut c, &r).unwrap()), ["readme.txt"]);
+    let r = req(Direction::Download, vec![d.join("c")], TREE, true);
+    assert_eq!(plan_request(&mut c, &r).unwrap().len(), 7);
+    // Up: a glob, a folder with and without its folders, into a folder made.
+    let src = d.join("src");
+    std::fs::create_dir_all(src.join("sub/deeper")).unwrap();
+    for f in ["a.csv", "b.csv", "c.txt", "sub/d.csv", "sub/deeper/e.csv"] {
+        std::fs::write(src.join(f), f).unwrap();
+    }
+    let r = req(
+        Direction::Upload,
+        vec![src.join("*.csv")],
+        "/home/BOB/in/new",
+        true,
+    );
+    let jobs = plan_request(&mut c, &r).unwrap();
+    assert_eq!(names(&jobs), ["a.csv", "b.csv"]);
+    assert_eq!(
+        c.get_info("/home/BOB/in/new").unwrap().kind,
+        qap_client::proto::ops::ifs::EntryKind::Directory
+    );
+    let r = req(
+        Direction::Upload,
+        vec![src.join("sub")],
+        "/home/BOB/in",
+        false,
+    );
+    let jobs = plan_request(&mut c, &r).unwrap();
+    assert_eq!(names(&jobs), ["d.csv"]);
+    assert_eq!(jobs[0].remote, "/home/BOB/in/sub/d.csv");
+    let r = req(
+        Direction::Upload,
+        vec![src.join("sub")],
+        "/home/BOB/in",
+        true,
+    );
+    let mut jobs = plan_request(&mut c, &r).unwrap();
+    assert_eq!(jobs.len(), 2);
+    for j in &mut jobs {
+        assert!(matches!(
+            run(&mut c, j, Choice::Replace),
+            Outcome::Done { .. }
+        ));
+    }
+    assert_eq!(
+        read_remote(&mut c, "/home/BOB/in/sub/deeper/e.csv", None),
+        b"sub/deeper/e.csv"
+    );
+    // The system's refusal of a folder it may not read.
+    let r = req(
+        Direction::Download,
+        vec![d.join("x")],
+        "/home/ANN/private",
+        true,
+    );
+    let e = plan_request(&mut c, &r).unwrap_err();
+    assert_eq!(e.error.status(), Some(qap_client::Status::NotAuthorized));
+}

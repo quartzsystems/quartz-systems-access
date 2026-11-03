@@ -40,14 +40,17 @@ fn system(s: &Server) -> System {
     sys
 }
 
-fn endpoint() -> Endpoint {
+fn endpoint(tag: &str) -> Endpoint {
     #[cfg(windows)]
     {
-        Endpoint::named(&format!("quartz-access-test-run-{}", std::process::id()))
+        Endpoint::named(&format!(
+            "quartz-access-test-run-{tag}-{}",
+            std::process::id()
+        ))
     }
     #[cfg(unix)]
     {
-        let dir = std::env::temp_dir().join(format!("qsa-run-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("qsa-run-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         Endpoint::at(dir.join("s.sock"))
@@ -97,7 +100,7 @@ fn a_run_is_delegated_to_the_instance_and_no_token_crosses_the_link() {
 
     // The running instance: its endpoint, every message it is sent kept,
     // and the run served here, on its own session.
-    let main = endpoint();
+    let main = endpoint("delegated");
     let (tx, rx) = mpsc::channel();
     let server = ipc::Server::bind(&main).unwrap().spawn(move |args, link| {
         let _ = tx.send((args, link));
@@ -238,4 +241,67 @@ fn bad_arguments_and_request_files_exit_1() {
     )
     .unwrap();
     assert_eq!(code(&["run", &unknown.display().to_string()]), Some(1));
+}
+
+#[test]
+fn a_files_request_runs_on_the_instance_with_its_exit_code() {
+    use qsa_transfer::files::{Direction, Options};
+    use qsa_transfer::request::FilesRequest;
+    let s = start(cfg());
+    let sys = system(&s);
+    let mut systems = Systems::new();
+    systems.upsert(sys.clone());
+    let state = AppState::new(None, systems, Settings::default()).shared();
+    let h = state.borrow_mut().qap.client(&sys);
+    lock(&h).sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    let dir = std::env::temp_dir().join(format!("qsa-run-files-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).unwrap();
+    let write = |name: &str, remote: &str| {
+        let qdx = dir.join(name);
+        let r = request::Request::Files {
+            system: sys.name.clone(),
+            files: FilesRequest {
+                direction: Direction::Download,
+                local: vec![dir.join("out")],
+                remote: remote.into(),
+                recurse: true,
+                options: Options {
+                    text: true,
+                    crlf: false,
+                    ..Options::default()
+                },
+            },
+        };
+        request::save(&r, &qdx).unwrap();
+        qdx
+    };
+    let main = endpoint("files");
+    let (tx, rx) = mpsc::channel();
+    let _server = ipc::Server::bind(&main).unwrap().spawn(move |args, link| {
+        let _ = tx.send((args, link));
+    });
+    let run = |qdx: std::path::PathBuf| {
+        let m = main.clone();
+        let t = std::thread::spawn(move || cli::delegate(&m, &qdx, &cli::Out::Console));
+        let (asked, link) = rx.recv_timeout(Duration::from_secs(10)).unwrap();
+        cli::serve(
+            &state,
+            Request::parse(&asked).run.as_ref().unwrap(),
+            link,
+            false,
+        );
+        t.join().unwrap()
+    };
+    // The text files of a folder, converted by the system: exit 0.
+    let ok = write("text.qdx", "/home/BOB/text/text*.txt");
+    assert_eq!(run(ok), Some(cli::Exit::Done));
+    assert_eq!(
+        std::fs::read_to_string(dir.join("out/text37.txt")).unwrap(),
+        qapd::testing::files::TEXT
+    );
+    // A folder the profile may not read: exit 3, the system's refusal said.
+    let refused = write("private.qdx", "/home/ANN/private");
+    assert_eq!(run(refused), Some(cli::Exit::Failed));
+    let _ = std::fs::remove_dir_all(&dir);
 }

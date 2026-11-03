@@ -608,6 +608,141 @@ pub fn plan_upload<F: Files + ?Sized>(
     Ok(jobs)
 }
 
+/// Whether `name` matches `pattern`'s `*` (any characters) and `?` (one),
+/// without regard to case when `fold`.
+pub fn wild_match(pattern: &str, name: &str, fold: bool) -> bool {
+    let low = |s: &str| if fold { s.to_lowercase() } else { s.to_owned() };
+    let (p, n): (Vec<char>, Vec<char>) =
+        (low(pattern).chars().collect(), low(name).chars().collect());
+    // The classic two-pointer match, backing up to the last `*`.
+    let (mut i, mut j) = (0, 0);
+    let mut star: Option<(usize, usize)> = None;
+    while j < n.len() {
+        if i < p.len() && (p[i] == '?' || p[i] == n[j]) {
+            i += 1;
+            j += 1;
+        } else if i < p.len() && p[i] == '*' {
+            star = Some((i, j));
+            i += 1;
+        } else if let Some((si, sj)) = star {
+            i = si + 1;
+            j = sj + 1;
+            star = Some((si, sj + 1));
+        } else {
+            return false;
+        }
+    }
+    p[i..].iter().all(|c| *c == '*')
+}
+
+/// Whether a path's last part is a pattern.
+fn is_pattern(s: &str) -> bool {
+    s.contains(['*', '?'])
+}
+
+/// The jobs a files request makes, its folders made on the other side as
+/// they are found.
+///
+/// - An upload sends each `local` file; a folder with what is in it (all
+///   the way down with `recurse`, else its files only); a pattern in a
+///   path's last part (`data/*.csv`) the files and, with `recurse`,
+///   folders it matches. Into `remote`, made when missing.
+/// - A download writes into the first `local` folder (made when missing):
+///   `remote` a file, a folder's entries, or those of a folder matching a
+///   name pattern (`/home/BOB/reports/*.txt`); folders among them with
+///   their contents when `recurse`.
+pub fn plan_request<F: Files + ?Sized>(
+    f: &mut F,
+    r: &crate::request::FilesRequest,
+) -> Result<Vec<Job>, super::Stopped> {
+    let stop = |at: &str, error: Error| super::Stopped {
+        at: at.to_owned(),
+        error: Box::new(error),
+    };
+    let mut jobs = Vec::new();
+    match r.direction {
+        Direction::Upload => {
+            f.create_directory(&r.remote, true)
+                .map_err(|e| stop(&r.remote, e))?;
+            for local in &r.local {
+                let name = local
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default();
+                let found: Vec<PathBuf> = if is_pattern(&name) {
+                    let dir = local.parent().unwrap_or(Path::new("."));
+                    let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+                        .map_err(|e| stop(&dir.display().to_string(), Error::Read(e)))?
+                        .filter_map(Result::ok)
+                        .filter(|e| {
+                            wild_match(&name, &e.file_name().to_string_lossy(), cfg!(windows))
+                        })
+                        .map(|e| e.path())
+                        .collect();
+                    v.sort();
+                    v
+                } else {
+                    vec![local.clone()]
+                };
+                for p in found {
+                    let meta = std::fs::metadata(&p)
+                        .map_err(|e| stop(&p.display().to_string(), Error::Read(e)))?;
+                    if !meta.is_dir() {
+                        jobs.push(upload_job(&p, &r.remote, r.options));
+                    } else if r.recurse {
+                        jobs.extend(plan_upload(f, &p, &r.remote, r.options)?);
+                    } else {
+                        // The folder's own files, into a folder of its name.
+                        let dir = join(
+                            &r.remote,
+                            &p.file_name().unwrap_or_default().to_string_lossy(),
+                        );
+                        f.create_directory(&dir, true).map_err(|e| stop(&dir, e))?;
+                        let mut items: Vec<_> = std::fs::read_dir(&p)
+                            .map_err(|e| stop(&p.display().to_string(), Error::Read(e)))?
+                            .filter_map(Result::ok)
+                            .filter(|e| e.path().is_file())
+                            .collect();
+                        items.sort_by_key(std::fs::DirEntry::file_name);
+                        jobs.extend(items.iter().map(|e| upload_job(&e.path(), &dir, r.options)));
+                    }
+                }
+            }
+        }
+        Direction::Download => {
+            let into = r
+                .local
+                .first()
+                .cloned()
+                .unwrap_or_else(|| PathBuf::from("."));
+            std::fs::create_dir_all(&into)
+                .map_err(|e| stop(&into.display().to_string(), Error::Write(e)))?;
+            let last = ifs::file_name(&r.remote);
+            let (dir, pattern) = if is_pattern(last) {
+                (ifs::parent(&r.remote).to_owned(), last.to_owned())
+            } else {
+                let e = f.get_info(&r.remote).map_err(|e| stop(&r.remote, e))?;
+                if e.kind != EntryKind::Directory {
+                    jobs.push(download_job(ifs::parent(&r.remote), &e, &into, r.options));
+                    return Ok(jobs);
+                }
+                (r.remote.clone(), "*".to_owned())
+            };
+            let list = f.all_entries(&dir, &pattern).map_err(|e| stop(&dir, e))?;
+            for e in list.into_iter().filter(|e| e.name != "." && e.name != "..") {
+                match e.kind {
+                    EntryKind::Directory if r.recurse => {
+                        jobs.extend(plan_download(f, &join(&dir, &e.name), &into, r.options)?);
+                    }
+                    EntryKind::Directory | EntryKind::Symlink => {}
+                    _ => jobs.push(download_job(&dir, &e, &into, r.options)),
+                }
+            }
+        }
+    }
+    Ok(jobs)
+}
+
 /// The job that downloads `entry`, in the system's folder `dir`, into
 /// `local_dir`.
 pub fn download_job(dir: &str, entry: &Entry, local_dir: &Path, options: Options) -> Job {
@@ -656,6 +791,17 @@ mod tests {
             keep_both(Path::new("/tmp/README"), |_| false),
             Path::new("/tmp/README (2)")
         );
+    }
+
+    #[test]
+    fn wildcards() {
+        assert!(wild_match("*.csv", "a.csv", false));
+        assert!(!wild_match("*.csv", "a.CSV", false));
+        assert!(wild_match("*.csv", "a.CSV", true));
+        assert!(wild_match("f11??.txt", "f1190.txt", false));
+        assert!(!wild_match("f11??.txt", "f119.txt", false));
+        assert!(wild_match("*", "", false) && wild_match("a*b*c", "aXbYbc", false));
+        assert!(!wild_match("a*b", "aXbY", false));
     }
 
     #[test]

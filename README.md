@@ -68,12 +68,47 @@ attached to the session without a new sign-on, so a long query or command
 holds up nothing else; a window never signs off. `docs/connecting.md` has the
 details.
 
+**Integrated File System** (General) needs QAP version 5. It browses the
+system's files and folders from the profile's home directory and `/`: a
+folder tree, and a folder's entries (Name, Type, Size, Modified, Owner,
+CCSID) 500 a page as the list scrolls, with a `*` and `?` name pattern. Links
+show their target and open as it; a broken link is red. New Folder, Rename,
+Copy, Cut and Paste (copies on the system, the data never passing through
+this computer), Delete (a folder with everything in it, after saying how
+many, stopping at the first entry the system refuses), Properties, **Edit**
+in a built-in text editor, and **Open** (a read-only copy in this computer's
+default application). **Download...**, **Upload...** and files dragged from
+the desktop's file manager onto the list go to a transfer queue under the
+list, one file at a time on a connection of the window's own. Binary (the
+default) moves the bytes unchanged; text has the system convert between the
+file's CCSID and UTF-8, and changes only line endings here (LF on the
+system, CR LF on this computer when asked; by default on Windows). A
+download is written beside its target as `<name>.qsapart` and renamed when
+complete; **Retry** goes on from where a binary transfer, or a text
+download, stopped.
+
 ### Transfer requests and `qsaccess run`
 
 A transfer can be saved as a `.qdx` request (**Save Request...** in either
-Data Transfer window): everything but passwords, which are never saved, with
-the file's path relative to the request when it is in the request's folder.
-Opening one (a double-click, or **Open Request...**) shows it ready to run.
+Data Transfer window, or in the Integrated File System's transfer options):
+everything but passwords, which are never saved, with paths relative to the
+request when they are in the request's folder. Opening one (a double-click,
+or **Open Request...**) shows it ready to run: a table's in its Data Transfer
+window, files in the Integrated File System window's transfer options.
+
+Version 2 request files say which type they are, `[transfer] type = "table"`
+or `type = "files"`; a version 1 file is a table's. A files request has:
+
+| Key | Meaning |
+|---|---|
+| `direction` | `download` or `upload`. |
+| `local` | An upload's files, folders and globs (`data/*.csv`); a download's folder to write into. |
+| `remote` | An upload's folder on the system; a download's folder, file, or folder and name pattern (`/home/BOB/reports/*.txt`). |
+| `recurse` | Folders with all their folders (default `true`). |
+| `data` | `binary` (default) or `text`. |
+| `ccsid` | The CCSID of files an upload makes (default 1208). |
+| `line_endings` | Text only: `crlf` or `lf` on this computer. |
+| `existing` | `ask`, `skip`, `replace` or `replace-if-newer`. |
 
 ```
 qsaccess run <file.qdx>
@@ -90,16 +125,17 @@ remote clients and lets the current user alone open it, on Linux a socket of
 mode 0600), and each end checks the other's user; another user's connection
 is refused and logged as `QAD8040`. With no running program, the run shows
 the Sign On dialog itself and signs off at the end. Progress goes to stderr,
-and to a progress window with **Cancel**; the summary goes to stdout. A download replaces an existing
-output file even when the request says to ask. Exit codes:
+and to a progress window with **Cancel**; the summary goes to stdout. A run
+replaces an existing file even when the request says to ask. The exit codes
+are the same for both types:
 
 | Code | Meaning |
 |---|---|
-| 0 | The transfer is done. |
+| 0 | The transfer is done (for files: every file, `QAD8020`). |
 | 1 | Bad arguments, or a request file that cannot be read or names a system not configured here. |
-| 2 | Sign-on cancelled or failed (or the system's QAP version has no `Sql`). |
-| 3 | The transfer failed (the summary says where, and the row to resume from). |
-| 4 | The transfer was cancelled. |
+| 2 | Sign-on cancelled or failed, or the system's QAP version has no `Sql` (a table's, version 4) or `Ifs` (files, version 5). |
+| 3 | The transfer failed: for a table, where and the row to resume from; for files, each file that failed (`QAD8021`), the rest done. |
+| 4 | The transfer was cancelled (`QAD7032` or `QAD8022`). |
 
 Fully unattended runs, with no sign-on prompt, are not offered: passwords are
 never saved, so a run with no running program signed on to the system always

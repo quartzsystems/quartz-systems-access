@@ -106,6 +106,8 @@ pub enum Work {
         into: String,
         options: Options,
     },
+    /// A saved request (`.qdx`), planned into files when it starts.
+    Request(qsa_transfer::request::FilesRequest),
 }
 
 enum Cmd {
@@ -188,6 +190,11 @@ impl Worker {
                             options,
                         } => {
                             let r = plan_upload(&mut conn, &local, &into, options)
+                                .map_err(|s| stopped_text(&s));
+                            let _ = etx.send(Ev::Planned(id, r));
+                        }
+                        Work::Request(req) => {
+                            let r = qsa_transfer::files::transfer::plan_request(&mut conn, &req)
                                 .map_err(|s| stopped_text(&s));
                             let _ = etx.send(Ev::Planned(id, r));
                         }
@@ -422,6 +429,13 @@ impl Queue {
                     local.file_name().unwrap_or_default().to_string_lossy()
                 ),
                 Direction::Upload,
+                0,
+                None,
+                Some(work),
+            ),
+            Work::Request(ref r) => (
+                format!("{} (request)", ifs::file_name(&r.remote)),
+                r.direction,
                 0,
                 None,
                 Some(work),

@@ -124,8 +124,8 @@ pub fn attach(parent: Option<&dyn WindowExt>, h: &Handle, sys: &System) -> Optio
 }
 
 /// What the progress dialog hears from the run's thread.
-enum Msg<T> {
-    Progress(Progress),
+enum Msg<T, P> {
+    Progress(P),
     Done(T),
 }
 
@@ -180,12 +180,23 @@ pub fn with_progress<T: Send + 'static>(
     name: &str,
     work: impl FnOnce(&dyn Fn(Progress), &AtomicBool) -> T + Send + 'static,
 ) -> T {
-    let (tx, rx) = mpsc::channel::<Msg<T>>();
+    with_progress_as(parent, name, progress_text, work)
+}
+
+/// [`with_progress`] for work whose progress is a `P`, shown as `text`
+/// makes it.
+pub fn with_progress_as<T: Send + 'static, P: Send + 'static>(
+    parent: Option<&dyn WindowExt>,
+    name: &str,
+    text: impl Fn(P) -> String,
+    work: impl FnOnce(&dyn Fn(P), &AtomicBool) -> T + Send + 'static,
+) -> T {
+    let (tx, rx) = mpsc::channel::<Msg<T, P>>();
     let cancel = Arc::new(AtomicBool::new(false));
     let flag = Arc::clone(&cancel);
     let ptx = tx.clone();
     std::thread::spawn(move || {
-        let report = move |p: Progress| {
+        let report = move |p: P| {
             let _ = ptx.send(Msg::Progress(p));
             app::awake();
         };
@@ -214,7 +225,7 @@ pub fn with_progress<T: Send + 'static>(
             match rx.try_recv() {
                 Ok(Msg::Progress(p)) => {
                     if !cancel.load(Ordering::SeqCst) {
-                        d.rows.set_label(&progress_text(p));
+                        d.rows.set_label(&text(p));
                         d.rows.redraw();
                     }
                 }
@@ -366,6 +377,9 @@ pub fn open_request(state: &Shared, path: &std::path::Path, parent: Option<&dyn 
                 }
                 qsa_transfer::request::Request::Upload { system, upload: u } => {
                     upload::open(parent, state, &system, Some(&u));
+                }
+                qsa_transfer::request::Request::Files { system, files } => {
+                    crate::ifs::open_request(parent, state, &system, files);
                 }
             }
         }

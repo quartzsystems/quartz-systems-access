@@ -52,6 +52,7 @@ use qap_client::proto::ops::ifs::{Entry, EntryKind};
 use qap_client::{Error, Files, Status as QapStatus};
 use qsa_config::System;
 use qsa_msg::id;
+use qsa_transfer::request::FilesRequest;
 use qsa_ui::chan::{self, Emit, MenuEmit};
 use qsa_ui::inputbox::InputBox;
 use qsa_ui::listtable::ListTable;
@@ -336,6 +337,14 @@ impl Widgets {
         }
         self.window.clone().redraw();
     }
+}
+
+/// What the transfer options dialog answered.
+enum Chosen {
+    /// Run the batch with these options.
+    Run(qsa_transfer::files::Options),
+    /// Run this request, opened from a file, instead.
+    Request(FilesRequest),
 }
 
 /// Entries copied or cut, for Paste in this window or another of the same
@@ -760,23 +769,136 @@ impl Ifs {
         self.w.window.clone().hide();
     }
 
-    /// The options for a batch, from the dialog; `None` when cancelled.
-    fn ask_options(&self, what: &str) -> Option<qsa_transfer::files::Options> {
-        let mut d = queue::OptionsDialog::build(what, self.options.get());
+    /// The transfer options dialog for `batch` (what it moves, its options
+    /// shown): the options chosen, or a request opened from a file instead;
+    /// `None` when cancelled. Save Request writes `batch` with the options
+    /// shown to a `.qdx` and stays in the dialog.
+    fn ask_options(&self, what: &str, batch: &FilesRequest) -> Option<Chosen> {
+        let mut d = queue::OptionsDialog::build(what, batch.options);
         loop {
             match d.run(self.parent_window()) {
                 queue::Asked::Ok => match d.options() {
                     Some(o) => {
                         self.options.set(o);
-                        return Some(o);
+                        return Some(Chosen::Run(o));
                     }
                     None => self.report("Enter a CCSID for new files, such as 1208."),
                 },
                 queue::Asked::Cancel => return None,
-                queue::Asked::SaveRequest | queue::Asked::OpenRequest => {
-                    self.report("Requests are saved from the transfer options of a later step.");
+                queue::Asked::SaveRequest => {
+                    let Some(o) = d.options() else {
+                        self.report("Enter a CCSID for new files, such as 1208.");
+                        continue;
+                    };
+                    self.save_request(&FilesRequest {
+                        options: o,
+                        ..batch.clone()
+                    });
+                }
+                queue::Asked::OpenRequest => {
+                    if let Some(r) = self.open_request_file() {
+                        return Some(Chosen::Request(r));
+                    }
                 }
             }
+        }
+    }
+
+    /// Writes `r` to a `.qdx` the user picks (`QAD7040`).
+    fn save_request(&self, r: &FilesRequest) {
+        let name = format!(
+            "{}.{}",
+            crate::files::file_name_for(file_name(&r.remote), "")
+                .trim_end_matches('.')
+                .to_owned(),
+            qsa_transfer::request::EXTENSION
+        );
+        let Some(path) = crate::files::choose_save_in(
+            &crate::files::downloads_dir(),
+            "Save Request",
+            crate::transfer::REQUEST_PATTERN,
+            &name,
+        ) else {
+            return;
+        };
+        let path = crate::files::with_extension(path, qsa_transfer::request::EXTENSION);
+        let req = qsa_transfer::request::Request::Files {
+            system: self.sys.name.clone(),
+            files: r.clone(),
+        };
+        match qsa_transfer::request::save(&req, &path) {
+            Ok(()) => self.said(&qsa_msg::message(
+                id::REQUEST_SAVED,
+                &[&path.display().to_string()],
+            )),
+            Err(e) => {
+                let m = qsa_msg::message(
+                    id::SESSION_FILE_UNREADABLE,
+                    &[&path.display().to_string(), &e.to_string()],
+                );
+                self.said(&m);
+                msgdetails::show_message(self.parent_window(), &m);
+            }
+        }
+    }
+
+    /// A files request from a `.qdx` the user picks, for this system.
+    fn open_request_file(&self) -> Option<FilesRequest> {
+        let path = crate::files::choose_open_in(
+            &crate::files::downloads_dir(),
+            "Open Request",
+            crate::transfer::REQUEST_PATTERN,
+        )?;
+        let why = match qsa_transfer::request::load(&path) {
+            Ok(qsa_transfer::request::Request::Files { system, files })
+                if system.eq_ignore_ascii_case(&self.sys.name) =>
+            {
+                return Some(files);
+            }
+            Ok(qsa_transfer::request::Request::Files { system, .. }) => {
+                format!("it is for {system}, not {}", self.sys.name)
+            }
+            Ok(_) => "it is a table's Data Transfer, not files".to_owned(),
+            Err(e) => e.to_string(),
+        };
+        let m = qsa_msg::message(
+            id::SESSION_FILE_UNREADABLE,
+            &[&path.display().to_string(), &why],
+        );
+        self.said(&m);
+        msgdetails::show_message(self.parent_window(), &m);
+        None
+    }
+
+    /// Runs a files request: the folder it writes to on the system shown,
+    /// then its files planned and queued.
+    fn run_request(&self, r: FilesRequest) {
+        let folder = match r.direction {
+            qsa_transfer::files::Direction::Upload => r.remote.clone(),
+            qsa_transfer::files::Direction::Download => {
+                if file_name(&r.remote).contains(['*', '?']) {
+                    parent(&r.remote).to_owned()
+                } else {
+                    r.remote.clone()
+                }
+            }
+        };
+        if r.direction == qsa_transfer::files::Direction::Upload {
+            *self.stale.borrow_mut() = Some(folder.clone());
+        } else if folder != *self.cur.borrow() {
+            self.go_to(&folder, true);
+        }
+        self.enqueue(vec![queue::Work::Request(r)]);
+    }
+
+    /// Opens a saved files request in the transfer dialog, its options
+    /// shown, and runs it when OK is chosen.
+    pub fn offer_request(&self, r: FilesRequest) {
+        let what = format!("Request for {}", r.remote);
+        match self.ask_options(&what, &r) {
+            Some(Chosen::Run(options)) => self.run_request(FilesRequest { options, ..r }),
+            Some(Chosen::Request(other)) => self.run_request(other),
+            None => {}
         }
     }
 
@@ -831,10 +953,23 @@ impl Ifs {
             [one] => one.entry.name.clone(),
             _ => format!("{} entries", rows.len()),
         };
-        let Some(options) = self.ask_options(&format!("Download {what}")) else {
-            return;
+        // As a request: one entry by its path; several, the folder they are
+        // in (a request names one file, folder or pattern).
+        let batch = FilesRequest {
+            direction: qsa_transfer::files::Direction::Download,
+            local: vec![into.clone()],
+            remote: match &rows[..] {
+                [one] => one.path.clone(),
+                _ => self.cur.borrow().clone(),
+            },
+            recurse: true,
+            options: self.options.get(),
         };
-        self.enqueue(queue::downloads(&rows, &into, options));
+        match self.ask_options(&format!("Download {what}"), &batch) {
+            Some(Chosen::Run(options)) => self.enqueue(queue::downloads(&rows, &into, options)),
+            Some(Chosen::Request(r)) => self.run_request(r),
+            None => {}
+        }
     }
 
     fn upload(&self, paths: Vec<PathBuf>) {
@@ -848,10 +983,18 @@ impl Ifs {
                 .map_or_else(String::new, |n| n.to_string_lossy().into_owned()),
             _ => format!("{} files", paths.len()),
         };
-        let Some(options) = self.ask_options(&format!("Upload {what} to {cur}")) else {
-            return;
+        let batch = FilesRequest {
+            direction: qsa_transfer::files::Direction::Upload,
+            local: paths.clone(),
+            remote: cur.clone(),
+            recurse: true,
+            options: self.options.get(),
         };
-        self.enqueue(queue::uploads(&paths, &cur, options));
+        match self.ask_options(&format!("Upload {what} to {cur}"), &batch) {
+            Some(Chosen::Run(options)) => self.enqueue(queue::uploads(&paths, &cur, options)),
+            Some(Chosen::Request(r)) => self.run_request(r),
+            None => {}
+        }
     }
 
     fn act(&self, a: Act) {
@@ -1333,12 +1476,13 @@ pub fn blocked(system: &str, version: Option<u16>) -> Option<qsa_msg::Message> {
 /// when this program has no session on it. Before QAP version 5:
 /// `QAD5001`.
 pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
-    let Some(sys) = state.borrow().systems.get(system).cloned() else {
-        return;
-    };
-    let Some(h) = qap::session(parent, state, &sys.name) else {
-        return;
-    };
+    open_window(parent, state, system);
+}
+
+/// [`open`], the window it opened.
+fn open_window(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) -> Option<Rc<Ifs>> {
+    let sys = state.borrow().systems.get(system).cloned()?;
+    let h = qap::session(parent, state, &sys.name)?;
     let (refused, home) = match h.try_lock() {
         Ok(mut c) => {
             let has = c.version().unwrap_or(1);
@@ -1355,7 +1499,7 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
         let m = qap::version_needed(FUNCTION, &sys.name, Op::ListDirectory, has);
         crate::log!("{m}");
         msgdetails::show_message(parent, &m);
-        return;
+        return None;
     }
     let (w, rx) = build_widgets(&sys.name);
     let mut s = Ifs::new(w, rx, &sys, &home);
@@ -1372,8 +1516,18 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
     let home = s.home.clone();
     s.go_to(&home, false);
     s.nav_buttons();
-    WINDOWS.with(|v| v.borrow_mut().push(s));
+    WINDOWS.with(|v| v.borrow_mut().push(Rc::clone(&s)));
     tick();
+    Some(s)
+}
+
+/// Opens the Integrated File System window for `system` with the saved
+/// files request `r` in its transfer dialog (a double-click on a files
+/// `.qdx`), run when OK is chosen.
+pub fn open_request(parent: Option<&dyn WindowExt>, state: &Shared, system: &str, r: FilesRequest) {
+    if let Some(w) = open_window(parent, state, system) {
+        w.offer_request(r);
+    }
 }
 
 fn tick() {

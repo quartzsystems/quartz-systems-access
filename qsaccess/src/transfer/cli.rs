@@ -247,7 +247,13 @@ fn transfer_on(
     out: &Out,
     show: bool,
 ) -> Exit {
-    let refused = qap::lock(h).supports(qap_client::proto::Op::Prepare).err();
+    // A table's rows need the Sql service (version 4), files the Ifs
+    // service (version 5).
+    let needs = match r {
+        Request::Files { .. } => qap_client::proto::Op::ListDirectory,
+        _ => qap_client::proto::Op::Prepare,
+    };
+    let refused = qap::lock(h).supports(needs).err();
     if let Some(e) = refused {
         out.tell(&qap::explain(sys, &e).line());
         return Exit::SignOn;
@@ -259,6 +265,16 @@ fn transfer_on(
             return Exit::SignOn;
         }
     };
+    if let Request::Files { files, .. } = r {
+        let name = files
+            .remote
+            .rsplit('/')
+            .find(|p| !p.is_empty())
+            .unwrap_or("/")
+            .to_owned();
+        out.tell(&format!("Transfer {name} on {}...", sys.name));
+        return go_files(attached, files, &name, out, show);
+    }
     let p = attached.profile().clone();
     let dates = qsa_sql::DateStyle::job(&p.date_format, &p.date_separator, &p.time_separator);
     let ccsid = match p.ccsid {
@@ -327,6 +343,8 @@ fn go(
                     )
                 })
             }
+            // Files requests go to go_files.
+            Request::Files { .. } => Err((false, None, "not a table request".into())),
         };
         q.close();
         done
@@ -361,6 +379,154 @@ fn go(
             Exit::Failed
         }
     }
+}
+
+/// Where a files run has got to: the file (1-based) of how many, its name,
+/// and the bytes moved.
+#[derive(Clone, Debug)]
+pub struct FilesProgress {
+    pub file: usize,
+    pub files: usize,
+    pub name: String,
+    pub bytes: u64,
+}
+
+/// The progress line: `file 3 of 7: big.bin, 12.0 MiB`.
+pub fn files_progress_text(p: FilesProgress) -> String {
+    format!(
+        "file {} of {}: {}, {}",
+        p.file,
+        p.files,
+        p.name,
+        crate::ifs::model::bytes_text(p.bytes)
+    )
+}
+
+/// How a files run ended.
+struct FilesDone {
+    done: usize,
+    skipped: usize,
+    bytes: u64,
+    /// Each file that failed, and why.
+    failed: Vec<(String, String)>,
+    cancelled: Option<String>,
+}
+
+/// Runs a files request on `attached`, one file at a time, with the
+/// progress dialog when `show`. Unattended, a file already there is
+/// replaced when the request says to ask.
+fn go_files(
+    attached: qap_client::Attached,
+    r: &qsa_transfer::request::FilesRequest,
+    name: &str,
+    out: &Out,
+    show: bool,
+) -> Exit {
+    use qsa_transfer::files::{Choice, Outcome, Policy, transfer};
+    let started = std::time::Instant::now();
+    let req = r.clone();
+    let lines = out.clone();
+    let work = move |progress: &dyn Fn(FilesProgress), cancel: &AtomicBool| {
+        let mut conn = attached;
+        let mut d = FilesDone {
+            done: 0,
+            skipped: 0,
+            bytes: 0,
+            failed: Vec::new(),
+            cancelled: None,
+        };
+        let jobs = match transfer::plan_request(&mut conn, &req) {
+            Ok(j) => j,
+            Err(s) => {
+                let why = match s.error.server_message() {
+                    Some(m) => format!("{}: {}", m.id, m.text.trim_end_matches('.')),
+                    None => s.error.to_string(),
+                };
+                d.failed.push((s.at, why));
+                return d;
+            }
+        };
+        let files = jobs.len();
+        for (i, mut job) in jobs.into_iter().enumerate() {
+            if cancel.load(Ordering::SeqCst) {
+                d.cancelled = Some(job.name());
+                break;
+            }
+            if job.options.existing == Policy::Ask {
+                job.options.existing = Policy::Replace;
+            }
+            let file = job.name();
+            if !lines.tell(&format!("{file}...")) {
+                cancel.store(true, Ordering::SeqCst);
+            }
+            let r = transfer::run(
+                &mut conn,
+                &mut job,
+                &mut |_| Choice::Replace,
+                &mut |p| {
+                    progress(FilesProgress {
+                        file: i + 1,
+                        files,
+                        name: file.clone(),
+                        bytes: p.bytes,
+                    })
+                },
+                cancel,
+            );
+            match r {
+                Ok(Outcome::Done { bytes, .. }) => {
+                    d.done += 1;
+                    d.bytes += bytes;
+                }
+                Ok(Outcome::Skipped) => d.skipped += 1,
+                Ok(Outcome::Cancelled(_)) => {
+                    d.cancelled = Some(file);
+                    break;
+                }
+                Err(f) => d.failed.push((file, f.error.to_string())),
+            }
+        }
+        conn.close();
+        d
+    };
+    let d = if show {
+        super::with_progress_as(None, name, files_progress_text, work)
+    } else {
+        work(&|_| {}, &AtomicBool::new(false))
+    };
+    for (file, why) in &d.failed {
+        out.say(&qsa_msg::message(qsa_msg::id::FILE_TRANSFER_FAILED, &[file, why]).to_string());
+    }
+    if let Some(file) = &d.cancelled {
+        out.say(&qsa_msg::message(qsa_msg::id::FILE_TRANSFER_CANCELLED, &[file]).to_string());
+        return Exit::Cancelled;
+    }
+    let what = format!(
+        "{} {}{}, {}",
+        d.done,
+        if d.done == 1 { "file" } else { "files" },
+        if d.skipped > 0 {
+            format!(" ({} skipped)", d.skipped)
+        } else {
+            String::new()
+        },
+        crate::ifs::model::bytes_text(d.bytes)
+    );
+    if !d.failed.is_empty() {
+        return Exit::Failed;
+    }
+    out.say(
+        &qsa_msg::message(
+            qsa_msg::id::FILE_TRANSFER_COMPLETE,
+            &[
+                name,
+                &what,
+                &format!("{:.1} s", started.elapsed().as_secs_f64()),
+            ],
+        )
+        .to_string(),
+    );
+    Exit::Done
 }
 
 fn resumable(name: &str, kept: u64, x: u64) -> String {
