@@ -30,6 +30,7 @@
 
 pub mod editor;
 pub mod model;
+pub mod props;
 pub mod queue;
 
 use std::cell::{Cell, RefCell};
@@ -93,6 +94,7 @@ pub enum Act {
     SelectAll,
     Sort(usize),
     Edit,
+    Properties,
     Download,
     Upload,
     /// Files dropped on the list.
@@ -127,7 +129,7 @@ fn part(label: &str) -> String {
 }
 
 /// The actions a right-click in the list offers, with what they ask for.
-const CONTEXT: [(&str, Act); 10] = [
+const CONTEXT: [(&str, Act); 11] = [
     ("Open", Act::Open),
     ("Edit", Act::Edit),
     ("Download...", Act::Download),
@@ -138,6 +140,7 @@ const CONTEXT: [(&str, Act); 10] = [
     ("Paste", Act::Paste),
     ("Delete", Act::Delete),
     ("New Folder...", Act::NewFolder),
+    ("Properties", Act::Properties),
 ];
 
 fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
@@ -162,6 +165,12 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
             "&File/New &Folder...",
             Shortcut::Ctrl | Shortcut::Shift | 'n',
             Act::NewFolder,
+            d,
+        );
+        add(
+            "&File/P&roperties",
+            Shortcut::Alt | Key::Enter,
+            Act::Properties,
             d,
         );
         add("&File/&Close", Shortcut::Alt | Key::F4, Act::Close, n);
@@ -851,6 +860,7 @@ impl Ifs {
             Act::Close => self.close(),
             Act::Download => self.download(),
             Act::Edit => self.edit(),
+            Act::Properties => self.properties(&cur),
             Act::Upload => {
                 let paths = crate::files::choose_open_many(
                     &crate::files::downloads_dir(),
@@ -960,6 +970,19 @@ impl Ifs {
                 self.said(&m);
                 msgdetails::show_message(self.parent_window(), &m);
             }
+        }
+    }
+
+    /// The selected entry's Properties; a new name there renames it.
+    fn properties(&self, cur: &str) {
+        let [row] = &self.selected()[..] else {
+            self.report("Select one entry.");
+            return;
+        };
+        let Some(h) = self.h.clone() else { return };
+        if let Some(to) = props::run(self.parent_window(), &h, &self.sys, row) {
+            self.go_to(cur, false);
+            self.said(&qsa_msg::message(id::RENAMED, &[&row.path, &to]));
         }
     }
 

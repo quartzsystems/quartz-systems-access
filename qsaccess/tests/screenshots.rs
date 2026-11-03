@@ -1236,7 +1236,31 @@ fn ifs_editor_views() -> Vec<(String, Window)> {
         Some(&notice),
     );
     let m = qsa_msg::message(qsa_msg::id::CHANGED_ON_SYSTEM, &["/home/BOB/src/mklib.clp"]);
+    let link = qsaccess::ifs::model::Row {
+        path: "/home/BOB/link1208".into(),
+        entry: entry(
+            "link1208",
+            qap_client::proto::ops::ifs::EntryKind::Symlink,
+            0,
+            0,
+        ),
+        link: Some(qsaccess::ifs::model::Target::To(
+            "/home/BOB/text/text1208.txt".into(),
+            entry("text1208.txt", File, 80, 1208),
+        )),
+    };
+    let file = qsaccess::ifs::model::Row {
+        path: "/home/BOB/src/mklib.clp".into(),
+        entry: entry("mklib.clp", File, 4211, 37),
+        link: None,
+    };
+    let props = |r| {
+        let (d, _) = qsaccess::ifs::props::build(r);
+        d.window().clone()
+    };
     vec![
+        ("ifs-properties".to_owned(), props(&file)),
+        ("ifs-properties-link".to_owned(), props(&link)),
         ("ifs-editor".to_owned(), normal.window.clone()),
         ("ifs-editor-read-only".to_owned(), read_only.window.clone()),
         (
