@@ -115,6 +115,20 @@ pub mod id {
     pub const REPLY_TOO_LARGE: &str = "QAD6014";
     pub const SPOOL_SAVED: &str = "QAD6020";
     pub const SPOOL_PRINTED: &str = "QAD6021";
+    pub const ATTACHED: &str = "QAD7001";
+    pub const ATTACH_NEEDS_VERSION_4: &str = "QAD7002";
+    pub const NO_MORE_CONNECTIONS: &str = "QAD7003";
+    pub const STATEMENT_LOST: &str = "QAD7010";
+    pub const RESULT_INCOMPLETE: &str = "QAD7011";
+    pub const ROWS_CHANGED: &str = "QAD7020";
+    pub const UNCOMMITTED_CHANGES: &str = "QAD7021";
+    pub const TRANSFER_COMPLETE: &str = "QAD7030";
+    pub const TRANSFER_FAILED: &str = "QAD7031";
+    pub const TRANSFER_CANCELLED: &str = "QAD7032";
+    pub const TRANSFER_RESUMABLE: &str = "QAD7033";
+    pub const NO_COMMITMENT_CONTROL: &str = "QAD7034";
+    pub const VALUE_DOES_NOT_FIT: &str = "QAD7035";
+    pub const REQUEST_SAVED: &str = "QAD7040";
 }
 
 /// Errors in the catalogue itself.
@@ -284,7 +298,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 88] = [
+    const SEEDS: [&str; 102] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -373,7 +387,145 @@ mod tests {
         id::REPLY_TOO_LARGE,
         id::SPOOL_SAVED,
         id::SPOOL_PRINTED,
+        id::ATTACHED,
+        id::ATTACH_NEEDS_VERSION_4,
+        id::NO_MORE_CONNECTIONS,
+        id::STATEMENT_LOST,
+        id::RESULT_INCOMPLETE,
+        id::ROWS_CHANGED,
+        id::UNCOMMITTED_CHANGES,
+        id::TRANSFER_COMPLETE,
+        id::TRANSFER_FAILED,
+        id::TRANSFER_CANCELLED,
+        id::TRANSFER_RESUMABLE,
+        id::NO_COMMITMENT_CONTROL,
+        id::VALUE_DOES_NOT_FIT,
+        id::REQUEST_SAVED,
     ];
+
+    #[test]
+    fn phase_7_texts() {
+        let t = |id: &str, args: &[&str]| message(id, args).text;
+        for (id, args, want) in [
+            (
+                id::ATTACHED,
+                &["SYS", "Run SQL", "000123/BOB/QAPCNN"][..],
+                "Connected to SYS for Run SQL (job 000123/BOB/QAPCNN).",
+            ),
+            (
+                id::ATTACH_NEEDS_VERSION_4,
+                &["Run Command"],
+                "Run Command needs its own connection, and the server is older than version 4.",
+            ),
+            (
+                id::NO_MORE_CONNECTIONS,
+                &["SYS"],
+                "No more connections allowed to SYS. Close a window and try again.",
+            ),
+            (
+                id::STATEMENT_LOST,
+                &["SYS"],
+                "The connection to SYS was lost; the statement must be run again.",
+            ),
+            (
+                id::RESULT_INCOMPLETE,
+                &["cancelled"],
+                "Result is incomplete: cancelled.",
+            ),
+            (id::ROWS_CHANGED, &["12"], "12 rows changed."),
+            (
+                id::UNCOMMITTED_CHANGES,
+                &["Run SQL - SYS"],
+                "Uncommitted changes in Run SQL - SYS. Commit, roll back, or cancel.",
+            ),
+            (
+                id::TRANSFER_COMPLETE,
+                &["ASSETS.csv", "12", "0.4 s"],
+                "Transfer ASSETS.csv complete: 12 rows in 0.4 s.",
+            ),
+            (
+                id::TRANSFER_FAILED,
+                &[
+                    "up.qdx",
+                    "7",
+                    "8",
+                    "a.csv",
+                    "SQL0803: Duplicate key value specified",
+                ],
+                "Transfer up.qdx failed at row 7 (line 8 of a.csv): SQL0803: Duplicate key value specified.",
+            ),
+            (
+                id::TRANSFER_CANCELLED,
+                &["down.qdx"],
+                "Transfer down.qdx was cancelled; nothing was kept.",
+            ),
+            (
+                id::TRANSFER_RESUMABLE,
+                &["up.qdx", "200", "201"],
+                "200 rows committed before the failure; resume from row 201.",
+            ),
+            (
+                id::NO_COMMITMENT_CONTROL,
+                &["HLTEST.NOJRN"],
+                "HLTEST.NOJRN cannot use commitment control; uploading without it.",
+            ),
+            (
+                id::VALUE_DOES_NOT_FIT,
+                &["COST", "123456789.123", "DECIMAL(9,2)"],
+                "Column COST: value 123456789.123 does not fit DECIMAL(9,2).",
+            ),
+            (
+                id::REQUEST_SAVED,
+                &["C:\\x\\up.qdx"],
+                "Request saved to C:\\x\\up.qdx.",
+            ),
+        ] {
+            assert_eq!(t(id, args), want, "{id}");
+            let m = message(id, args);
+            assert!(!m.cause.is_empty() && !m.recovery.is_empty(), "{id}");
+            assert!(!m.text.contains('&'), "{id}");
+            assert!(!m.cause.contains('&') && !m.recovery.contains('&'), "{id}");
+        }
+        let m = |id: &str, args: &[&str]| message(id, args);
+        assert!(m(id::NO_MORE_CONNECTIONS, &["S"]).cause.contains("TCP1A59"));
+        assert!(m(id::NO_MORE_CONNECTIONS, &["S"]).cause.contains("16"));
+        assert!(
+            m(id::STATEMENT_LOST, &["S"])
+                .cause
+                .contains("not run again")
+        );
+        assert!(
+            m(id::ATTACHED, &["S", "F", "J"])
+                .recovery
+                .contains("does not sign off")
+        );
+        assert!(m(id::NO_COMMITMENT_CONTROL, &["T"]).cause.contains("55019"));
+        assert!(
+            m(id::TRANSFER_RESUMABLE, &["T", "2", "3"])
+                .cause
+                .contains("first row not committed")
+        );
+        assert!(m(id::REQUEST_SAVED, &["F"]).cause.contains("never saved"));
+        for id in [
+            id::NO_MORE_CONNECTIONS,
+            id::STATEMENT_LOST,
+            id::TRANSFER_FAILED,
+        ] {
+            assert_eq!(
+                m(id, &["1", "2", "3", "4", "5"]).kind(),
+                Kind::Error,
+                "{id}"
+            );
+        }
+        for id in [
+            id::RESULT_INCOMPLETE,
+            id::UNCOMMITTED_CHANGES,
+            id::NO_COMMITMENT_CONTROL,
+        ] {
+            assert_eq!(m(id, &["1"]).kind(), Kind::Warning, "{id}");
+        }
+        assert_eq!(m(id::ROWS_CHANGED, &["1"]).kind(), Kind::Information);
+    }
 
     #[test]
     fn phase_6_texts() {

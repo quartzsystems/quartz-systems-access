@@ -543,3 +543,87 @@ severity = 0
 text = "&1 sent to printer &2."
 cause = "Spooled file &1 was read from the system and sent to printer &2 on this computer, laid out as a 5250 printer session prints it."
 recovery = "None needed. If it does not print, check printer &2 on this computer."
+
+[QAD7001]
+severity = 0
+text = "Connected to &1 for &2 (job &3)."
+cause = "&2 has a connection of its own to system &1, attached to this program's session there without a new sign-on. Its job, &3, runs as the signed-on profile and keeps its own library list, QTEMP, commitment definition, statements and cursors."
+recovery = "None needed. Closing the window closes the connection and ends job &3; it does not sign off, and the session goes on."
+
+[QAD7002]
+severity = 10
+text = "&1 needs its own connection, and the server is older than version 4."
+cause = "&1 runs in a connection of its own, attached to the session, so that it never waits behind or holds up anything else. The QAP server on the system speaks a version before 4, which cannot attach a connection to a session."
+recovery = "Ask for the system to be upgraded to a QS/400 release whose QAP server speaks version 4 or later. Until then Run Command uses the session's shared connection, as before; Run SQL, Schemas and Data Transfer are not available."
+
+[QAD7003]
+severity = 30
+text = "No more connections allowed to &1. Close a window and try again."
+cause = "A session on system &1 may have at most 16 connections, the shared one included, and it has them all: the system refused another (TCP1A59). Each Run SQL and Run Command window and each Data Transfer run has one."
+recovery = "Close a Run SQL, Run Command or Data Transfer window, or wait for a transfer to end, then try again."
+
+[QAD7010]
+severity = 30
+text = "The connection to &1 was lost; the statement must be run again."
+cause = "The window's connection to system &1 closed while a statement ran or before its result was read. Its job ended with it, and with the job its statements, cursors and uncommitted changes, which the system rolled back. The statement was not run again by this program."
+recovery = "Check what the statement did, if it changes data, and run it again. The next run attaches a new connection; the rows already shown stay, marked incomplete."
+
+[QAD7011]
+severity = 10
+text = "Result is incomplete: &1."
+cause = "Not every row of the result was read: &1. The rows shown are those the system sent before that."
+recovery = "Run the statement again for the whole result. The rows shown can still be copied or exported, marked incomplete."
+
+[QAD7020]
+severity = 0
+text = "&1 rows changed."
+cause = "The statement changed &1 rows. Under commitment control the changes are not committed until Commit."
+recovery = "None needed. Under a commit level other than None, select Commit to keep the changes or Rollback to undo them."
+
+[QAD7021]
+severity = 10
+text = "Uncommitted changes in &1. Commit, roll back, or cancel."
+cause = "Statements in &1 changed data under commitment control, and the changes are neither committed nor rolled back. Closing the connection, or changing the commit level or naming, needs them settled first: a connection that closes rolls them back."
+recovery = "Select Commit to keep the changes, Roll Back to undo them, or Cancel to go back to the window."
+
+[QAD7030]
+severity = 0
+text = "Transfer &1 complete: &2 rows in &3."
+cause = "Every row of transfer &1 was transferred: &2 rows, in &3."
+recovery = "None needed."
+
+[QAD7031]
+severity = 30
+text = "Transfer &1 failed at row &2 (line &3 of &4): &5."
+cause = "The system refused row &2 of transfer &1, from line &3 of &4, with: &5. What was kept depends on the transfer's commitment options; the report says how many rows were committed."
+recovery = "Correct the row in &4, or the column mapping, and run the transfer again; when rows were committed, resume from the row the report gives."
+
+[QAD7032]
+severity = 10
+text = "Transfer &1 was cancelled; nothing was kept."
+cause = "Transfer &1 was cancelled before it ended. A download's partial output file was deleted; an upload's uncommitted rows were rolled back."
+recovery = "Run the transfer again when you are ready."
+
+[QAD7033]
+severity = 20
+text = "&2 rows committed before the failure; resume from row &3."
+cause = "Transfer &1 commits every few batches. &2 rows were committed before the failure and stay on the system; the batches after them were rolled back. Row &3 is the first row not committed."
+recovery = "Correct the failing row, then select Resume from row &3. The resume row is saved with the request."
+
+[QAD7034]
+severity = 10
+text = "&1 cannot use commitment control; uploading without it."
+cause = "Table &1 cannot be changed under commitment control (for example, it is not journaled): the system answered SQL7008, SQLSTATE 55019. The upload goes on without commitment control, so a failure leaves every row before the failing one in the table."
+recovery = "Journal table &1 if a failed upload must leave nothing behind, then upload with commitment control. Otherwise, resume from the failing row after a failure."
+
+[QAD7035]
+severity = 20
+text = "Column &1: value &2 does not fit &3."
+cause = "In the preview, value &2 for column &1 cannot be stored in its type &3: it is too long, has too many digits, or is not of that type. Only the first such value of each column is shown."
+recovery = "Correct the value in the source file, or map the column to another target column, before running the transfer."
+
+[QAD7040]
+severity = 0
+text = "Request saved to &1."
+cause = "The transfer request was saved to &1. It holds everything needed to run the transfer again except passwords, which are never saved."
+recovery = "None needed. Open &1, or run it with qsaccess run, to transfer again."
