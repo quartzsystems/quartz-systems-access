@@ -162,3 +162,44 @@ fn a_version_3_system_offers_printer_output() {
     assert!(printer_output_blocked("127.0.0.1", Some(4)).is_none());
     assert!(printer_output_blocked("127.0.0.1", None).is_none());
 }
+
+/// Before version 4: Run SQL, Schemas and Data Transfer are not offered
+/// (`QAD5001`), nothing of the `Sql` service or `Attach` is sent, and Run
+/// Command stays on the shared connection and works.
+#[test]
+fn a_version_2_system_has_no_sql_and_run_command_keeps_the_shared_connection() {
+    let (port, _, closed) = common::v2::start_v2();
+    let sys = system(port);
+    let st = state(&sys);
+    let h = qap::client(&st, &sys);
+    lock(&h).sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    for f in ["Run SQL", "Schemas", "Data Transfer"] {
+        let m = qsaccess::runsql::sql_blocked(f, "127.0.0.1", Some(2)).unwrap();
+        assert_eq!(m.id, id::QAP_VERSION_NEEDED);
+        assert_eq!(
+            m.text,
+            format!("{f} needs QAP version 4; system 127.0.0.1 has version 2.")
+        );
+    }
+    for op in [Op::Prepare, Op::ListSchemas, Op::Attach, Op::JobInfo] {
+        assert!(lock(&h).supports(op).is_err(), "{op:?}");
+    }
+    let e = lock(&h).sql_connection().unwrap_err();
+    assert_eq!(qap::explain(&sys, &e).message.id, id::QAP_VERSION_NEEDED);
+    assert!(lock(&h).attach().is_err());
+    let p = lock(&h).run_command("CRTLIB LIB(QATEST)").unwrap();
+    let o = qap_client::CommandOutcome::from_reply(p.wait_done().unwrap()).unwrap();
+    assert_eq!(o.status, qap_client::Status::Ok);
+    assert!(
+        closed.lock().unwrap().is_empty(),
+        "one connection, nothing refused"
+    );
+}
+
+#[test]
+fn a_version_4_system_offers_sql() {
+    for f in ["Run SQL", "Schemas", "Data Transfer"] {
+        assert!(qsaccess::runsql::sql_blocked(f, "127.0.0.1", Some(4)).is_none());
+        assert!(qsaccess::runsql::sql_blocked(f, "127.0.0.1", None).is_none());
+    }
+}

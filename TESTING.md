@@ -67,12 +67,69 @@
   command and another request share its connection, and the GUI's look at
   the signed-on profile never waits on a client in use.
 
+Phase 7 (QAP version 4), against QS/400's engine at dd1f61a4 and its test
+database (`qapd::testing::sql`):
+
+- `qap-client/tests/attach.rs`: `Attach` and `JobInfo`: a connection of its
+  own with its own job as the session's profile; refused before version 4.
+- `qap-client/tests/sql.rs`: every `Sql` operation and status (`SqlError`
+  with SQLSTATE and SQLCODE, `NotFound`, `NotAuthorized` with `SQL0551`,
+  `InUse` with `SQL0752`, `Cancelled`); `Attach` first or `InvalidRequest`,
+  and not again on the same connection; the session's 16 connections
+  (`TCP1A59`); `SessionEnded` (`TCP1A58`) after a sign-off elsewhere; the
+  three cancel bodies; cursors that survive Commit and Rollback; a failing
+  row's index; `SQL7008` on the unjournaled table; rollback when a
+  connection closes; every type (DECFLOAT's special values, CCSID 65535
+  bytes, `TIMESTAMP(12)`, BOOLEAN, NULLs); a result over 1 MiB streamed in
+  blocks of 500; and a forced drop mid-fetch (`System::drop_connection`):
+  the cursor lost, said once, never sent to the new job.
+- `qap-client/tests/drops.rs`: connections dropped under their requests by
+  the test system's forced close: read-only requests resumed and sent once
+  more (a spooled file batch included), a command never sent again, a
+  window's connection attached anew; every close logged at info.
+- `qsa-net`'s unit tests: polled reads, and os error 997 as no data.
+- `qsa-sql/tests/props.rs`: 20,000 generated values each: decimal and
+  DECFLOAT text, integers, binary and CCSID 65535 data come back unchanged
+  through CSV fields (either decimal point) and spreadsheet cells; dates,
+  times and timestamps read back in every date style.
+- `qsa-transfer/tests/download.rs` and `upload.rs`: downloads to every
+  format with their exact text; columns, Where clause and row limit;
+  append; cancel and failure leaving no file; uploads mapped by name,
+  position and hand; a failing row in one transaction, with a commit every
+  batch (resume from the first row not committed) and without commitment
+  control after `SQL7008` (resume from the failing row); Replace in one
+  transaction; a misfit; a cancel; and the all-types table downloaded and
+  uploaded back in CSV, TSV, XLSX, ODS and fixed width, CCSID 65535 data as
+  hex and as text, reproducing every value exactly (ODS refuses CCSID 65535
+  text with control characters, which XML cannot hold).
+- `qsaccess/tests/runsql.rs`: Run SQL's connection worker: a script's
+  messages as sent with SQLSTATE, SQLCODE and script line, Stop at First
+  Error, Fetch More and Fetch All, a cancelled query keeping its rows
+  (incomplete), the commit level and `InUse`, a drop mid-fetch (`QAD7010`,
+  nothing run again, the next run attached anew), `SessionEnded` after a
+  sign-off on the shared connection, and a close that rolls back and never
+  signs off.
+- `qsaccess/tests/runcmd.rs`: Run Command windows on their own attached
+  connections beside a long command, the seventeenth connection as
+  `QAD7003`, and a sign-off elsewhere.
+- `qsaccess/tests/fallback.rs`: before version 4, Run SQL, Schemas and Data
+  Transfer are `QAD5001`, nothing of `Sql` or `Attach` is sent, and Run
+  Command keeps the shared connection.
+- `qsaccess/tests/run_request.rs`: the running instance's session handed to
+  `qsaccess run` over the instance endpoint, and exit code 1 for bad
+  arguments and request files.
+- `qsaccess/tests/secrets.rs` also attaches, runs SQL and hands the session
+  over, and searches for the session token too.
+
 CI also runs `cargo fmt --check`, `cargo clippy -D warnings`, the clean-room
 check (`ci/cleanroom.sh`), the copyright header check and `ci/deps.sh`
-(`qsa-net`, `qap-client`, `tn5250` and `scs` must not depend on FLTK).
+(`qsa-net`, `qap-client`, `qsa-sql`, `qsa-transfer`, `tn5250` and `scs` must
+not depend on FLTK).
 
 The clean-room check allows an explicit list of files and no others: each
-protocol crate's `wire.rs` (today only `tn5250/src/wire.rs`).
+protocol crate's `wire.rs` (today only `tn5250/src/wire.rs`), and, while QS/400's
+version 4 build notes name another platform, the read-only spec mirror
+`docs/qap-protocol-spec.md`.
 The protocols' vendor-prefixed strings (5250 terminal types and environment
 variable names) live there and nowhere else.
 Other code uses their constants, and logs them only at debug level. A new
@@ -147,7 +204,12 @@ on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 | `session-properties-auto-sign-on`, `session-properties-auto-sign-on-disabled` | New: Session Properties with automatic sign-on enabled (TLS, QAP version 2) and disabled without TLS (`QAD5030`). `session-properties-general` changes with them. No golden yet. |
 | `password-expiry` | New: the password expiry warning, `QAD4031` with Change Password.... No golden yet. |
 | `prompt-simple`, `prompt-qualifiers`, `prompt-list`, `prompt-additional`, `prompt-elements`, `prompt-checked`, `prompt-help` | New: Prompt for QS/400's test commands (`qapd::testing`): CRTLIB; DSPOBJD with a qualified name, then a list with "+"; CRTPF with its additional parameters shown, then its element list changed; DSPOBJD after a failed check; a qualifier's help. No golden yet. |
-| `qsa-install`: `wizard-0-welcome`, `wizard-1-licence`, `wizard-2-install-for`, `wizard-3-location`, `wizard-4-options`, `wizard-5-ready`, `wizard-7-finish`, `uninstall`, `repair` | The licence text, the check box control, and no saved passwords in the Welcome, Uninstall and Repair text. |
+| `run-sql`, `run-sql-results`, `run-sql-error`, `run-sql-incomplete`, `run-sql-commit`, `run-sql-uncommitted` | New: Run SQL empty; with two result tabs (`HLINV.ASSETS`, NULL notes a grey dash, dates in `*MDY`); with `SQL0104` as the system sent it; with a result cut short by a cancel (`QAD7011`, the tab marked Incomplete); under Read committed with Commit and Rollback enabled after `QAD7020`; and the uncommitted-changes prompt (`QAD7021`). No golden yet. |
+| `schemas`, `schemas-columns` | New: Schemas with the test system's schemas, and `HLINV.ASSETS`'s columns. No golden yet. |
+| `transfer-download-source`, `transfer-download-columns`, `transfer-download-output`, `transfer-download-fixed`, `transfer-download-query` | New: Data Transfer from the system: each page for `HLINV.ASSETS` with a Where clause, chosen columns and a row limit; the fixed-width widths; a query source. No golden yet. |
+| `transfer-upload-input`, `transfer-upload-target`, `transfer-upload-mapping`, `transfer-upload-commit` | New: Data Transfer to the system: each page, the mapping grid with a value that does not fit (`QAD7035`), and commit every 10 batches. No golden yet. |
+| `transfer-progress`, `transfer-summary`, `transfer-no-commitment-control` | New: the progress dialog, the summary (`QAD7030`), and `SQL7008` as sent with `QAD7034` and Upload Without Commitment Control. No golden yet. |
+| `qsa-install`: `wizard-0-welcome`, `wizard-1-licence`, `wizard-2-install-for`, `wizard-3-location`, `wizard-4-options`, `wizard-5-ready`, `wizard-7-finish`, `uninstall`, `repair` | The licence text, the check box control, and no saved passwords in the Welcome, Uninstall and Repair text; `.qdx` among the file types on Options and Ready. |
 
 ## PDF goldens
 
@@ -374,6 +436,102 @@ is dimmed in the task pane with `QAD5001` as its tip and says the same when
 opened; Run Command, the expiry warning and automatic sign-on work as
 before.
 
+## Live acceptance (Phase 7: QAP version 4)
+
+On QS/400 at 10.42.70.150, prepared first:
+
+1. a QS/400 build at or after dd1f61a4 installed (`STRTCPSVR SERVER(*QAP)`;
+   Verify... says "Version 4");
+2. the test data from QS/400's `tools/conformance/qap/` (its `README.md`
+   says how): `RUNSQLSTM` of `hlinv.sql`, then each command of `hlinv.cl`
+   (profiles `BOB` and `ANN`, `HLTEST.NOJRN` unjournaled, `HLPAY.SALARIES`
+   for `ANN` only). Names differ from the in-process test database where that
+   README says (the view is `HLINV.ASSETSACT`; there is no `ASSETSL1`);
+3. the long query, from the comment in `hlinv.sql` above `HLTEST.SLOW`:
+   `SELECT COUNT(*) FROM HLTEST.SLOW A WHERE EXISTS (SELECT 1 FROM HLTEST.SLOW B WHERE EXISTS (SELECT 1 FROM HLTEST.SLOW C WHERE C.ID > A.ID + B.ID + 1000000))`.
+   Never cancel-test with a join of several copies (see that README);
+4. this program installed by its installer (for the `.qdx` file type), signed
+   on as `BOB`.
+
+Then, with `QSACCESS_LOG=trace`:
+
+- [ ] **Query.** Run SQL, `SELECT * FROM HLINV.ASSETS`, Ctrl+Enter: twelve
+  rows; `COST` with two decimals; `ACQUIRED` in the job's date format;
+  `NOTES` a grey `-`; a header's tooltip shows its label and type; the title
+  names the system and the window's job (`QAD7001` on the status line);
+  `WRKACTJOB` shows that job beside the shared connection's. Copy Cell and
+  Copy Row paste as tab-separated text.
+- [ ] **The long query cancelled.** Run the long query, Cancel after a few
+  seconds: `SQL0952` in Messages as the system sent it; the result tab says
+  Incomplete (cancelled), as does the status bar (`QAD7011`).
+- [ ] **Run Command while a long query runs.** Start the long query; in Run
+  Command, `CRTLIB LIB(QATESTLIB)` completes at once (`QAD5010`), in a job
+  of its own; `DLTLIB LIB(QATESTLIB)` afterwards.
+- [ ] **Printer Output and a second Run SQL window while a long query
+  runs.** With the long query running: Printer Output lists and opens a
+  file; a second Run SQL window queries `HLINV.LOCATIONS`. Neither waits for
+  the query (QS/400 lets a plain query take turns; see `docs/QAP.md`'s "Long
+  statements").
+- [ ] **Commit and Rollback.** Commit level Read committed: Commit and
+  Rollback are enabled. `INSERT INTO HLTEST.JRN VALUES(1, 'one')`
+  (`QAD7020`), Rollback, `SELECT * FROM HLTEST.JRN`: empty. Insert again,
+  Commit: it stays. Insert once more and change the commit level: the
+  program asks Commit, Roll Back or Cancel (`QAD7021`); so does closing the
+  window. With a result half fetched, Commit: Fetch More still works.
+- [ ] **An unjournaled table.** Under Read committed,
+  `INSERT INTO HLTEST.NOJRN VALUES(1, 'x')`: the system's `SQL7008`
+  (SQLSTATE `55019`) in Messages.
+- [ ] **Not authorized.** As `BOB`, `SELECT * FROM HLPAY.SALARIES`:
+  `SQL0551` as sent; Schemas lists `SALARIES` and opening it shows the same.
+  As `ANN` in a second session (another computer or user): two rows.
+- [ ] **Schemas.** The tree lists `ARCH001` and on in pages of 100 (More
+  schemas...), `HLMANY`'s 150 tables in pages; `HLINV.ASSETS`'s columns in
+  the right pane; View Data opens Run SQL with the first 1,000 rows; Transfer
+  Data from... and to... open Data Transfer with the table set.
+- [ ] **Download to each format.** `HLTEST.ALLTYPES` to CSV, TSV, XLSX, ODS
+  and fixed width (`QAD7030` each). Open the XLSX and ODS in a spreadsheet
+  program: `C_DECIMAL` a number with two decimals, `C_BIGINT` and the
+  DECFLOAT special values text, `C_BOOLEAN` TRUE or FALSE, `C_TS12` with
+  twelve fractional digits. Cancel a download of the long query: no file.
+- [ ] **Upload from each format.** `DELETE FROM HLTEST.ALLTYPES`, then
+  upload each downloaded file back (Replace): `SELECT * FROM
+  HLTEST.ALLTYPES` shows the same rows as before, NULLs, decimals, DECFLOAT
+  special values, `TIMESTAMP(12)`, BOOLEAN and the CCSID 65535 bytes
+  included. The Mapping page shows a misfit (`QAD7035`) for a hand-edited
+  CSV with a text in `C_INTEGER`.
+- [ ] **A failing upload in both modes, with resume.** A CSV of `ID,NAME`
+  rows 1 to 30 with row 17 repeating ID 3, into `HLTEST.JRN` (empty):
+  - One transaction: `QAD7031` names row 17, line 18 and `SQL0803`; the
+    table is empty.
+  - Commit every 1 batch: `QAD7033` says how many rows were committed and
+    offers Resume from Row X, X the first row not committed (not 17).
+    Correct row 17, resume: rows 1 to 30, each once.
+- [ ] **The unjournaled-table fallback.** The same CSV into `HLTEST.NOJRN`:
+  the system's `SQL7008` with `QAD7034` and Upload Without Commitment
+  Control. Uploading without it stops at row 17 with rows 1 to 16 kept, and
+  offers Resume from Row 17.
+- [ ] **A `.qdx` double-clicked.** Save Request... from a download, then
+  double-click the `.qdx` in Explorer (or the file manager): the window
+  opens with the request, ready to run (`QAD7040` when saved).
+- [ ] **`qsaccess run` with a running instance.** With the program running
+  and signed on: `start /wait "" qsaccess run assets.qdx` (Windows) or
+  `qsaccess run assets.qdx` (Linux): no Sign On; progress on stderr and in
+  the progress window; `QAD7030` on stdout; exit code 0. Cancel in the
+  progress window: exit code 4.
+- [ ] **`qsaccess run` without one.** Close the program, run it again: the
+  Sign On dialog, then the transfer; exit code 0. Cancel the Sign On: exit
+  code 2. A request naming a missing table: `QAD7031`, exit code 3.
+- [ ] **A sign-off under a window.** With a Run SQL window open, Actions >
+  Sign Off in the main window: the window shows the system's `TCP1A58` and
+  offers Sign On...; its results stay.
+- [ ] **Nothing secret logged.** Search `qsaccess.log` for the passwords
+  used and for any 64-hexadecimal-character run: none.
+
+Against a version-3 server (QS/400 at 3134e9ea, if one is at hand; the
+automated tests cover version 2 with QS/400's engine at 8306ec41): Run SQL,
+Schemas and Data Transfer are dimmed with `QAD5001`; Run Command works on
+the shared connection; everything earlier works as before.
+
 ## Keyboard: Right Ctrl
 
 Right Ctrl is told apart from left Ctrl by FLTK's key codes, which FLTK
@@ -395,7 +553,7 @@ It snapshots the registry keys and folders an install can touch, then:
 
 1. a damaged copy of the installer exits 2 and changes nothing;
 2. silent install exits 0: program, uninstaller, manifest, version information,
-   `.qsd`/`.qsp`/`.qkm`/`.qsm` ProgIDs and open commands, Start menu and desktop
+   `.qsd`/`.qsp`/`.qkm`/`.qsm`/`.qdx` ProgIDs and open commands, Start menu and desktop
    shortcuts, the Apps entry;
 3. (just me) a `.qsd` opened through the shell starts `qsaccess open <file>`,
    and `qsaccess --quit` closes it;

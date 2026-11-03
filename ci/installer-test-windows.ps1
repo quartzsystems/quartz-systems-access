@@ -30,11 +30,12 @@ $settingsDir = "$env:APPDATA\Quartz Systems\Access"
 
 # What an install can touch: these keys and folders, listed in full.
 $keys = @(
-    "$hive\Software\Classes\.qsd", "$hive\Software\Classes\.qsp", "$hive\Software\Classes\.qkm", "$hive\Software\Classes\.qsm",
+    "$hive\Software\Classes\.qsd", "$hive\Software\Classes\.qsp", "$hive\Software\Classes\.qkm", "$hive\Software\Classes\.qsm", "$hive\Software\Classes\.qdx",
     "$hive\Software\Classes\QuartzSystems.Access.Session.1",
     "$hive\Software\Classes\QuartzSystems.Access.PrinterSession.1",
     "$hive\Software\Classes\QuartzSystems.Access.KeyMap.1",
     "$hive\Software\Classes\QuartzSystems.Access.Macro.1",
+    "$hive\Software\Classes\QuartzSystems.Access.Transfer.1",
     "$hive\Software\Microsoft\Windows\CurrentVersion\Uninstall\QuartzSystemsAccess"
 )
 # Folders listed in full, and folders listed one level deep (a desktop can

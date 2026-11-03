@@ -21,6 +21,8 @@
 //! (`harness = false`), not under the test harness.
 
 use std::path::{Path, PathBuf};
+
+use fltk::prelude::*;
 use std::process::ExitCode;
 
 use fltk::window::Window;
@@ -582,6 +584,448 @@ fn run_command_results() -> Window {
     .window
 }
 
+/// Run SQL: empty; with two result tabs; with an error; with a result cut
+/// short by a cancel; under a commit level with Commit and Rollback; and the
+/// uncommitted-changes prompt.
+fn run_sql_views() -> Vec<(String, Window)> {
+    use qap_client::proto::ops::sql::{Column, CommitLevel, SetOptions, SqlValue};
+    use qsaccess::runsql::RunSql;
+    use qsaccess::runsql::worker::{Detail, Line, Standing};
+    let sys = System::new("sys1.example.net");
+    let job = qap_client::proto::types::JobId {
+        name: "QAPCNN".into(),
+        user: "QUSER".into(),
+        number: "004311".into(),
+    };
+    let col = |name: &str, label: &str, t: &str, length: u32, scale: u16| Column {
+        name: name.into(),
+        label: label.into(),
+        sql_type: t.into(),
+        length,
+        scale,
+        nullable: true,
+        ccsid: if t == "CHAR" || t == "VARCHAR" { 37 } else { 0 },
+    };
+    let asset_cols = vec![
+        col("ASSET_TAG", "Asset tag", "CHAR", 10, 0),
+        col("LOCATION", "Rack / site code", "CHAR", 10, 0),
+        col("MANUFACTURER", "Manufacturer", "VARCHAR", 40, 0),
+        col("MODEL", "Model", "VARCHAR", 40, 0),
+        col("ACQUIRED", "Acquisition date", "DATE", 10, 0),
+        col("COST", "Purchase cost", "DECIMAL", 11, 2),
+        col("NOTES", "Short notes", "VARCHAR", 256, 0),
+    ];
+    let t = |s: &str| SqlValue::Text { text: s.into() };
+    let day = |y, m, d| SqlValue::Date {
+        ms: qsa_sql::datetime::day_number(y, m, d) * 86_400_000,
+    };
+    let asset_rows: Vec<Vec<SqlValue>> = [
+        (
+            "QS000101  ",
+            "QS-HQ-R1  ",
+            "QUANTA",
+            "T4048-IX8",
+            (2025, 3, 11),
+            "1200.00",
+        ),
+        (
+            "QS000110  ",
+            "QS-HQ-R1  ",
+            "EDGECORE",
+            "AS5712-54X",
+            (2024, 11, 2),
+            "1650.00",
+        ),
+        (
+            "QS000201  ",
+            "QS-HQ-R2  ",
+            "DELL",
+            "R740XD",
+            (2024, 6, 20),
+            "1800.00",
+        ),
+        (
+            "QS000302  ",
+            "QS-HQ-R3  ",
+            "WEIDMULLER",
+            "UR20-FBC-EIP",
+            (2026, 10, 1),
+            "2400.00",
+        ),
+        (
+            "QS000402  ",
+            "QS-BR1-R1 ",
+            "WATCHGUARD",
+            "M370",
+            (2024, 9, 8),
+            "2700.00",
+        ),
+    ]
+    .iter()
+    .map(|(a, l, m, mo, (y, mm, d), c)| {
+        vec![
+            t(a),
+            t(l),
+            t(m),
+            t(mo),
+            day(*y, *mm, *d),
+            SqlValue::Decimal { text: (*c).into() },
+            SqlValue::Null,
+        ]
+    })
+    .collect();
+    let loc_cols = vec![
+        col("LOCATION", "Rack / site code", "CHAR", 10, 0),
+        col("SITE", "Site", "VARCHAR", 40, 0),
+    ];
+    let loc_rows = vec![
+        vec![t("QS-HQ-R1  "), t("Headquarters")],
+        vec![t("QS-BR1-R1 "), t("Branch 1")],
+    ];
+    let ok = |n: usize, line: usize, text: &str, rows: Option<i64>| Line {
+        statement: n,
+        script_line: line,
+        verb: "SELECT".into(),
+        id: String::new(),
+        sqlstate: "00000".into(),
+        sqlcode: Some(0),
+        text: text.into(),
+        rows,
+        elapsed: std::time::Duration::from_millis(37 + n as u64 * 11),
+        failed: false,
+        detail: Detail::None,
+    };
+    let script = "SELECT * FROM HLINV.ASSETS;\nSELECT * FROM HLINV.LOCATIONS;\n";
+    let none = SetOptions::default();
+    let mut out = Vec::new();
+    out.push((
+        "run-sql".to_owned(),
+        RunSql::build(&sys, Some(&job), "", &[], &[], &none, false)
+            .window()
+            .clone(),
+    ));
+    out.push((
+        "run-sql-results".to_owned(),
+        RunSql::build(
+            &sys,
+            Some(&job),
+            script,
+            &[
+                ok(1, 1, "5 rows fetched.", Some(5)),
+                ok(2, 2, "2 rows fetched.", Some(2)),
+            ],
+            &[
+                (asset_cols.clone(), asset_rows.clone(), Standing::Complete),
+                (loc_cols, loc_rows, Standing::Complete),
+            ],
+            &none,
+            false,
+        )
+        .window()
+        .clone(),
+    ));
+    let mut failed = ok(1, 1, "Token SELEKT was not valid.", None);
+    failed.failed = true;
+    failed.id = "SQL0104".into();
+    failed.sqlstate = "42601".into();
+    failed.sqlcode = Some(-104);
+    let error = RunSql::build(
+        &sys,
+        Some(&job),
+        "SELEKT * FROM HLINV.ASSETS;\n",
+        &[failed],
+        &[],
+        &none,
+        false,
+    );
+    error.w.tabs.clone().select(0);
+    error.w.message.clone().set(
+        "SQL0104: Token SELEKT was not valid.",
+        qsa_ui::Status::Error,
+    );
+    out.push(("run-sql-error".to_owned(), error.window().clone()));
+    let mut cancelled = ok(1, 1, "Processing of the SQL statement ended.", None);
+    cancelled.id = "SQL0952".into();
+    cancelled.sqlstate = "57014".into();
+    cancelled.sqlcode = Some(-952);
+    let incomplete = RunSql::build(
+        &sys,
+        Some(&job),
+        "SELECT * FROM HLINV.ASSETS;\n",
+        &[cancelled],
+        &[(
+            asset_cols,
+            asset_rows[..3].to_vec(),
+            Standing::Incomplete("cancelled".into()),
+        )],
+        &none,
+        false,
+    );
+    incomplete.w.message.clone().set(
+        &qsa_msg::message(qsa_msg::id::RESULT_INCOMPLETE, &["cancelled"]).to_string(),
+        qsa_ui::Status::Error,
+    );
+    out.push(("run-sql-incomplete".to_owned(), incomplete.window().clone()));
+    let mut changed = ok(1, 1, "1 rows changed.", Some(1));
+    changed.id = "QAD7020".into();
+    let committed = SetOptions {
+        commit: CommitLevel::ReadCommitted,
+        naming: qap_client::proto::ops::sql::Naming::Sql,
+        default_schema: Some("HLTEST".into()),
+    };
+    out.push((
+        "run-sql-commit".to_owned(),
+        RunSql::build(
+            &sys,
+            Some(&job),
+            "INSERT INTO JRN VALUES(1, 'one');\n",
+            &[changed],
+            &[],
+            &committed,
+            true,
+        )
+        .window()
+        .clone(),
+    ));
+    out.push((
+        "run-sql-uncommitted".to_owned(),
+        qsa_ui::msgdetails::ask_message_box(
+            &qsa_msg::message(
+                qsa_msg::id::UNCOMMITTED_CHANGES,
+                &["Run SQL - sys1.example.net (004311/QUSER/QAPCNN)"],
+            ),
+            &["Commit", "Roll Back", "Cancel"],
+        )
+        .build()
+        .0,
+    ));
+    out
+}
+
+/// The columns of `HLINV.ASSETS`, as the catalog gives them.
+fn asset_columns() -> Vec<qap_client::proto::ops::sql::Column> {
+    let col = |name: &str, label: &str, t: &str, length: u32, scale: u16, nullable: bool| {
+        qap_client::proto::ops::sql::Column {
+            name: name.into(),
+            label: label.into(),
+            sql_type: t.into(),
+            length,
+            scale,
+            nullable,
+            ccsid: if t.contains("CHAR") { 37 } else { 0 },
+        }
+    };
+    vec![
+        col("ASSET_TAG", "Asset tag", "CHAR", 10, 0, false),
+        col("LOCATION", "Rack / site code", "CHAR", 10, 0, false),
+        col("MANUFACTURER", "Manufacturer", "VARCHAR", 40, 0, false),
+        col("MODEL", "Model", "VARCHAR", 40, 0, false),
+        col("SERIAL", "Serial number", "VARCHAR", 40, 0, true),
+        col("ACQUIRED", "Acquisition date", "DATE", 10, 0, true),
+        col("COST", "Purchase cost", "DECIMAL", 11, 2, true),
+        col("CHANGED_TS", "Last change", "TIMESTAMP", 26, 6, false),
+    ]
+}
+
+/// Data Transfer from the system: each page, the fixed-width widths, the
+/// progress dialog and the summary.
+fn download_views() -> Vec<(String, Window)> {
+    use qsa_transfer::{Download, FileOptions, Format, Source};
+    use qsaccess::transfer::download::DownloadWindow;
+    let sys = System::new("sys1.example.net");
+    let d = Download {
+        source: Source::Table {
+            schema: "HLINV".into(),
+            table: "ASSETS".into(),
+            where_clause: "STATUS = 'ACTIVE'".into(),
+        },
+        columns: vec!["ASSET_TAG".into(), "MODEL".into(), "COST".into()],
+        limit: Some(1000),
+        file: PathBuf::from("C:\\Users\\bob\\Documents\\assets.csv"),
+        ..Download::default()
+    };
+    let mut out = Vec::new();
+    for (i, page) in ["source", "columns", "output"].iter().enumerate() {
+        let w = DownloadWindow::build(&sys, &d, &asset_columns());
+        w.w.tabs.clone().select(i);
+        out.push((format!("transfer-download-{page}"), w.w.window.clone()));
+    }
+    let fixed = Download {
+        options: FileOptions {
+            format: Format::Fixed,
+            ..FileOptions::default()
+        },
+        file: PathBuf::from("C:\\Users\\bob\\Documents\\assets.txt"),
+        ..d.clone()
+    };
+    let w = DownloadWindow::build(&sys, &fixed, &asset_columns());
+    w.w.tabs.clone().select(2);
+    out.push(("transfer-download-fixed".to_owned(), w.w.window.clone()));
+    let query = Download {
+        source: Source::Query {
+            sql: "SELECT ASSET_TAG, COST\n  FROM HLINV.ASSETS\n WHERE COST > 1500".into(),
+        },
+        columns: Vec::new(),
+        ..d
+    };
+    let w = DownloadWindow::build(&sys, &query, &asset_columns());
+    out.push(("transfer-download-query".to_owned(), w.w.window.clone()));
+    let mut p = qsaccess::transfer::progress_dialog("assets.csv");
+    p.rows
+        .set_label(&qsaccess::transfer::progress_text(qsa_transfer::Progress {
+            rows: 1500,
+            elapsed: std::time::Duration::from_millis(2500),
+        }));
+    out.push(("transfer-progress".to_owned(), p.window));
+    out.push((
+        "transfer-summary".to_owned(),
+        qsa_ui::msgdetails::ask_message_box(
+            &qsaccess::transfer::complete("assets.csv", 12, std::time::Duration::from_millis(400)),
+            &["OK"],
+        )
+        .build()
+        .0,
+    ));
+    out
+}
+
+/// Data Transfer to the system: each page, the mapping grid with a value
+/// that does not fit, and the prompt to upload without commitment control.
+fn upload_views() -> Vec<(String, Window)> {
+    use qsa_transfer::reader::{Row, Sheet, Value};
+    use qsa_transfer::{Commit, Map, Mode, SourceColumn, Upload};
+    use qsaccess::transfer::upload::UploadWindow;
+    let sys = System::new("sys1.example.net");
+    let t = |s: &str| Value::Text(s.into());
+    let preview = Sheet {
+        header: Some(vec![
+            "ASSET_TAG".into(),
+            "LOCATION".into(),
+            "MANUFACTURER".into(),
+            "MODEL".into(),
+            "COST".into(),
+        ]),
+        rows: vec![
+            Row {
+                values: vec![
+                    t("QS000501"),
+                    t("QS-HQ-R4"),
+                    t("DELL"),
+                    t("R650"),
+                    t("2100.00"),
+                ],
+                line: 2,
+            },
+            Row {
+                values: vec![
+                    t("QS000502"),
+                    t("QS-HQ-R4"),
+                    t("DELL"),
+                    t("R650"),
+                    Value::Null,
+                ],
+                line: 3,
+            },
+            Row {
+                values: vec![
+                    t("QS000503"),
+                    t("QS-BR1-R1"),
+                    t("ARISTA"),
+                    t("7050SX3"),
+                    t("123456789012.50"),
+                ],
+                line: 4,
+            },
+        ],
+    };
+    let u = Upload {
+        file: PathBuf::from("C:\\Users\\bob\\Documents\\new-assets.csv"),
+        schema: "HLINV".into(),
+        table: "ASSETS".into(),
+        mode: Mode::Append,
+        mapping: vec![
+            Map {
+                target: "ASSET_TAG".into(),
+                from: SourceColumn::Name("ASSET_TAG".into()),
+            },
+            Map {
+                target: "LOCATION".into(),
+                from: SourceColumn::Name("LOCATION".into()),
+            },
+            Map {
+                target: "MANUFACTURER".into(),
+                from: SourceColumn::Name("MANUFACTURER".into()),
+            },
+            Map {
+                target: "MODEL".into(),
+                from: SourceColumn::Name("MODEL".into()),
+            },
+            Map {
+                target: "COST".into(),
+                from: SourceColumn::Name("COST".into()),
+            },
+        ],
+        commit: Commit::Every { batches: 10 },
+        ..Upload::default()
+    };
+    let mut out = Vec::new();
+    for (i, page) in ["input", "target", "mapping", "commit"].iter().enumerate() {
+        let w = UploadWindow::build(&sys, &u, &asset_columns(), preview.clone());
+        w.w.tabs.clone().select(i);
+        out.push((format!("transfer-upload-{page}"), w.w.window.clone()));
+    }
+    out.push((
+        "transfer-no-commitment-control".to_owned(),
+        qsa_ui::msgdetails::system_message_box(
+            Some(&qsa_msg::message(
+                qsa_msg::id::NO_COMMITMENT_CONTROL,
+                &["HLTEST.NOJRN"],
+            )),
+            &qsa_ui::msgdetails::SystemMessage {
+                id: "SQL7008",
+                severity: 30,
+                text: "NOJRN in HLTEST not valid for operation.",
+                help: "",
+            },
+            &["Upload Without Commitment Control", "Cancel"],
+        )
+        .build()
+        .0,
+    ));
+    out
+}
+
+/// Schemas: the tree of schemas, and a table's columns.
+fn schemas_views() -> Vec<(String, Window)> {
+    use qap_client::proto::ops::sql::{Table, TableKind};
+    use qsaccess::schemas::Schemas;
+    let sys = System::new("sys1.example.net");
+    let schemas: Vec<(String, String)> = [
+        ("HLINV", "Homelab inventory"),
+        ("HLMANY", "Many tables"),
+        ("HLPAY", "Payroll"),
+        ("HLTEST", "QAP test tables"),
+        ("QGPL", "General purpose library"),
+        ("QSYS2", "System catalog"),
+    ]
+    .iter()
+    .map(|(a, b)| ((*a).to_owned(), (*b).to_owned()))
+    .collect();
+    let tree = Schemas::build(&sys, &schemas, None);
+    let assets = Table {
+        schema: "HLINV".into(),
+        name: "ASSETS".into(),
+        kind: TableKind::Table,
+        text: "Hardware assets".into(),
+    };
+    let cols = asset_columns();
+    let columns = Schemas::build(&sys, &schemas, Some((&assets, &cols)));
+    vec![
+        ("schemas".to_owned(), tree.w.window.clone()),
+        ("schemas-columns".to_owned(), columns.w.window.clone()),
+    ]
+}
+
 /// A Prompt form for one of QS/400's test commands.
 fn prompt_form(name: &str) -> qsaccess::prompt::form::Form {
     let c = qapd::testing::commands::find(name).expect("a test command");
@@ -750,6 +1194,10 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
         qsaccess::runcmd::build("sys1.example.net", "", None, &[], None).window,
     ));
     out.push(("run-command-results".to_owned(), run_command_results()));
+    out.extend(run_sql_views());
+    out.extend(download_views());
+    out.extend(upload_views());
+    out.extend(schemas_views());
     out.extend(printer_output_views(state));
     out.extend(prompt_views());
     out.push((

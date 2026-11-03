@@ -17,6 +17,10 @@ here. Breaking changes are marked **Breaking**.
 
 ### qsa-net
 
+- **Breaking:** `Transport` has a new method, `poll_reads`: a non-blocking
+  socket whose reads wait a moment for data, as QAP's connections now read
+  (a socket read timeout on Windows can fail with os error 997).
+  `is_timeout` also takes os error 997 on Windows as no data yet.
 - `info!`, beside `debug!`, `trace!` and `warn!`.
 - **Breaking:** `TlsOptions` has a new field, `tls13_only`: offer TLS 1.3
   alone (QAP) instead of TLS 1.2 and 1.3 (Telnet).
