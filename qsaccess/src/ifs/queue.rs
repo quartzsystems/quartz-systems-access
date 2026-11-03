@@ -88,6 +88,13 @@ impl Files for Conn {
             Conn::Shared(h) => qap::lock(h).request(op, body),
         }
     }
+
+    fn ifs_supports(&mut self, op: Op) -> bool {
+        match self {
+            Conn::Attached(a) => a.supports(op).is_ok(),
+            Conn::Shared(h) => qap::lock(h).supports(op).is_ok(),
+        }
+    }
 }
 
 /// Work for the queue's thread.

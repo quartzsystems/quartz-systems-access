@@ -9,10 +9,14 @@
 //! - The file is read on the session's shared connection with `as_ccsid`
 //!   1208, so the system converts it from its own CCSID, and shown in the
 //!   system-output font with the line and column on the status bar.
-//! - Save looks at the file first (`GetInfo`): when it changed on the system
-//!   since it was opened, `QAD8011` offers Overwrite, Reload or Cancel. The
-//!   text then goes back as UTF-8 (`data_ccsid` 1208) with `Replace`, then
-//!   `Append` for the rest, and the file keeps its CCSID.
+//! - Save looks at the file first: when it changed on the system since it
+//!   was opened, `QAD8011` offers Overwrite, Reload or Cancel. On QAP
+//!   version 6 that is `Stat`'s change counter, read at open and compared
+//!   before the save, of the link's target for a symbolic link (`Stat` does
+//!   not follow links); before version 6, `GetInfo`'s last-change time
+//!   ([`ifs::Stamp`]). The text then goes back as UTF-8 (`data_ccsid` 1208)
+//!   with `Replace`, then `Append` for the rest, and the file keeps its
+//!   CCSID.
 //! - Save As writes to a new path in a CCSID chosen for it; Reload reads
 //!   the system's file again; Find and Replace work on the text shown.
 //! - A file over 8 MiB, or a binary one (CCSID 65535, or NUL bytes in its
@@ -32,9 +36,9 @@ use fltk::menu::MenuFlag;
 use fltk::prelude::*;
 use fltk::text::{TextBuffer, TextEditor};
 use fltk::window::Window;
-use qap_client::ifs::{self, Files, ReadOptions, WriteOptions};
+use qap_client::ifs::{self, Files, ReadOptions, Stamp, WriteOptions};
 use qap_client::proto::Op;
-use qap_client::proto::ops::ifs::{Entry, EntryKind, WriteMode};
+use qap_client::proto::ops::ifs::{Entry, WriteMode};
 use qap_client::{Client, Error, Status as QapStatus};
 use qsa_config::System;
 use qsa_msg::{Message, id};
@@ -61,10 +65,13 @@ pub const H: i32 = 620;
 /// What reading a file for the editor found.
 #[derive(Debug)]
 pub enum Loaded {
-    /// The text, the file's entry, and why it is read-only, if it is.
+    /// The text, the file's entry, what a save checks it against, and why
+    /// it is read-only, if it is. A link's entry and stamp are its
+    /// target's.
     Text {
         text: String,
         entry: Entry,
+        stamp: Stamp,
         read_only: Option<Message>,
     },
     /// Too large to edit: `QAD8012`.
@@ -97,19 +104,10 @@ fn read_all<F: Files + ?Sized>(
     Ok(out)
 }
 
-/// Reads `path` for the editor: a link opens as its target.
+/// Reads `path` for the editor: a link opens as its target. The stamp is
+/// read before the data, so a change while it reads shows at the save.
 pub fn load<F: Files + ?Sized>(f: &mut F, path: &str) -> Result<Loaded, Error> {
-    let mut entry = f.get_info(path)?;
-    if entry.kind == EntryKind::Symlink
-        && let Some(t) = entry.target.clone()
-    {
-        let target = if t.starts_with('/') {
-            t
-        } else {
-            ifs::join(ifs::parent(path), &t)
-        };
-        entry = f.get_info(&target)?;
-    }
+    let (_, entry, stamp) = f.checked(path)?;
     let name = ifs::file_name(path).to_owned();
     if entry.size > EDIT_MAX {
         return Ok(Loaded::TooLarge(qsa_msg::message(
@@ -129,6 +127,7 @@ pub fn load<F: Files + ?Sized>(f: &mut F, path: &str) -> Result<Loaded, Error> {
         return Ok(Loaded::Text {
             text: hex_dump(&raw),
             entry,
+            stamp,
             read_only: Some(not_text),
         });
     }
@@ -140,6 +139,7 @@ pub fn load<F: Files + ?Sized>(f: &mut F, path: &str) -> Result<Loaded, Error> {
         text,
         read_only: (entry.size > READ_ONLY_OVER || nul).then_some(not_text),
         entry,
+        stamp,
     })
 }
 
@@ -173,14 +173,15 @@ pub fn hex_dump(data: &[u8]) -> String {
 
 /// Writes `text` to `path` as UTF-8 for the system to convert: `first` the
 /// first request's mode (`Replace`, or `Create` for a new file), `ccsid`
-/// that of a file made. The file's entry afterwards.
+/// that of a file made. The file's entry and stamp afterwards (a link's
+/// target's).
 pub fn save<F: Files + ?Sized>(
     f: &mut F,
     path: &str,
     text: &str,
     first: WriteMode,
     ccsid: u16,
-) -> Result<Entry, Error> {
+) -> Result<(Entry, Stamp), Error> {
     ifs::write(
         |w| f.ifs_request(Op::WriteFile, w),
         path,
@@ -194,7 +195,8 @@ pub fn save<F: Files + ?Sized>(
         |_| {},
         &AtomicBool::new(false),
     )?;
-    f.get_info(path)
+    let (_, entry, stamp) = f.checked(path)?;
+    Ok((entry, stamp))
 }
 
 /// The 1-based line and column of byte `pos` in `buf`, the column in
@@ -236,6 +238,8 @@ pub struct Editor {
     h: Option<Handle>,
     path: RefCell<String>,
     entry: RefCell<Entry>,
+    /// What the file was when read or saved last, for the save's check.
+    stamp: Cell<Option<Stamp>>,
     read_only: bool,
     dirty: Rc<Cell<bool>>,
     /// The last place shown on the status bar.
@@ -357,6 +361,7 @@ impl Editor {
             h: None,
             path: RefCell::new(path.to_owned()),
             entry: RefCell::new(entry),
+            stamp: Cell::new(None),
             read_only,
             dirty,
             shown_at: Cell::new(-1),
@@ -493,13 +498,16 @@ impl Editor {
     fn reload(&self) {
         let path = self.path.borrow().clone();
         match self.call(move |c| load(c, &path)) {
-            Some(Ok(Loaded::Text { text, entry, .. })) => {
+            Some(Ok(Loaded::Text {
+                text, entry, stamp, ..
+            })) => {
                 let pos = self.editor.insert_position();
                 self.buf.clone().set_text(&text);
                 self.editor
                     .clone()
                     .set_insert_position(pos.min(self.buf.length()));
                 *self.entry.borrow_mut() = entry;
+                self.stamp.set(Some(stamp));
                 self.dirty.set(false);
                 self.title();
                 self.report("Read again from the system.");
@@ -519,10 +527,10 @@ impl Editor {
             return false;
         }
         let path = self.path.borrow().clone();
-        let opened = self.entry.borrow().modified;
+        let opened = self.stamp.get();
         let p = path.clone();
-        let now = match self.call(move |c| c.get_info(&p)) {
-            Some(Ok(e)) => Some(e),
+        let now = match self.call(move |c| c.checked(&p)) {
+            Some(Ok((_, _, s))) => Some(s),
             Some(Err(e)) if e.status() == Some(QapStatus::NotFound) => None,
             Some(Err(e)) => {
                 self.failed(&e);
@@ -530,7 +538,7 @@ impl Editor {
             }
             None => return false,
         };
-        if now.as_ref().is_some_and(|e| e.modified != opened) {
+        if now.is_some_and(|s| Some(s) != opened) {
             let m = qsa_msg::message(id::CHANGED_ON_SYSTEM, &[&path]);
             crate::log!("{m}");
             match changed_prompt(&m).run(self.parent()) {
@@ -551,9 +559,10 @@ impl Editor {
         };
         let p = path.clone();
         match self.call(move |c| save(c, &p, &text, mode, ccsid)) {
-            Some(Ok(e)) => {
+            Some(Ok((e, s))) => {
                 let size = e.size;
                 *self.entry.borrow_mut() = e;
+                self.stamp.set(Some(s));
                 self.dirty.set(false);
                 self.title();
                 self.report(&format!(
@@ -611,9 +620,10 @@ impl Editor {
             r => r,
         };
         match r {
-            Some(Ok(e)) => {
+            Some(Ok((e, s))) => {
                 *self.path.borrow_mut() = path.clone();
                 *self.entry.borrow_mut() = e;
+                self.stamp.set(Some(s));
                 self.dirty.set(false);
                 self.shown_at.set(-1);
                 self.title();
@@ -785,12 +795,13 @@ pub enum Asked {
 pub fn open(parent: Option<&dyn WindowExt>, h: &Handle, sys: &System, path: &str) -> Asked {
     let p = path.to_owned();
     let loaded = qap::busy(|| load(&mut *qap::lock(h), &p));
-    let (text, entry, notice) = match loaded {
+    let (text, entry, stamp, notice) = match loaded {
         Ok(Loaded::Text {
             text,
             entry,
+            stamp,
             read_only,
-        }) => (text, entry, read_only),
+        }) => (text, entry, stamp, read_only),
         Ok(Loaded::TooLarge(m)) => {
             crate::log!("{m}");
             return match msgdetails::ask_message(parent, &m, &["Download...", "Cancel"]) {
@@ -808,6 +819,7 @@ pub fn open(parent: Option<&dyn WindowExt>, h: &Handle, sys: &System, path: &str
     }
     let mut e = Editor::build(sys, path, &text, entry, notice.as_ref());
     e.h = Some(h.clone());
+    e.stamp.set(Some(stamp));
     let e = Rc::new(e);
     let mut win = e.window.clone();
     qsa_ui::propdialog::center_on(&mut win, parent);

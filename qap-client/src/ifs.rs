@@ -36,6 +36,13 @@
 //! Links: `GetInfo` does not follow a symbolic link, `ReadFile` does. A
 //! link opens as its target with `GetInfo` of the `target` path; a broken
 //! link's target is `NotFound`.
+//!
+//! Changes: [`Files::stamp`] says what a copy of a file is checked against
+//! to know whether the file changed since: on version 6 `Stat`'s `change`,
+//! which rises on every change to the object and is never reused for it,
+//! two changes in one millisecond included; before version 6, `GetInfo`'s
+//! `modified`. `Stat` does not follow a link either, so a link is stamped
+//! by its target ([`Files::checked`]).
 
 use std::io::{Read, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -46,7 +53,7 @@ use qap_proto::Op;
 use qap_proto::Status;
 use qap_proto::ops::ifs::{
     CreateDirectory, Entries, Entry, EntryKind, FileData, FromTo, ListDirectory, PathRef, ReadFile,
-    WriteFile, WriteMode, Written,
+    Stat, WriteFile, WriteMode, Written,
 };
 
 use crate::conn::lost_and_retryable;
@@ -71,6 +78,16 @@ pub const BINARY: u16 = 65535;
 /// How often a read or write in flight looks for a cancel.
 const LOOK: Duration = Duration::from_millis(25);
 
+/// What tells whether a file changed since it was read.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stamp {
+    /// `Stat`'s change counter (version 6).
+    Change(u64),
+    /// `GetInfo`'s last-change time, milliseconds since 1970 (before
+    /// version 6): two changes within its resolution look like one.
+    Modified(i64),
+}
+
 /// The `Ifs` operations, on whichever connection implements
 /// [`Files::ifs_call`] and [`Files::ifs_request`].
 pub trait Files {
@@ -80,6 +97,52 @@ pub trait Files {
 
     /// Sends `op` and returns at once.
     fn ifs_request<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error>;
+
+    /// Whether the connection's version defines `op`.
+    fn ifs_supports(&mut self, op: Op) -> bool;
+
+    /// `Stat` (version 6): `GetInfo`'s entry and the object's change
+    /// counter; a symbolic link itself, not its target.
+    fn stat(&mut self, path: &str) -> Result<Stat, Error> {
+        self.ifs_call(
+            Op::Stat,
+            &PathRef {
+                path: path.to_owned(),
+            },
+        )
+    }
+
+    /// `path`'s entry and its [`Stamp`]: `Stat` where the version has it,
+    /// `GetInfo` before. Not following a link.
+    fn stamp(&mut self, path: &str) -> Result<(Entry, Stamp), Error> {
+        if self.ifs_supports(Op::Stat) {
+            let s = self.stat(path)?;
+            Ok((s.entry, Stamp::Change(s.change)))
+        } else {
+            let e = self.get_info(path)?;
+            let m = e.modified;
+            Ok((e, Stamp::Modified(m)))
+        }
+    }
+
+    /// What a copy of `path` is checked against: for a symbolic link its
+    /// target (absolute), whose entry and stamp these are; otherwise `path`
+    /// itself. A broken link answers `NotFound`.
+    fn checked(&mut self, path: &str) -> Result<(String, Entry, Stamp), Error> {
+        let (entry, stamp) = self.stamp(path)?;
+        match (&entry.kind, &entry.target) {
+            (EntryKind::Symlink, Some(t)) => {
+                let target = if t.starts_with('/') {
+                    t.clone()
+                } else {
+                    join(parent(path), t)
+                };
+                let (e, s) = self.stamp(&target)?;
+                Ok((target, e, s))
+            }
+            _ => Ok((path.to_owned(), entry, stamp)),
+        }
+    }
 
     /// `ListDirectory`: one page of `path`'s entries matching `pattern`
     /// (`*` and `?`; empty for all), from `start`, at most `max` (0 for no
@@ -223,6 +286,10 @@ impl Files for Client {
     fn ifs_request<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error> {
         self.request(op, body)
     }
+
+    fn ifs_supports(&mut self, op: Op) -> bool {
+        self.supports(op).is_ok()
+    }
 }
 
 impl Files for Attached {
@@ -232,6 +299,10 @@ impl Files for Attached {
 
     fn ifs_request<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error> {
         self.request(op, body)
+    }
+
+    fn ifs_supports(&mut self, op: Op) -> bool {
+        self.supports(op).is_ok()
     }
 }
 

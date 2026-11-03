@@ -8,7 +8,9 @@
 //! MiB file both ways byte for byte, the converted files read in chunks
 //! that cut inside characters joining into the system's whole conversion,
 //! text written in pieces making the same file as one write, and a read
-//! and a write resumed after the connection is dropped under them.
+//! and a write resumed after the connection is dropped under them; and
+//! version 6's `Stat`, its change counter and the stamps that fall back to
+//! `GetInfo` before it.
 
 mod common;
 
@@ -725,6 +727,70 @@ fn a_cancel_in_a_write_stops_it() {
     let at = end.progress().offset;
     assert_eq!(at, 2 * (ifs::WRITE_CHUNK - "/home/BOB/c.bin".len()) as u64);
     assert_eq!(c.get_info("/home/BOB/c.bin").unwrap().size, at);
+}
+
+#[test]
+fn stat_is_get_info_and_a_change_counter() {
+    let s = start(cfg());
+    let mut c = bob(&s);
+    let path = text_file(37);
+    let st = c.stat(&path).unwrap();
+    assert_eq!(st.entry, c.get_info(&path).unwrap());
+    // Up on every change, two in one millisecond included; never down.
+    s.c.files.change_twice(&path);
+    let after = c.stat(&path).unwrap();
+    assert_eq!(after.entry.modified, st.entry.modified);
+    assert!(
+        after.change >= st.change + 2,
+        "{} then {}",
+        st.change,
+        after.change
+    );
+    c.write_file(&WriteFile {
+        path: path.clone(),
+        mode: WriteMode::Append,
+        data: b"x".to_vec(),
+        ..WriteFile::default()
+    })
+    .unwrap();
+    assert!(c.stat(&path).unwrap().change > after.change);
+    // A directory changes with its entries.
+    let dir = c.stat(TEXT_DIR).unwrap().change;
+    c.copy(&path, &format!("{TEXT_DIR}/copied.txt"), false)
+        .unwrap();
+    assert!(c.stat(TEXT_DIR).unwrap().change > dir);
+    // A link is itself; its target is stamped through `checked`.
+    let link = c.stat(LINK).unwrap();
+    assert_eq!(link.entry.kind, EntryKind::Symlink);
+    let (target, entry, stamp) = c.checked(LINK).unwrap();
+    assert_eq!(target, text_file(1208));
+    assert_eq!(entry.kind, EntryKind::File);
+    assert_eq!(stamp, ifs::Stamp::Change(c.stat(&target).unwrap().change));
+    // As GetInfo refuses.
+    assert_eq!(
+        refused(c.stat(BROKEN_TARGET).unwrap_err()).0,
+        Status::NotFound
+    );
+    assert_eq!(
+        refused(c.stat(PRIVATE_FILE).unwrap_err()).0,
+        Status::NotAuthorized
+    );
+    assert_eq!(refused(c.checked(BROKEN).unwrap_err()).0, Status::NotFound);
+}
+
+#[test]
+fn stat_is_version_6_and_stamps_fall_back_to_get_info() {
+    let s = start(cfg());
+    let mut t = s.target();
+    t.options.max_version = 5;
+    let mut c = Client::new(t);
+    c.sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    match c.stat("/home/BOB").unwrap_err() {
+        Error::Unsupported { op, needs, has } => assert_eq!((op, needs, has), (Op::Stat, 6, 5)),
+        e => panic!("{e:?}"),
+    }
+    let (e, stamp) = c.stamp(&text_file(37)).unwrap();
+    assert_eq!(stamp, ifs::Stamp::Modified(e.modified));
 }
 
 #[test]

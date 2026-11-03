@@ -673,7 +673,7 @@ recovery = "Choose Replace to replace it, Skip to leave it as it is, or Keep bot
 [QAD8011]
 severity = 10
 text = "&1 changed on the system since you opened it."
-cause = "The file &1 was changed on the system after this editor read it: its last-changed time is not the one it had when it was opened. Saving now would replace those changes."
+cause = "The file &1 was changed on the system after this editor read it: its change count (on QAP version 6; before it, its last-changed time) is not the one it had when it was opened or last saved. Saving now would replace those changes."
 recovery = "Choose Overwrite to save your text over the system's file, Reload to read the system's file again and lose your changes, or Cancel to go on editing."
 
 [QAD8012]
