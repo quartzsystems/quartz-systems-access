@@ -315,6 +315,8 @@ impl Attached {
             match ev {
                 Event::ServerEnding(m) => self.end(Ended::Server(m)),
                 Event::SessionEnded { message, .. } => self.end(Ended::Session(message)),
+                // Watches are the shared connection's; none is made here.
+                Event::MessageArrived(_) | Event::SpooledFileChanged(_) => {}
             }
         }
     }

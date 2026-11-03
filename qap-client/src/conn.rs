@@ -40,6 +40,8 @@ use std::time::{Duration, Instant};
 use ipc::Wire;
 use qap_proto::ops::connection::{Hello, HelloReply};
 use qap_proto::ops::event;
+use qap_proto::ops::messages::MessageArrived;
+use qap_proto::ops::spool::SpooledFileChanged;
 use qap_proto::{Envelope, Kind, Op, ProtoError, Reassembly, ServerMessage, Service, Status};
 use qsa_net::{Security, Transport, is_timeout};
 
@@ -61,6 +63,12 @@ pub enum Event {
         status: Status,
         message: Option<ServerMessage>,
     },
+    /// `Messages` 100 (version 6): a message arrived on a queue watched on
+    /// this connection.
+    MessageArrived(MessageArrived),
+    /// `Spool` 100 (version 6): a file of a spool target watched on this
+    /// connection changed.
+    SpooledFileChanged(SpooledFileChanged),
 }
 
 impl Event {
@@ -332,8 +340,8 @@ pub fn runs_long(op: Op) -> bool {
 
 /// Whether `op` only reads, so that when its connection closed quietly or
 /// dropped before the reply came it may be sent once more, on a new
-/// connection: the lists (the `Sql` catalog's, operations 9 to 11,
-/// included), `ReadSpooledFile`, `SystemInfo`, `PasswordStatus`,
+/// connection: the lists (the `Sql` catalog's, operations 9 to 11, and
+/// `ListMessages` included), `ReadSpooledFile`, `SystemInfo`, `PasswordStatus`,
 /// `DescribeCommand`, `CheckCommand`, `JobInfo`, and `Ifs`'s
 /// `ListDirectory`, `GetInfo`, `Stat` and `ReadFile`. Nothing that changes state is
 /// ever sent again (`WriteFile` included), nor `Execute` or `Fetch`: their
@@ -343,6 +351,7 @@ pub fn retryable(op: Op) -> bool {
         op,
         Op::ListSpooledFiles
             | Op::ListOutputQueues
+            | Op::ListMessages
             | Op::ListSchemas
             | Op::ListTables
             | Op::ListColumns
@@ -745,6 +754,19 @@ impl Pump {
         self.t.write_all(&b).and_then(|()| self.t.flush()).is_ok()
     }
 
+    /// An event whose body does not decode: logged and dropped, the
+    /// connection kept.
+    fn unreadable_event(
+        &self,
+        what: &str,
+        e: &ipc::WireError,
+        mut env: Envelope,
+    ) -> Option<Closed> {
+        qsa_net::warn!("qap: event {what} does not decode ({e}); ignored");
+        wipe(&mut env.body);
+        None
+    }
+
     /// Takes one frame in; `Some` when the connection is to end.
     fn take(&mut self, mut env: Envelope) -> Option<Closed> {
         lock(&self.shared).frames_in += 1;
@@ -788,12 +810,34 @@ impl Pump {
                         status: env.status,
                         message: env.message,
                     },
+                    (Service::Messages, event::MESSAGE_ARRIVED) => {
+                        match ipc::decode::<MessageArrived>(&env.body) {
+                            Ok(m) => Event::MessageArrived(m),
+                            Err(e) => return self.unreadable_event("MessageArrived", &e, env),
+                        }
+                    }
+                    (Service::Spool, event::SPOOLED_FILE_CHANGED) => {
+                        match ipc::decode::<SpooledFileChanged>(&env.body) {
+                            Ok(c) => Event::SpooledFileChanged(c),
+                            Err(e) => {
+                                return self.unreadable_event("SpooledFileChanged", &e, env);
+                            }
+                        }
+                    }
                     (service, op) => {
                         qsa_net::debug!("qap: event {service:?} {op} not known; ignored");
                         return None;
                     }
                 };
-                qsa_net::debug!("qap: event {ev:?}");
+                // A watch's event carries a message's text, which is the
+                // user's: its kind alone goes to the log.
+                match &ev {
+                    Event::MessageArrived(_) => qsa_net::debug!("qap: event MessageArrived"),
+                    Event::SpooledFileChanged(c) => {
+                        qsa_net::debug!("qap: event SpooledFileChanged {:?}", c.change);
+                    }
+                    ev => qsa_net::debug!("qap: event {ev:?}"),
+                }
                 lock(&self.shared).events.push_back(ev);
                 self.wake();
                 None

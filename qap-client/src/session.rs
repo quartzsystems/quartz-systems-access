@@ -31,6 +31,12 @@
 //!   the session for a window ([`crate::Attached`]), and [`Client::job_info`]
 //!   names the shared connection's job.
 //!
+//! - From version 6: the `Messages` service ([`crate::messages`]) and the
+//!   watches ([`crate::watch`]), which this client owns on its shared
+//!   connection: [`Client::watch`] and [`Client::unwatch`]; after every
+//!   resume and every sign-on it watches everything again and catches up,
+//!   and [`Client::watch_events`] hands over what they reported.
+//!
 //! The session token is held as a [`Token`] only, and the profile kept for
 //! display has its token zeroed. A Telnet ticket is handed over as a
 //! [`Token`] too and never kept here.
@@ -38,9 +44,11 @@
 use ipc::Wire;
 use qap_proto::ops::command::{CommandDefinition, CommandText, DescribeCommand};
 use qap_proto::ops::connection::{HelloReply, JobInfoReply};
+use qap_proto::ops::messages::QueueRef;
 use qap_proto::ops::signon::{
     ChangePassword, PasswordStatus, Resume, SignOn, SignOnReply, TelnetTicketReply,
 };
+use qap_proto::ops::spool::WatchSpool;
 use qap_proto::ops::system::SystemInfo;
 use qap_proto::types::ObjectName;
 use qap_proto::{Op, Secret, ServerMessage, Status, Token};
@@ -48,6 +56,7 @@ use qap_proto::{Op, Secret, ServerMessage, Status, Token};
 use crate::attach::Attached;
 use crate::command::CheckOutcome;
 use crate::conn::{Closed, Connection, Event, Pending, lost_and_retryable, supported};
+use crate::watch::{Watch, WatchEvent, Watches};
 use crate::{Error, Target};
 
 /// What happened to the connection or the session since the last look.
@@ -90,6 +99,8 @@ pub struct Client {
     /// milliseconds.
     clock_offset_ms: Option<i64>,
     notices: Vec<Notice>,
+    /// The watches this client keeps on its shared connection.
+    watches: Watches,
 }
 
 /// This computer's time, in milliseconds since 1970.
@@ -117,6 +128,7 @@ impl Client {
             resumes: 0,
             clock_offset_ms: None,
             notices: Vec::new(),
+            watches: Watches::default(),
         }
     }
 
@@ -205,7 +217,9 @@ impl Client {
         };
         let reply = self.live()?.call::<_, SignOnReply>(Op::SignOn, &body);
         self.absorb_events();
-        Ok(self.signed_on(reply?))
+        self.signed_on(reply?);
+        self.rewatch();
+        Ok(self.profile.as_ref().expect("just signed on"))
     }
 
     /// Changes `user`'s password. Not signed on (after `PasswordExpired`)
@@ -240,7 +254,9 @@ impl Client {
             reply.token = Token::default();
             Ok(self.profile.insert(reply))
         } else {
-            Ok(self.signed_on(reply))
+            self.signed_on(reply);
+            self.rewatch();
+            Ok(self.profile.as_ref().expect("just signed on"))
         }
     }
 
@@ -371,6 +387,110 @@ impl Client {
         self.call(Op::DescribeCommand, &DescribeCommand { command })
     }
 
+    /// Watches `w` on the shared connection (version 6) and keeps it: it is
+    /// watched again after every resume and sign-on. A queue is listed
+    /// whole the first time, for its newest message and the inquiries
+    /// waiting. Already watched: nothing to do. Refused here before version
+    /// 6 or when not signed on; a watch the system refuses is not kept.
+    pub fn watch(&mut self, w: Watch) -> Result<(), Error> {
+        self.supports(w.op())?;
+        if self.token.is_none() {
+            return Err(Error::Status {
+                status: Status::NotSignedOn,
+                message: None,
+            });
+        }
+        self.live()?;
+        let c = self.conn.as_ref().expect("live");
+        let r = self.watches.add(c, w);
+        self.absorb_events();
+        r
+    }
+
+    /// Stops watching `w` and forgets it. Not watched: nothing to do.
+    pub fn unwatch(&mut self, w: &Watch) -> Result<(), Error> {
+        if !self.watches.remove(w) {
+            return Ok(());
+        }
+        let Some(c) = self.conn.as_ref().filter(|c| c.closed().is_none()) else {
+            return Ok(());
+        };
+        let r = match w {
+            Watch::Queue(q) => c.call::<_, ()>(Op::UnwatchQueue, &QueueRef { queue: q.clone() }),
+            Watch::Spool(t) => c.call::<_, ()>(Op::UnwatchSpool, &WatchSpool { target: t.clone() }),
+        };
+        self.absorb_events();
+        match r {
+            // Not watched on this connection (`TCP1A5B`): it is not.
+            Err(e) if e.status() == Some(Status::NotFound) => Ok(()),
+            r => r,
+        }
+    }
+
+    /// Everything this client watches, live or waiting to be watched again.
+    pub fn watching(&self) -> Vec<Watch> {
+        self.watches.all()
+    }
+
+    /// Whether `w` is watched on the connection open now.
+    pub fn is_watched(&self, w: &Watch) -> bool {
+        self.watches.is_live(w)
+    }
+
+    /// What the watches reported since the last look, oldest first: the
+    /// server's events taken in first.
+    pub fn watch_events(&mut self) -> Vec<WatchEvent> {
+        self.absorb_events();
+        self.watches.take_events()
+    }
+
+    /// Inquiries waiting for a reply across the watched queues.
+    pub fn messages_waiting(&self) -> usize {
+        self.watches.waiting()
+    }
+
+    /// The watches, to look at.
+    pub fn watches(&self) -> &Watches {
+        &self.watches
+    }
+
+    pub(crate) fn watches_mut(&mut self) -> &mut Watches {
+        &mut self.watches
+    }
+
+    /// Takes the watches out, for a new client of the same system to
+    /// [`Client::adopt_watches`]: its sign-on then watches them again and
+    /// catches up. This client keeps none.
+    pub fn take_watches(&mut self) -> Watches {
+        let mut w = std::mem::take(&mut self.watches);
+        w.connection_gone();
+        w
+    }
+
+    /// Takes over another client's watches; they are watched again at this
+    /// client's sign-on.
+    pub fn adopt_watches(&mut self, mut w: Watches) {
+        w.connection_gone();
+        self.watches = w;
+        if let Some(p) = self.profile.as_ref().map(|p| p.profile.clone()) {
+            self.watches.signed_on(&p);
+            self.rewatch();
+        }
+    }
+
+    /// Watches everything again once a connection is signed on, when it
+    /// waits to be: after a resume or a sign-on. On the thread that holds
+    /// the client.
+    fn rewatch(&mut self) {
+        if self.token.is_none() || !self.watches.stale() {
+            return;
+        }
+        let Some(c) = self.conn.as_ref().filter(|c| c.closed().is_none()) else {
+            return;
+        };
+        self.watches.rewatch(c);
+    }
+
     /// Takes in the server's events and, when the server closed the
     /// connection quietly while signed on, reconnects and resumes. What
     /// happened, oldest first.
@@ -378,6 +498,7 @@ impl Client {
         self.absorb_events();
         if let Some(why) = self.conn.as_ref().and_then(Connection::closed) {
             self.conn = None;
+            self.watches.connection_gone();
             if why.resumable() && !self.ending && self.token.is_some() {
                 match self.live() {
                     Ok(_) => self.notices.push(Notice::Resumed),
@@ -397,6 +518,8 @@ impl Client {
             self.conn = None;
         }
         if self.conn.is_none() {
+            // Watches end with their connection.
+            self.watches.connection_gone();
             if self.ending {
                 return Err(Error::Closed(Closed::ServerEnding));
             }
@@ -423,6 +546,9 @@ impl Client {
                 }
             }
             self.conn = Some(c);
+            // A resume restores no watch: watch them again here, whichever
+            // request brought the connection back.
+            self.rewatch();
         }
         Ok(self.conn.as_ref().expect("opened above"))
     }
@@ -430,6 +556,7 @@ impl Client {
     fn signed_on(&mut self, mut reply: SignOnReply) -> &SignOnReply {
         self.token = Some(std::mem::take(&mut reply.token));
         qsa_net::debug!("qap: {}: signed on as {}", self.target.host, reply.profile);
+        self.watches.signed_on(&reply.profile);
         self.profile.insert(reply)
     }
 
@@ -437,6 +564,7 @@ impl Client {
         // Dropping the token wipes it.
         self.token = None;
         self.profile = None;
+        self.watches.connection_gone();
     }
 
     fn absorb_events(&mut self) {
@@ -464,6 +592,8 @@ impl Client {
                         message,
                     });
                 }
+                Event::MessageArrived(m) => self.watches.arrived(m),
+                Event::SpooledFileChanged(c) => self.watches.spool_changed(c),
             }
         }
     }

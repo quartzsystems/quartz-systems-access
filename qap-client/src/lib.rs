@@ -37,7 +37,15 @@
 //!   listed a page at a time, looked at, read and written in chunks of
 //!   about 1 MiB with conversion by the system (`as_ccsid`, `data_ccsid`),
 //!   progress, cancel and resume, and made, deleted, renamed and copied on
-//!   the system, on the shared connection or a window's own.
+//!   the system, on the shared connection or a window's own; and version
+//!   6's `Stat` and its change counter.
+//! - [`messages`]: version 6's `Messages` service: message queues listed a
+//!   page at a time, replies, removes and sends, with every status they
+//!   answer, and a reply matched to its inquiry by `answers` alone.
+//! - [`watch`]: version 6's watches of message queues and spool targets,
+//!   owned by the [`Client`] on its shared connection: watched again after
+//!   every resume and sign-on, each queue caught up, every message reported
+//!   once ([`WatchEvent`]).
 //!
 //! `Hello` offers versions [`proto::MIN_VERSION`] to [`proto::VERSION`] (1
 //! to 6) and the server picks the highest both speak. An operation is sent
@@ -53,9 +61,11 @@ pub mod attach;
 pub mod command;
 pub mod conn;
 pub mod ifs;
+pub mod messages;
 pub mod session;
 pub mod spool;
 pub mod sql;
+pub mod watch;
 
 mod error;
 mod frames;
@@ -73,6 +83,7 @@ pub use qap_proto as proto;
 pub use qap_proto::{Secret, ServerMessage, Status, Token};
 pub use session::{Client, Notice};
 pub use sql::{ExecuteOutcome, FetchEnd, FetchOutcome, SqlConnection};
+pub use watch::{Watch, WatchEvent};
 
 /// The most a split reply is joined to: 64 MiB.
 pub const MAX_REPLY: usize = 64 << 20;
