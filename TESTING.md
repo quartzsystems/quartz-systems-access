@@ -468,10 +468,24 @@ Then, with `QSACCESS_LOG=trace`:
   Command, `CRTLIB LIB(QATESTLIB)` completes at once (`QAD5010`), in a job
   of its own; `DLTLIB LIB(QATESTLIB)` afterwards.
 - [ ] **Printer Output and a second Run SQL window while a long query
-  runs.** With the long query running: Printer Output lists and opens a
-  file; a second Run SQL window queries `HLINV.LOCATIONS`. Neither waits for
-  the query (QS/400 lets a plain query take turns; see `docs/QAP.md`'s "Long
-  statements").
+  runs.** Three times, each with one long statement running in a first Run
+  SQL window: the long query above (an aggregate); a slow plain select,
+  `SELECT A.ID, A.NAME FROM HLTEST.SLOW A WHERE EXISTS (SELECT 1 FROM
+  HLTEST.SLOW B WHERE EXISTS (SELECT 1 FROM HLTEST.SLOW C WHERE C.ID + B.ID =
+  600 + A.ID * 0))`, every row found only at the last `B` and `C`, so its 300
+  rows come slowly (Fetch All; never a join, which builds its rows in memory); and the long query again at commit level
+  Repeatable read. Meanwhile Run Command `CRTLIB LIB(QATESTLIB)` completes
+  at once, Printer Output lists and opens a file, and a second Run SQL
+  window queries `HLINV.LOCATIONS`: none waits for the statement (at
+  58e189df no statement in one job holds up another; see `docs/QAP.md`'s
+  "Version 4 Sql, as built"). Under Repeatable read, the rows read stay
+  read-locked until Commit or Rollback: in the second window, an `UPDATE` of
+  a row of `HLTEST.SLOW` the first has read waits up to the table's record
+  wait (60 s) and fails with `SQL0913`, a database rule rather than a delay,
+  while its `SELECT`s still answer at once. Commit in the first window
+  releases them. Do not use `CLRPFM`, `INZPFM`, save or restore commands,
+  `CPYTOSTMF`, `CPYFRMSTMF` or `RCLSTG` for this: those still run to their
+  end.
 - [ ] **Commit and Rollback.** Commit level Read committed: Commit and
   Rollback are enabled. `INSERT INTO HLTEST.JRN VALUES(1, 'one')`
   (`QAD7020`), Rollback, `SELECT * FROM HLTEST.JRN`: empty. Insert again,

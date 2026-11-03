@@ -6,7 +6,10 @@
 //! engine and its test database (`qapd::testing::sql`): every operation
 //! and status, `Attach`'s place and limit, `SessionEnded` after a sign-off
 //! elsewhere, the three cancel bodies, rollback when a connection closes,
-//! every type, streaming in blocks, and a connection dropped under a fetch.
+//! every type, streaming in blocks, a connection dropped under a fetch, and
+//! a slow select (plain and under `RepeatableRead`) holding up no other
+//! connection of the session: Run Command, Printer Output and another
+//! window's query answer at once beside it.
 
 mod common;
 
@@ -622,4 +625,80 @@ fn a_drop_mid_fetch_loses_the_cursor_and_the_next_run_attaches_again() {
     // The next run attaches a new connection with the options set again.
     assert_eq!(query(&mut q, "SELECT * FROM JRN").len(), 0);
     assert_eq!(q.attached().attaches(), 2);
+}
+
+/// While a slow query fetches on one window's connection, under
+/// `commit`: Run Command, Printer Output's list and another window's query
+/// on the same session each answer at once, and the slow fetch is still
+/// going when they have. No statement in one job holds up another.
+fn independent_of_a_slow_query(commit: CommitLevel) {
+    use qap_client::proto::ops::spool::ListSpooledFiles;
+    let s = start(cfg());
+    let (mut c, mut slow) = bob(&s);
+    slow.set_options(SetOptions {
+        commit,
+        ..SetOptions::default()
+    })
+    .unwrap();
+    let mut other = c.sql_connection().unwrap();
+    let p = slow.prepare("SELECT * FROM HLTEST.SLOW").unwrap();
+    let cursor = slow
+        .execute_now(p.statement, Vec::new())
+        .unwrap()
+        .executed
+        .cursor
+        .unwrap();
+    let fetching = std::thread::spawn(move || {
+        let mut got = 0usize;
+        let end = slow
+            .fetch_into(
+                cursor,
+                None,
+                &mut |b| {
+                    got += b.len();
+                    Ok(())
+                },
+                &AtomicBool::new(false),
+            )
+            .unwrap();
+        (got, end)
+    });
+    // The fetch is under way: 300 rows at 10 ms each.
+    std::thread::sleep(Duration::from_millis(200));
+    let quick = Duration::from_millis(1000);
+    let at = std::time::Instant::now();
+    let o = qap_client::CommandOutcome::from_reply(
+        c.run_command("CRTLIB LIB(QATESTLIB)")
+            .unwrap()
+            .wait_done()
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(o.status, Status::Ok);
+    assert!(at.elapsed() < quick, "Run Command waited {:?}", at.elapsed());
+    let at = std::time::Instant::now();
+    let files = c
+        .list_spooled_files(&ListSpooledFiles {
+            user: "*CURRENT".into(),
+            ..ListSpooledFiles::default()
+        })
+        .unwrap();
+    assert!(files.total > 0);
+    assert!(at.elapsed() < quick, "Printer Output waited {:?}", at.elapsed());
+    let at = std::time::Instant::now();
+    assert_eq!(query(&mut other, "SELECT * FROM HLINV.ASSETS").len(), 12);
+    assert!(at.elapsed() < quick, "Run SQL waited {:?}", at.elapsed());
+    assert!(!fetching.is_finished(), "the slow query is still fetching");
+    let (got, end) = fetching.join().unwrap();
+    assert_eq!((got, end.rows()), (300, 300));
+}
+
+#[test]
+fn a_slow_select_holds_up_no_other_connection() {
+    independent_of_a_slow_query(CommitLevel::None);
+}
+
+#[test]
+fn a_slow_select_under_repeatable_read_holds_up_no_other_connection() {
+    independent_of_a_slow_query(CommitLevel::RepeatableRead);
 }
