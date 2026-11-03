@@ -24,6 +24,7 @@ pub mod recent;
 pub mod request;
 pub mod runcmd;
 pub mod runsql;
+pub mod schemas;
 pub mod session;
 pub mod shell;
 pub mod signon;

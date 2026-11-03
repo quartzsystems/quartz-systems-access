@@ -229,6 +229,25 @@ Output.
   an operator ending one of its jobs), the window shows the system's
   message and offers **Sign On...**.
 
+## Schemas
+
+**Schemas** in the task pane's Database group shows a system's catalog on the
+session's shared connection. It needs QAP version 4; for an older system the
+link is dimmed (`QAD5001`).
+
+- **The tree.** The system; its schemas, matching the **Schema pattern** (an
+  SQL `LIKE` pattern), 100 at a time with **More schemas...** for the next;
+  in each schema its Tables, Views, Aliases, Physical files and Logical files,
+  read when opened, 100 at a time; and in each of those its columns.
+- **The right pane.** A table's columns (Name, Label, Type, Length, Scale,
+  Nullable, CCSID), or the selected schema's or column's properties.
+- **Actions** (the menu, the buttons, or a right-click): **View Data** opens
+  Run SQL on `SELECT * FROM schema.table`, its first 1,000 rows; **Copy
+  Name** copies the qualified name; **Transfer Data from...** and **Transfer
+  Data to...** open Data Transfer with the table set.
+- A table the profile may not read shows the system's message, as it sent it
+  (`SQL0551`), when its columns are opened; the catalog still lists it.
+
 ## Data Transfer
 
 **Data Transfer** in the task pane's General group moves rows between a
