@@ -345,12 +345,17 @@ fn decfloat_text_round_trips_exactly_through_every_format() {
     let mut q = connection(&s);
     let d = dir("decfloat");
     // The engine's own texts, each kept as sent: never compared by value.
-    for v in ["1.50", "1E+2", "100", "0E+3", "-0", "1E-7", "-12.50", "1.5E-30"] {
+    for v in [
+        "1.50", "1E+2", "100", "0E+3", "-0", "1E-7", "-12.50", "1.5E-30",
+    ] {
         let set = q
             .prepare("UPDATE HLTEST.ALLTYPES SET C_DECFLOAT = ? WHERE ID = 7")
             .unwrap();
-        q.execute_now(set.statement, vec![vec![SqlValue::Decimal { text: v.into() }]])
-            .unwrap();
+        q.execute_now(
+            set.statement,
+            vec![vec![SqlValue::Decimal { text: v.into() }]],
+        )
+        .unwrap();
         q.release(set.statement).unwrap();
         for format in Format::ALL {
             let file = d.join(format!("df.{}", format.extension()));
@@ -377,7 +382,9 @@ fn decfloat_text_round_trips_exactly_through_every_format() {
                 &AtomicBool::new(false),
             )
             .unwrap();
-            let del = q.prepare("DELETE FROM HLTEST.ALLTYPES WHERE ID = 7").unwrap();
+            let del = q
+                .prepare("DELETE FROM HLTEST.ALLTYPES WHERE ID = 7")
+                .unwrap();
             q.execute_now(del.statement, Vec::new()).unwrap();
             q.release(del.statement).unwrap();
             put(
@@ -392,7 +399,10 @@ fn decfloat_text_round_trips_exactly_through_every_format() {
                 },
             )
             .unwrap_or_else(|f| panic!("{v} through {format:?}: {f:?}"));
-            let back = rows(&mut q, "SELECT C_DECFLOAT FROM HLTEST.ALLTYPES WHERE ID = 7");
+            let back = rows(
+                &mut q,
+                "SELECT C_DECFLOAT FROM HLTEST.ALLTYPES WHERE ID = 7",
+            );
             assert_eq!(
                 back,
                 [vec![SqlValue::Decimal { text: v.into() }]],

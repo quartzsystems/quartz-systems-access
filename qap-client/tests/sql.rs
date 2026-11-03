@@ -675,7 +675,11 @@ fn independent_of_a_slow_query(commit: CommitLevel) {
     )
     .unwrap();
     assert_eq!(o.status, Status::Ok);
-    assert!(at.elapsed() < quick, "Run Command waited {:?}", at.elapsed());
+    assert!(
+        at.elapsed() < quick,
+        "Run Command waited {:?}",
+        at.elapsed()
+    );
     let at = std::time::Instant::now();
     let files = c
         .list_spooled_files(&ListSpooledFiles {
@@ -684,7 +688,11 @@ fn independent_of_a_slow_query(commit: CommitLevel) {
         })
         .unwrap();
     assert!(files.total > 0);
-    assert!(at.elapsed() < quick, "Printer Output waited {:?}", at.elapsed());
+    assert!(
+        at.elapsed() < quick,
+        "Printer Output waited {:?}",
+        at.elapsed()
+    );
     let at = std::time::Instant::now();
     assert_eq!(query(&mut other, "SELECT * FROM HLINV.ASSETS").len(), 12);
     assert!(at.elapsed() < quick, "Run SQL waited {:?}", at.elapsed());
@@ -753,7 +761,10 @@ fn decfloat_equals_by_value_in_a_where_clause() {
             .prepare("SELECT ID FROM HLTEST.ALLTYPES WHERE C_DECFLOAT = ?")
             .unwrap();
         let o = q
-            .execute_now(p.statement, vec![vec![SqlValue::Decimal { text: v.into() }]])
+            .execute_now(
+                p.statement,
+                vec![vec![SqlValue::Decimal { text: v.into() }]],
+            )
             .unwrap();
         let cursor = o.executed.cursor.unwrap();
         let mut ids = Vec::new();
