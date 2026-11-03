@@ -550,6 +550,132 @@ fn printer_output_views(state: &Shared) -> Vec<(String, Window)> {
     ]
 }
 
+/// The test system's messages on `lib/name` (`qapd::testing::messages`),
+/// newest first, as its connection job shows them to `BOB`: an identifier's
+/// text and second-level text looked up in BOB's language.
+fn queued_messages(lib: &str, name: &str) -> Vec<qap_client::proto::ops::messages::QueuedMessage> {
+    use qap_client::proto::ops::messages::{MessageType, QueuedMessage};
+    let sys = qapd::testing::System::new();
+    let qs = sys.messages.lock().unwrap();
+    let i = qs.find(lib, name).expect("a test system queue");
+    let key = |k: u32| k.to_be_bytes();
+    qs.queues[i]
+        .msgs
+        .iter()
+        .rev()
+        .map(|m| {
+            let (text, help) = if m.id.is_empty() {
+                (m.text.clone(), m.help.clone())
+            } else {
+                (
+                    format!("{} {} (lang of BOB)", m.id, m.data.join(" ")),
+                    format!("Help for {}.", m.id),
+                )
+            };
+            QueuedMessage {
+                key: key(m.key),
+                id: m.id.clone(),
+                kind: m.kind,
+                severity: m.severity,
+                text,
+                help,
+                sent: m.sent,
+                from_user: m.from.user.clone(),
+                from_job: m.from.clone(),
+                needs_reply: m.kind == MessageType::Inquiry && m.waiting,
+                reply: m.reply.clone(),
+                answers: m.answers.map(key),
+            }
+        })
+        .collect()
+}
+
+/// Messages on sys1.example.net as BOB, offering `QSYSOPR`, on `queue` from
+/// `start`, `select` selected.
+fn messages_window(
+    state: &Shared,
+    queue: &qap_client::proto::ops::messages::Queue,
+    all: &[qap_client::proto::ops::messages::QueuedMessage],
+    start: usize,
+    select: Option<usize>,
+) -> Window {
+    use qsaccess::messages::MessagesWindow;
+    use qsaccess::splf::model::utc_time;
+    let st = state.borrow();
+    let sys = st.systems.get("sys1.example.net").expect("fixture system");
+    let w = MessagesWindow::build(sys, "BOB", true);
+    let page: Vec<_> = all.iter().skip(start).take(100).cloned().collect();
+    w.show_messages(queue, start as u32, page, all.len() as u32, &utc_time);
+    if let Some(i) = select {
+        w.select_row(i, &utc_time);
+    }
+    let win = w.window().clone();
+    std::mem::forget(w);
+    win
+}
+
+fn messages_views(state: &Shared) -> Vec<(String, Window)> {
+    use qap_client::proto::ops::messages::{MessageType, Queue};
+    use qap_client::proto::types::ObjectName;
+    let own = queued_messages("QUSRSYS", "BOB");
+    let operator = queued_messages("QSYS", "QSYSOPR");
+    let team = Queue::Named {
+        queue: ObjectName {
+            library: "QGPL".into(),
+            name: "TEAMQ".into(),
+        },
+    };
+    let cpa5305 = own.iter().position(|m| m.id == "CPA5305");
+    let invalid = qsa_ui::msgdetails::SystemMessage {
+        id: "CPF2420",
+        severity: 40,
+        text: "CPF2420 X CPA5305 (lang of BOB)",
+        help: "Help for CPF2420.",
+    };
+    let first_inquiry = operator
+        .iter()
+        .position(|m| m.kind == MessageType::Inquiry && m.needs_reply)
+        .expect("QSYSOPR has inquiries waiting");
+    vec![
+        (
+            "messages".to_owned(),
+            messages_window(state, &Queue::Own, &own, 0, None),
+        ),
+        (
+            "messages-operator".to_owned(),
+            messages_window(state, &Queue::SystemOperator, &operator, 0, None),
+        ),
+        (
+            "messages-operator-inquiries".to_owned(),
+            messages_window(
+                state,
+                &Queue::SystemOperator,
+                &operator,
+                100,
+                Some(first_inquiry - 100),
+            ),
+        ),
+        (
+            "messages-empty".to_owned(),
+            messages_window(state, &team, &[], 0, None),
+        ),
+        (
+            "messages-detail".to_owned(),
+            messages_window(state, &Queue::Own, &own, 0, cpa5305),
+        ),
+        (
+            "messages-invalid-reply".to_owned(),
+            qsa_ui::msgdetails::system_message_box(None, &invalid, &["OK"])
+                .build()
+                .0,
+        ),
+        (
+            "messages-remove-unanswered".to_owned(),
+            qsaccess::messages::remove_waiting_box(1, 3).build().0,
+        ),
+    ]
+}
+
 /// Run Command after two runs of CRTLIB (created, then already there), a
 /// check, and CHGAUT and CPYFRMSTMF with the test system's severities 10
 /// and 20.
@@ -1445,6 +1571,7 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     out.extend(ifs_views());
     out.extend(ifs_editor_views());
     out.extend(printer_output_views(state));
+    out.extend(messages_views(state));
     out.extend(prompt_views());
     out.push((
         "password-expiry".to_owned(),

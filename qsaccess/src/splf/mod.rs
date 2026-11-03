@@ -55,12 +55,12 @@ use fltk::menu::{Choice, MenuBar, MenuFlag, MenuItem};
 use fltk::misc::InputChoice;
 use fltk::prelude::*;
 use fltk::window::Window;
+use qap_client::Error;
 use qap_client::proto::Op;
 use qap_client::proto::ops::spool::{
     ListOutputQueues, OutputQueue, OutputQueues, SpooledFile, SpooledFileId, SpooledFiles,
 };
 use qap_client::spool::{Action, Paging, ReadEnd};
-use qap_client::{Error, Reply};
 use qsa_config::System;
 use qsa_msg::id;
 use qsa_ui::chan::{self, Emit, MenuEmit};
@@ -397,21 +397,6 @@ fn build_widgets(system: &str, rows: u32, refresh_secs: u32) -> (Widgets, chan::
     )
 }
 
-/// Sends `body` as `op` holding the client only to send, then waits
-/// without it: other tools use the session meanwhile.
-fn call_unlocked<B: qap_client::Wire, R: qap_client::Wire>(
-    h: &Handle,
-    op: Op,
-    body: &B,
-) -> Result<R, Error> {
-    let (pending, timeout) = {
-        let mut c = lock(h);
-        let t = c.target().options.reply_timeout;
-        (c.request(op, body)?, t)
-    };
-    pending.wait(timeout).and_then(Reply::decode)
-}
-
 impl PrinterOutput {
     /// The window for `system` with `settings`, not shown and not yet
     /// listing (screenshots use it so).
@@ -596,7 +581,7 @@ impl PrinterOutput {
         st.last_list = Instant::now();
         let (tx, rx) = mpsc::channel();
         std::thread::spawn(move || {
-            let _ = tx.send(call_unlocked(&h, Op::ListSpooledFiles, &req));
+            let _ = tx.send(qap::call_unlocked(&h, Op::ListSpooledFiles, &req));
             app::awake();
         });
         st.listing = Some(Listing { rx });
@@ -614,7 +599,7 @@ impl PrinterOutput {
                 max: 500,
             };
             let r = loop {
-                match call_unlocked::<_, OutputQueues>(&h, Op::ListOutputQueues, &req) {
+                match qap::call_unlocked::<_, OutputQueues>(&h, Op::ListOutputQueues, &req) {
                     Ok(page) => {
                         let n = page.queues.len();
                         all.extend(page.queues);

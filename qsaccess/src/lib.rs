@@ -16,6 +16,7 @@ pub mod log;
 pub mod macros;
 pub mod mainwin;
 pub mod manager;
+pub mod messages;
 pub mod open;
 pub mod printer;
 pub mod prompt;

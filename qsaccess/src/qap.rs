@@ -228,6 +228,21 @@ pub fn busy<T: Send>(f: impl FnOnce() -> T + Send) -> T {
     })
 }
 
+/// Sends `body` as `op` holding the client only to send, then waits
+/// without it: other tools use the session meanwhile.
+pub fn call_unlocked<B: qap_client::Wire, R: qap_client::Wire>(
+    h: &Handle,
+    op: Op,
+    body: &B,
+) -> Result<R, Error> {
+    let (pending, timeout) = {
+        let mut c = lock(h);
+        let t = c.target().options.reply_timeout;
+        (c.request(op, body)?, t)
+    };
+    pending.wait(timeout).and_then(qap_client::Reply::decode)
+}
+
 /// `system`'s client, for a sign-on, a password change or a tool.
 pub fn client(state: &Shared, system: &System) -> Handle {
     state.borrow_mut().qap.client(system)
@@ -461,6 +476,12 @@ pub fn function_name(op: Op) -> &'static str {
         | Op::Delete
         | Op::Rename
         | Op::Copy => crate::ifs::FUNCTION,
+        Op::ListMessages
+        | Op::ReplyMessage
+        | Op::RemoveMessages
+        | Op::SendMessage
+        | Op::WatchQueue
+        | Op::UnwatchQueue => crate::messages::FUNCTION,
         _ => "This function",
     }
 }
@@ -646,6 +667,15 @@ pub fn pump(ui: &Ui) {
         let mut offer = None;
         for n in notices {
             offer = offer.or(tell(ui, &system, n));
+        }
+        // What the watches reported (version 6), for the windows that show
+        // it. A client busy elsewhere is looked at next time.
+        let events = h
+            .try_lock()
+            .map(|mut c| c.watch_events())
+            .unwrap_or_default();
+        if !events.is_empty() {
+            crate::messages::watch_events(&system.name, &events);
         }
         if ui.state.borrow_mut().qap.resumed(&k) {
             warn_expiry(Some(&ui.window), &ui.state, &system.name);

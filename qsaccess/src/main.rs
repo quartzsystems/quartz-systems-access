@@ -170,6 +170,7 @@ fn main() {
         qsaccess::session::pump();
         qsaccess::printer::pump();
         qsaccess::splf::pump();
+        qsaccess::messages::pump();
         qsaccess::runsql::pump();
         qsaccess::manager::pump();
         qsaccess::macros::editor::pump();
@@ -184,6 +185,7 @@ fn main() {
             && !qsaccess::session::any_open()
             && !qsaccess::printer::any_open()
             && !qsaccess::splf::any_open()
+            && !qsaccess::messages::any_open()
             && !qsaccess::manager::shown()
             && !qsaccess::macros::editor::any_open()
             && !qsaccess::runsql::any_open()

@@ -208,6 +208,36 @@ fn a_version_2_system_has_no_sql_and_run_command_keeps_the_shared_connection() {
 }
 
 #[test]
+fn a_version_5_system_has_no_messages() {
+    for has in [1u16, 2, 5] {
+        let m = qsaccess::messages::blocked("127.0.0.1", Some(has)).unwrap();
+        assert_eq!(m.id, id::QAP_VERSION_NEEDED);
+        assert_eq!(
+            m.text,
+            format!("Messages needs QAP version 6; system 127.0.0.1 has version {has}.")
+        );
+    }
+    assert!(qsaccess::messages::blocked("127.0.0.1", Some(6)).is_none());
+    assert!(qsaccess::messages::blocked("127.0.0.1", None).is_none());
+    // Nothing of version 6 goes to a version-5 session.
+    let s = common::start(common::cfg());
+    let mut t = common::target(s.port);
+    t.options.max_version = 5;
+    let mut c = qap_client::Client::new(t);
+    c.sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    let e = c
+        .list_messages(&qap_client::proto::ops::messages::Queue::Own, true, 0, 1)
+        .unwrap_err();
+    assert_eq!(
+        qap::explain(&system(s.port), &e).message.text,
+        format!(
+            "Messages needs QAP version 6; system {} has version 5.",
+            system(s.port).name
+        )
+    );
+}
+
+#[test]
 fn a_version_4_system_has_no_integrated_file_system() {
     let m = qsaccess::ifs::blocked("127.0.0.1", Some(4)).unwrap();
     assert_eq!(m.id, id::QAP_VERSION_NEEDED);

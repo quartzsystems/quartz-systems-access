@@ -11,7 +11,7 @@
 //! - A click on a column header calls [`ListTable::on_header_click`]; the
 //!   caller sorts and shows which way with [`ListTable::set_sort`].
 //! - [`ListTable::set_icons`] puts a 16-pixel glyph at the start of each
-//!   row.
+//!   row; [`ListTable::set_bold`] draws chosen rows in bold.
 //! - [`ListTable::on_drop`] takes files dropped on the list from the
 //!   desktop's file manager; [`ListTable::near_end`] says when the rows in
 //!   view reach the last ones, for a list that loads more as it scrolls.
@@ -64,6 +64,8 @@ struct Model {
     rows: Vec<Vec<Cell>>,
     /// A glyph before each row's first cell.
     icons: Vec<Option<crate::glyph::Glyph>>,
+    /// Rows drawn in bold.
+    bold: Vec<bool>,
     /// The row with the focus: the one selected, or the last one clicked.
     selected: Option<usize>,
     /// Multiple selection: allowed, every selected row, and where a Shift
@@ -140,6 +142,7 @@ impl ListTable {
         let model = Rc::new(RefCell::new(Model {
             headers: columns.iter().map(|(t, _)| (*t).to_owned()).collect(),
             icons: Vec::new(),
+            bold: Vec::new(),
             rows: Vec::new(),
             selected: None,
             multi: false,
@@ -204,7 +207,12 @@ impl ListTable {
                     tx += 20;
                 }
                 if let Some(c) = cell {
-                    draw::set_font(theme::UI_FONT, theme::UI_SIZE);
+                    let font = if m.bold.get(row as usize).copied().unwrap_or(false) {
+                        theme::UI_FONT_BOLD
+                    } else {
+                        theme::UI_FONT
+                    };
+                    draw::set_font(font, theme::UI_SIZE);
                     draw::set_draw_color(fg);
                     draw::draw_text2(
                         &c.text,
@@ -452,6 +460,13 @@ impl ListTable {
     /// Sets the glyph shown at the start of each row (by row, as set).
     pub fn set_icons(&mut self, icons: Vec<Option<crate::glyph::Glyph>>) {
         self.model.borrow_mut().icons = icons;
+        self.table.redraw();
+    }
+
+    /// Sets which rows are drawn in bold (by row, as set): rows that want
+    /// attention, such as a message waiting for a reply.
+    pub fn set_bold(&mut self, bold: Vec<bool>) {
+        self.model.borrow_mut().bold = bold;
         self.table.redraw();
     }
 

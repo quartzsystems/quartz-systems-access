@@ -41,6 +41,7 @@ pub enum Task {
     Display5250,
     Printer5250,
     IntegratedFileSystem,
+    Messages,
     PrinterOutput,
     RunCommand,
     Schemas,
@@ -60,6 +61,7 @@ impl Task {
             Task::Display5250 => "5250 Display",
             Task::Printer5250 => "5250 Printer",
             Task::IntegratedFileSystem => "Integrated File System",
+            Task::Messages => crate::messages::FUNCTION,
             Task::PrinterOutput => "Printer Output",
             Task::RunCommand => "Run Command",
             Task::Schemas => "Schemas",
@@ -82,6 +84,7 @@ pub const TASK_GROUPS: &[(Option<&str>, &[Task])] = &[
             Task::Display5250,
             Task::Printer5250,
             Task::IntegratedFileSystem,
+            Task::Messages,
             Task::PrinterOutput,
             Task::RunCommand,
         ],
@@ -119,6 +122,9 @@ pub struct Ui {
     /// The Integrated File System link, dimmed for a system whose QAP
     /// version has no Ifs service.
     ifs_link: Widget,
+    /// The Messages link, dimmed for a system whose QAP version has no
+    /// Messages service.
+    messages_link: Widget,
 }
 
 impl Ui {
@@ -219,6 +225,15 @@ impl Ui {
                     self.refresh_systems();
                 }
             }
+            Task::Messages => {
+                if self.state.borrow().systems.is_empty() {
+                    crate::sysconfig::open(self);
+                }
+                if let Some(system) = self.selected_system() {
+                    crate::messages::open(self.parent(), &self.state, &system);
+                    self.refresh_systems();
+                }
+            }
             _ => self.not_available(),
         }
     }
@@ -290,6 +305,14 @@ impl Ui {
         let why = crate::ifs::blocked(system, version);
         let text = why.as_ref().map(ToString::to_string).unwrap_or_default();
         TaskPane::set_link_dimmed(&mut self.ifs_link.clone(), why.is_some(), &text);
+        let why = crate::messages::blocked(system, version);
+        let text = why.as_ref().map(ToString::to_string).unwrap_or_default();
+        TaskPane::set_link_dimmed(&mut self.messages_link.clone(), why.is_some(), &text);
+    }
+
+    /// Whether the task pane's Messages is dimmed.
+    pub fn messages_dimmed(&self) -> bool {
+        self.messages_link.label_color() == qsa_ui::theme::colors::DISABLED_TEXT
     }
 
     /// Whether the task pane's Integrated File System is dimmed.
@@ -551,6 +574,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
         Task::Printer5250,
         Task::DataTransfer,
         Task::IntegratedFileSystem,
+        Task::Messages,
         Task::PrinterOutput,
         Task::RunSql,
         Task::RunCommand,
@@ -614,6 +638,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
     let system = system.expect("system row is built");
     let mut printer_output = None;
     let mut ifs_link = None;
+    let mut messages_link = None;
     let mut sql_links = Vec::new();
     pane.add_rule();
     for (title, tasks) in TASK_GROUPS {
@@ -631,7 +656,10 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
                         printer_output = Some(link.clone());
                     }
                     if task == Task::IntegratedFileSystem {
-                        ifs_link = Some(link);
+                        ifs_link = Some(link.clone());
+                    }
+                    if task == Task::Messages {
+                        messages_link = Some(link);
                     }
                 }
             }
@@ -657,6 +685,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
         printer_output: printer_output.expect("the General group has Printer Output"),
         sql_links,
         ifs_link: ifs_link.expect("the General group has Integrated File System"),
+        messages_link: messages_link.expect("the General group has Messages"),
     };
     ui.refresh_systems();
     ui.refresh_recent();
