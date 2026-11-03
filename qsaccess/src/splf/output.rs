@@ -49,12 +49,31 @@ pub fn temporary_file(f: &SpooledFile, ext: &str) -> io::Result<PathBuf> {
     )))
 }
 
-/// Removes this process's temporary files; when the program ends.
+/// Removes this process's temporary files; when the program ends. Read-only
+/// copies (the Integrated File System's Open) are made writable first, since
+/// Windows deletes no read-only file.
 pub fn remove_temporary() {
     let dir = temporary_dir();
-    if dir.exists()
-        && let Err(e) = fs::remove_dir_all(&dir)
-    {
+    if !dir.exists() {
+        return;
+    }
+    let mut todo = vec![dir.clone()];
+    while let Some(d) = todo.pop() {
+        for e in fs::read_dir(&d).into_iter().flatten().flatten() {
+            let p = e.path();
+            if p.is_dir() {
+                todo.push(p);
+            } else if let Ok(m) = fs::metadata(&p) {
+                let mut perm = m.permissions();
+                if perm.readonly() {
+                    #[allow(clippy::permissions_set_readonly_false)]
+                    perm.set_readonly(false);
+                    let _ = fs::set_permissions(&p, perm);
+                }
+            }
+        }
+    }
+    if let Err(e) = fs::remove_dir_all(&dir) {
         crate::log!("{}: {e}", dir.display());
     }
 }

@@ -28,6 +28,7 @@
 //!   may not read shows its message in the list.
 //! - Before QAP version 5 the window does not open: `QAD5001`.
 
+pub mod editor;
 pub mod model;
 pub mod queue;
 
@@ -91,6 +92,7 @@ pub enum Act {
     Delete,
     SelectAll,
     Sort(usize),
+    Edit,
     Download,
     Upload,
     /// Files dropped on the list.
@@ -125,8 +127,9 @@ fn part(label: &str) -> String {
 }
 
 /// The actions a right-click in the list offers, with what they ask for.
-const CONTEXT: [(&str, Act); 9] = [
+const CONTEXT: [(&str, Act); 10] = [
     ("Open", Act::Open),
+    ("Edit", Act::Edit),
     ("Download...", Act::Download),
     ("Upload...", Act::Upload),
     ("Rename...", Act::Rename),
@@ -151,7 +154,8 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
         };
         let n = MenuFlag::Normal;
         let d = MenuFlag::MenuDivider;
-        add("&File/&Open", Shortcut::None, Act::Open, d);
+        add("&File/&Open", Shortcut::None, Act::Open, n);
+        add("&File/&Edit", Shortcut::Ctrl | 'e', Act::Edit, d);
         add("&File/&Download...", Shortcut::Ctrl | 'd', Act::Download, n);
         add("&File/&Upload...", Shortcut::Ctrl | 'u', Act::Upload, d);
         add(
@@ -846,6 +850,7 @@ impl Ifs {
         match a {
             Act::Close => self.close(),
             Act::Download => self.download(),
+            Act::Edit => self.edit(),
             Act::Upload => {
                 let paths = crate::files::choose_open_many(
                     &crate::files::downloads_dir(),
@@ -913,28 +918,66 @@ impl Ifs {
         }
     }
 
-    /// Opens the entry selected: a folder (or a link to one) is shown.
-    fn open(&self) {
+    /// What the one entry selected opens as: its path and entry, a link's
+    /// target for a link; `None` (said on the status bar) for a broken
+    /// link or none selected.
+    fn target(&self) -> Option<(String, Entry)> {
         let [row] = &self.selected()[..] else {
-            return;
+            self.report("Select one entry.");
+            return None;
         };
-        if row.broken() {
+        if let Some(model::Target::Broken(t) | model::Target::Unknown(t)) = &row.link {
             self.report(&format!(
-                "{} is a link to {}, which is not there.",
-                row.entry.name,
-                row.name_text()
-            ));
-            return;
-        }
-        let Some((path, entry)) = row.opens_as() else {
-            self.report(&format!(
-                "The target of {} cannot be looked at.",
+                "{} is a link to {t}, which cannot be opened.",
                 row.entry.name
             ));
+            return None;
+        }
+        row.opens_as()
+    }
+
+    /// Opens the entry selected: a folder (or a link to one) is shown; a
+    /// file goes, as a read-only copy, to this computer's default
+    /// application.
+    fn open(&self) {
+        let Some((path, entry)) = self.target() else {
             return;
         };
         if entry.kind == EntryKind::Directory {
             self.go_to(&path, true);
+            return;
+        }
+        let Some(h) = self.h.clone() else { return };
+        self.busy.set(true);
+        let r = editor::open_copy(&h, &path);
+        self.busy.set(false);
+        match r {
+            Ok(_) => self.report(&format!(
+                "Opened a read-only copy of {path}; changes to it are not saved to the system."
+            )),
+            Err(why) => {
+                let m = qsa_msg::message(id::FILE_TRANSFER_FAILED, &[&entry.name, &why]);
+                self.said(&m);
+                msgdetails::show_message(self.parent_window(), &m);
+            }
+        }
+    }
+
+    /// Edits the text file selected in the built-in editor.
+    fn edit(&self) {
+        let Some((path, entry)) = self.target() else {
+            return;
+        };
+        if entry.kind == EntryKind::Directory {
+            self.go_to(&path, true);
+            return;
+        }
+        let Some(h) = self.h.clone() else { return };
+        self.busy.set(true);
+        let asked = editor::open(self.parent_window(), &h, &self.sys, &path);
+        self.busy.set(false);
+        if let editor::Asked::Download = asked {
+            self.download();
         }
     }
 
@@ -1336,7 +1379,7 @@ fn tick() {
 
 /// Whether any of these windows is open.
 pub fn any_open() -> bool {
-    WINDOWS.with(|v| v.borrow().iter().any(|w| w.w.window.shown()))
+    WINDOWS.with(|v| v.borrow().iter().any(|w| w.w.window.shown())) || editor::any_open()
 }
 
 /// An entry for screenshots and tests.

@@ -1212,6 +1212,40 @@ fn ifs_views() -> Vec<(String, Window)> {
     ]
 }
 
+/// The editor: a text file, a binary one read-only, and the prompt for a
+/// file changed on the system.
+fn ifs_editor_views() -> Vec<(String, Window)> {
+    use qap_client::proto::ops::ifs::EntryKind::File;
+    use qsaccess::ifs::editor::{Editor, changed_prompt};
+    use qsaccess::ifs::entry;
+    let sys = System::new("sys1.example.net");
+    let text = "PGM PARM(&LIB)\n  DCL VAR(&LIB) TYPE(*CHAR) LEN(10)\n  CRTLIB LIB(&LIB) TEXT('Grüße aus Zürich')\n  MONMSG MSGID(CPF2111)\nENDPGM\n";
+    let normal = Editor::build(
+        &sys,
+        "/home/BOB/src/mklib.clp",
+        text,
+        entry("mklib.clp", File, text.len() as u64, 37),
+        None,
+    );
+    let notice = qsa_msg::message(qsa_msg::id::NOT_TEXT, &["binary.dat"]);
+    let read_only = Editor::build(
+        &sys,
+        "/home/BOB/text/binary.dat",
+        &qsaccess::ifs::editor::hex_dump(&[0x00, 0x0E, 0xFF, 0x0F, 0x41, 0x80, 0xC1]),
+        entry("binary.dat", File, 7, 65535),
+        Some(&notice),
+    );
+    let m = qsa_msg::message(qsa_msg::id::CHANGED_ON_SYSTEM, &["/home/BOB/src/mklib.clp"]);
+    vec![
+        ("ifs-editor".to_owned(), normal.window.clone()),
+        ("ifs-editor-read-only".to_owned(), read_only.window.clone()),
+        (
+            "ifs-editor-changed".to_owned(),
+            changed_prompt(&m).build().0,
+        ),
+    ]
+}
+
 /// A Prompt form for one of QS/400's test commands.
 fn prompt_form(name: &str) -> qsaccess::prompt::form::Form {
     let c = qapd::testing::commands::find(name).expect("a test command");
@@ -1385,6 +1419,7 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     out.extend(upload_views());
     out.extend(schemas_views());
     out.extend(ifs_views());
+    out.extend(ifs_editor_views());
     out.extend(printer_output_views(state));
     out.extend(prompt_views());
     out.push((
