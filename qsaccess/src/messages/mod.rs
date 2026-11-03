@@ -31,8 +31,11 @@
 //! never runs on the GUI thread: a page is listed on a thread of its own,
 //! which holds the shared client only to send.
 
+pub mod arrived;
 pub mod model;
+pub mod options;
 pub mod send;
+pub mod watching;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -98,6 +101,7 @@ pub enum Cmd {
     RemoveAnswered,
     Link,
     Send,
+    Options,
     Close,
     About,
 }
@@ -208,6 +212,7 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Cmd>) {
         Cmd::RemoveAnswered,
         d,
     );
+    add("&Messages/&Options...", Shortcut::None, Cmd::Options, n);
     add("&Help/&About...", Shortcut::None, Cmd::About, n);
 
     let (m, fh) = (8, theme::FIELD_H);
@@ -697,6 +702,15 @@ impl MessagesWindow {
                     send::open(self.parent(), &state, &system, None);
                 }
             }
+            Cmd::Options => {
+                let (state, system) = {
+                    let st = self.st.borrow();
+                    (st.state.clone(), st.system.name.clone())
+                };
+                if let Some(state) = state {
+                    options::open(self.parent(), &state, &system);
+                }
+            }
             Cmd::Close => self.w.window.clone().hide(),
             Cmd::About => crate::about::show(self.parent()),
         }
@@ -1072,6 +1086,7 @@ pub fn pump() {
     let windows: Vec<Rc<MessagesWindow>> = WINDOWS.with(|v| v.borrow().clone());
     let open: Vec<bool> = windows.iter().map(|w| w.pump()).collect();
     send::pump();
+    arrived::pump();
     WINDOWS.with(|v| {
         let mut i = 0;
         v.borrow_mut().retain(|_| {
@@ -1082,7 +1097,10 @@ pub fn pump() {
     });
 }
 
-/// Whether any Messages window or Send Message dialog is open.
+/// Whether any Messages window, Send Message dialog or Message Arrived is
+/// open.
 pub fn any_open() -> bool {
-    WINDOWS.with(|v| v.borrow().iter().any(|w| w.w.window.shown())) || send::any_open()
+    WINDOWS.with(|v| v.borrow().iter().any(|w| w.w.window.shown()))
+        || send::any_open()
+        || arrived::any_open()
 }

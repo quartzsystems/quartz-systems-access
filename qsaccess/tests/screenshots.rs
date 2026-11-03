@@ -676,7 +676,83 @@ fn messages_views(state: &Shared) -> Vec<(String, Window)> {
         ("send-message".to_owned(), send_message(state, 0)),
         ("send-message-waiting".to_owned(), send_message(state, 1)),
         ("send-message-reply".to_owned(), send_message(state, 2)),
+        ("message-arrived".to_owned(), message_arrived(&operator, 1)),
+        (
+            "message-arrived-several".to_owned(),
+            message_arrived(&operator, 3),
+        ),
+        (
+            "messages-options".to_owned(),
+            qsaccess::messages::options::OptionsDialog::build(
+                "sys1.example.net",
+                "BOB",
+                qsa_config::settings::MessageOptions {
+                    operator: true,
+                    ..Default::default()
+                },
+                true,
+            )
+            .window,
+        ),
+        (
+            "messages-options-not-authorized".to_owned(),
+            qsaccess::messages::options::OptionsDialog::build(
+                "sys1.example.net",
+                "BOB",
+                qsa_config::settings::MessageOptions::default(),
+                false,
+            )
+            .window,
+        ),
+        (
+            "main-messages-waiting".to_owned(),
+            main_messages_waiting(state),
+        ),
     ]
+}
+
+/// Message Arrived with the first `n` of QSYSOPR's inquiries and the
+/// informational message before them queued, on the second when there are
+/// several.
+fn message_arrived(
+    operator: &[qap_client::proto::ops::messages::QueuedMessage],
+    n: usize,
+) -> Window {
+    use qap_client::proto::ops::messages::{MessageType, Queue};
+    use qsaccess::messages::arrived::{ArrivedWindow, Item};
+    use qsaccess::splf::model::utc_time;
+    let w = ArrivedWindow::build();
+    let picked: Vec<_> = operator
+        .iter()
+        .filter(|m| m.kind == MessageType::Inquiry && m.needs_reply)
+        .chain(operator.iter().filter(|m| m.id == "CPF2103"))
+        .take(n)
+        .cloned()
+        .collect();
+    for m in picked {
+        w.push(
+            Item {
+                system: "sys1.example.net".into(),
+                queue: Queue::SystemOperator,
+                queue_name: "QSYSOPR".into(),
+                message: m,
+            },
+            &utc_time,
+        );
+    }
+    if n > 1 {
+        w.go(1, &utc_time);
+    }
+    let win = w.window.clone();
+    std::mem::forget(w);
+    win
+}
+
+/// The main window with "Messages waiting: 3" on its status bar.
+fn main_messages_waiting(state: &Shared) -> Window {
+    let (ui, _rx) = mainwin::build(state.clone());
+    ui.status.clone().set_indicator(Some("Messages waiting: 3"));
+    ui.window.clone()
 }
 
 /// Send Message on sys1.example.net to ANN: as opened (`stage` 0), after an

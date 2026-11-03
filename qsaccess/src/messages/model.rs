@@ -226,6 +226,20 @@ impl Link {
     }
 }
 
+/// Whether `m`, arrived on a queue whose option is `arrival`, opens Message
+/// Arrived. A sender's copy and a reply never do.
+pub fn opens_arrived(arrival: qsa_config::settings::Arrival, m: &QueuedMessage) -> bool {
+    use qsa_config::settings::Arrival;
+    if matches!(m.kind, MessageType::SenderCopy | MessageType::Reply) {
+        return false;
+    }
+    match arrival {
+        Arrival::InquiriesOnly => needs_reply(m),
+        Arrival::All => true,
+        Arrival::None => false,
+    }
+}
+
 /// The status bar's line: `QAD9001`, with the page's sort when it has one.
 pub fn list_line(total: u32, queue: &str, sorted: Option<&str>) -> String {
     let m = qsa_msg::message(qsa_msg::id::MESSAGES_LISTED, &[&total.to_string(), queue]);
@@ -354,6 +368,27 @@ mod tests {
         assert_eq!(Link::of(&reply), Some(Link::Answers(copy.key)));
         assert!(Link::Answers(copy.key).leads_to(&copy));
         assert!(!Link::Answers(copy.key).leads_to(&reply));
+    }
+
+    #[test]
+    fn what_opens_message_arrived() {
+        use qsa_config::settings::Arrival;
+        let inquiry = msg(MessageType::Inquiry);
+        let info = msg(MessageType::Informational);
+        let mut answered = inquiry.clone();
+        answered.needs_reply = false;
+        let mut copy = msg(MessageType::SenderCopy);
+        copy.needs_reply = true;
+        let reply = msg(MessageType::Reply);
+        assert!(opens_arrived(Arrival::InquiriesOnly, &inquiry));
+        assert!(!opens_arrived(Arrival::InquiriesOnly, &info));
+        assert!(!opens_arrived(Arrival::InquiriesOnly, &answered));
+        assert!(opens_arrived(Arrival::All, &info));
+        assert!(!opens_arrived(Arrival::None, &inquiry));
+        for a in Arrival::ALL {
+            assert!(!opens_arrived(a, &copy), "{a:?}");
+            assert!(!opens_arrived(a, &reply), "{a:?}");
+        }
     }
 
     #[test]

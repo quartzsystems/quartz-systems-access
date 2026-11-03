@@ -7,6 +7,7 @@
 //! Call [`theme::init`] once, after creating the FLTK app and before making
 //! any widget.
 
+pub mod attention;
 pub mod chan;
 pub mod console;
 pub mod controls;

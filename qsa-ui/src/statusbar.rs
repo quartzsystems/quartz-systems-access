@@ -121,12 +121,19 @@ impl StatusLine {
     }
 }
 
-/// The status bar: a wide message panel and a narrower status panel.
+/// What a click on the indicator does.
+type OnIndicator = Rc<RefCell<Option<Box<dyn FnMut()>>>>;
+
+/// The status bar: a wide message panel and a narrower status panel, and
+/// between them, when set, an indicator panel that opens something when
+/// clicked ([`StatusBar::set_indicator`]).
 #[derive(Clone)]
 pub struct StatusBar {
     group: Group,
     message: Panel,
+    indicator: Panel,
     status: Panel,
+    on_indicator: OnIndicator,
 }
 
 impl StatusBar {
@@ -134,6 +141,8 @@ impl StatusBar {
     pub const HEIGHT: i32 = 22;
     /// Width of the status panel on the right.
     pub const STATUS_W: i32 = 180;
+    /// Width of the indicator panel.
+    pub const INDICATOR_W: i32 = 150;
 
     /// A status bar across the bottom of `parent_w`, at `y`.
     pub fn new(x: i32, y: i32, w: i32) -> StatusBar {
@@ -141,15 +150,68 @@ impl StatusBar {
         group.set_frame(FrameType::FlatBox);
         group.set_color(colors::FACE);
         let sw = Self::STATUS_W;
+        let iw = Self::INDICATOR_W;
         let message = Panel::new(x + 2, y + 3, w - sw - 6, Self::HEIGHT - 5);
+        let mut indicator = Panel::new(x + w - sw - iw - 4, y + 3, iw, Self::HEIGHT - 5);
         let status = Panel::new(x + w - sw - 2, y + 3, sw, Self::HEIGHT - 5);
         group.end();
         group.resizable(message.widget());
+        indicator.widget.hide();
+        let on_indicator: OnIndicator = Rc::new(RefCell::new(None));
+        let cb = on_indicator.clone();
+        indicator.widget.handle(move |_, ev| {
+            if ev != fltk::enums::Event::Push {
+                return false;
+            }
+            let taken = cb.borrow_mut().take();
+            if let Some(mut f) = taken {
+                f();
+                cb.borrow_mut().get_or_insert(f);
+            }
+            true
+        });
         StatusBar {
             group,
             message,
+            indicator,
             status,
+            on_indicator,
         }
+    }
+
+    /// Shows `text` in the indicator panel, or hides it (`None`); the
+    /// message panel gives it the room.
+    pub fn set_indicator(&mut self, text: Option<&str>) {
+        let (x, y, w) = (self.group.x(), self.group.y(), self.group.w());
+        let (sw, iw, h) = (Self::STATUS_W, Self::INDICATOR_W, Self::HEIGHT - 5);
+        match text {
+            Some(t) => {
+                self.indicator.set(t, Status::Neutral);
+                self.indicator
+                    .widget
+                    .resize(x + w - sw - iw - 4, y + 3, iw, h);
+                self.indicator.widget.show();
+                self.message.widget.resize(x + 2, y + 3, w - sw - iw - 8, h);
+            }
+            None => {
+                self.indicator.widget.hide();
+                self.message.widget.resize(x + 2, y + 3, w - sw - 6, h);
+            }
+        }
+        self.group.redraw();
+    }
+
+    /// The indicator's text, when it is shown.
+    pub fn indicator(&self) -> Option<String> {
+        self.indicator
+            .widget
+            .visible()
+            .then(|| self.indicator.text())
+    }
+
+    /// Called when the indicator is clicked.
+    pub fn on_indicator(&mut self, f: impl FnMut() + 'static) {
+        *self.on_indicator.borrow_mut() = Some(Box::new(f));
     }
 
     /// Shows a message in the wide panel.

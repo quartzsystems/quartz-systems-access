@@ -283,8 +283,17 @@ impl Ui {
                     }
                     None => status.set_status(&format!("{name}: Not connected"), Status::Error),
                 }
+                // The inquiries waiting, while the system has message watches.
+                let waiting = crate::messages::watching::waiting(&self.state, &name)
+                    .map(crate::messages::watching::indicator_text);
+                if status.indicator() != waiting {
+                    status.set_indicator(waiting.as_deref());
+                }
             }
-            None => status.set_status("No system configured", Status::Neutral),
+            None => {
+                status.set_status("No system configured", Status::Neutral);
+                status.set_indicator(None);
+            }
         }
     }
 
@@ -674,6 +683,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
     window.resizable(&panel);
 
     status.set_message("Ready");
+    status.on_indicator(move || tx.send(Action::Task(Task::Messages)));
     let ui = Ui {
         window,
         status,

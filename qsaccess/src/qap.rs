@@ -64,7 +64,9 @@ pub fn lock(h: &Handle) -> MutexGuard<'_, Client> {
     h.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
-/// One system's entry.
+/// One system's entry. A client's watches go to the next client of the
+/// same system ([`Client::adopt_watches`]), so a new sign-on watches again
+/// and catches up.
 struct Entry {
     client: Handle,
     /// The signed-on profile as the GUI thread last saw it, for when
@@ -83,6 +85,9 @@ struct Entry {
 #[derive(Default)]
 pub struct Registry {
     map: HashMap<String, Entry>,
+    /// Watches of a client whose session ended under a window's own
+    /// connection, for the system's next client.
+    parked: HashMap<String, qap_client::watch::Watches>,
 }
 
 impl std::fmt::Debug for Registry {
@@ -101,13 +106,24 @@ impl Registry {
     /// now (its address, port and trust may have changed).
     pub fn client(&mut self, system: &System) -> Handle {
         let k = key(&system.name);
-        if let Some(e) = self.map.get(&k) {
-            let stale = e.client.try_lock().is_ok_and(|c| !c.is_signed_on());
-            if !stale {
-                return Arc::clone(&e.client);
+        let watches = match self.map.get(&k) {
+            Some(e) => {
+                let Ok(mut old) = e.client.try_lock() else {
+                    return Arc::clone(&e.client);
+                };
+                if old.is_signed_on() {
+                    drop(old);
+                    return Arc::clone(&e.client);
+                }
+                Some(old.take_watches())
             }
+            None => self.parked.remove(&k),
+        };
+        let mut fresh = Client::new(target_for(system));
+        if let Some(w) = watches {
+            fresh.adopt_watches(w);
         }
-        let client = Arc::new(Mutex::new(Client::new(target_for(system))));
+        let client = Arc::new(Mutex::new(fresh));
         self.map.insert(
             k,
             Entry {
@@ -195,7 +211,10 @@ impl Registry {
     /// session end: it is over for every tool, so the next one signs on,
     /// whether or not the shared connection has heard yet.
     pub fn forget_ended(&mut self, system: &str) {
-        if self.map.remove(&key(system)).is_some() {
+        if let Some(e) = self.map.remove(&key(system)) {
+            if let Ok(mut c) = e.client.try_lock() {
+                self.parked.insert(key(system), c.take_watches());
+            }
             crate::log!("QAP session on {system} ended; the next tool signs on again");
         }
     }
@@ -668,13 +687,19 @@ pub fn pump(ui: &Ui) {
         for n in notices {
             offer = offer.or(tell(ui, &system, n));
         }
-        // What the watches reported (version 6), for the windows that show
-        // it. A client busy elsewhere is looked at next time.
-        let events = h
+        // The message watches (version 6): set up once per sign-on, then
+        // what they reported, for the log, Message Arrived and the windows
+        // that show it. A client busy elsewhere is looked at next time.
+        crate::messages::watching::upkeep(ui, &system, &h);
+        let (events, profile) = h
             .try_lock()
-            .map(|mut c| c.watch_events())
+            .map(|mut c| {
+                let p = c.profile().map(|p| p.profile.clone()).unwrap_or_default();
+                (c.watch_events(), p)
+            })
             .unwrap_or_default();
         if !events.is_empty() {
+            crate::messages::watching::events(ui, &system, &profile, &events);
             crate::messages::watch_events(&system.name, &events);
         }
         if ui.state.borrow_mut().qap.resumed(&k) {

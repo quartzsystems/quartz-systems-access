@@ -145,6 +145,88 @@ pub struct Settings {
     pub printer_output: PrinterOutput,
     /// Run SQL's history, recent scripts and options.
     pub run_sql: RunSql,
+    /// What Messages watches, and what opens Message Arrived, per system.
+    pub messages: Messages,
+}
+
+/// What a message arriving on a watched queue does.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Arrival {
+    /// An inquiry waiting for a reply opens Message Arrived.
+    #[default]
+    InquiriesOnly,
+    /// Every message opens it (a sender's copy and a reply never do).
+    All,
+    /// Nothing opens it; Messages still shows the message.
+    None,
+}
+
+impl Arrival {
+    /// Every choice, in the order Options lists them.
+    pub const ALL: [Arrival; 3] = [Arrival::InquiriesOnly, Arrival::All, Arrival::None];
+
+    /// Its label in Options.
+    pub fn label(self) -> &'static str {
+        match self {
+            Arrival::InquiriesOnly => "Inquiries only",
+            Arrival::All => "All messages",
+            Arrival::None => "None",
+        }
+    }
+}
+
+/// One system's message options.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct MessageOptions {
+    /// What arrivals on the signed-on profile's own queue do. The own
+    /// queue is always watched while signed on.
+    pub own_arrival: Arrival,
+    /// Watch `QSYSOPR` too. Off by default; offered only when the profile
+    /// may read it, and turned off when it may not.
+    pub operator: bool,
+    /// What arrivals on `QSYSOPR` do while it is watched.
+    pub operator_arrival: Arrival,
+}
+
+impl Default for MessageOptions {
+    fn default() -> MessageOptions {
+        MessageOptions {
+            own_arrival: Arrival::InquiriesOnly,
+            operator: false,
+            operator_arrival: Arrival::InquiriesOnly,
+        }
+    }
+}
+
+/// `[messages]`: each system's [`MessageOptions`], by system name in lower
+/// case; a system with the defaults is not written.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Messages {
+    #[serde(skip_serializing_if = "std::collections::BTreeMap::is_empty")]
+    pub systems: std::collections::BTreeMap<String, MessageOptions>,
+}
+
+impl Messages {
+    /// `system`'s options.
+    pub fn for_system(&self, system: &str) -> MessageOptions {
+        self.systems
+            .get(&system.to_ascii_lowercase())
+            .copied()
+            .unwrap_or_default()
+    }
+
+    /// Sets `system`'s options.
+    pub fn set(&mut self, system: &str, o: MessageOptions) {
+        let k = system.to_ascii_lowercase();
+        if o == MessageOptions::default() {
+            self.systems.remove(&k);
+        } else {
+            self.systems.insert(k, o);
+        }
+    }
 }
 
 /// Statements Run SQL keeps per system.
@@ -348,6 +430,7 @@ impl Default for Settings {
             command_history: Default::default(),
             printer_output: PrinterOutput::default(),
             run_sql: RunSql::default(),
+            messages: Messages::default(),
         }
     }
 }
@@ -475,6 +558,40 @@ impl Settings {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn message_options_per_system() {
+        let mut s = Settings::default();
+        assert_eq!(s.messages.for_system("SYS1"), MessageOptions::default());
+        assert_eq!(
+            MessageOptions::default().own_arrival,
+            Arrival::InquiriesOnly
+        );
+        assert!(!MessageOptions::default().operator, "QSYSOPR is opt-in");
+        let o = MessageOptions {
+            own_arrival: Arrival::All,
+            operator: true,
+            operator_arrival: Arrival::None,
+        };
+        s.messages.set("Sys1", o);
+        assert_eq!(s.messages.for_system("sys1"), o);
+        let text = toml::to_string(&s).unwrap();
+        assert!(text.contains("[messages.systems.sys1]"), "{text}");
+        assert!(text.contains("own_arrival = \"all\""), "{text}");
+        assert!(text.contains("operator_arrival = \"none\""), "{text}");
+        let back: Settings = toml::from_str(&text).unwrap();
+        assert_eq!(back.messages, s.messages);
+        // Back to the defaults: not written.
+        s.messages.set("SYS1", MessageOptions::default());
+        assert!(!toml::to_string(&s).unwrap().contains("[messages.systems"));
+        let read: Settings = toml::from_str(
+            "[messages.systems.sys2]\noperator = true\noperator_arrival = \"inquiries-only\"\n",
+        )
+        .unwrap();
+        let o = read.messages.for_system("SYS2");
+        assert!(o.operator);
+        assert_eq!(o.own_arrival, Arrival::InquiriesOnly);
+    }
 
     #[test]
     fn run_sql_settings() {
