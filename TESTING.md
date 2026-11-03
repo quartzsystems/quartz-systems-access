@@ -507,6 +507,13 @@ Then, with `QSACCESS_LOG=trace`:
   program: `C_DECIMAL` a number with two decimals, `C_BIGINT` and the
   DECFLOAT special values text, `C_BOOLEAN` TRUE or FALSE, `C_TS12` with
   twelve fractional digits. Cancel a download of the long query: no file.
+- [ ] **DECFLOAT as the engine writes it.** In Run SQL, run
+  `UPDATE HLTEST.ALLTYPES SET C_DECFLOAT = 1.50 WHERE ID = 7` (and `1E+2`,
+  `1.00E+2`, `1e2`, `+1.5`, `0.0000001`, `-0`), each followed by `SELECT
+  C_DECFLOAT FROM HLTEST.ALLTYPES WHERE ID = 7`: `1.50`, `1E+2`, `100`,
+  `1E+2`, `1.5`, `1E-7` and `-0`, compared as text. With `1.50` set,
+  `WHERE C_DECFLOAT = 1.5` finds row 7, and with `-0`, `= 0` does. Download
+  row 7 to each format and upload it back: the same text each time.
 - [ ] **Upload from each format.** `DELETE FROM HLTEST.ALLTYPES`, then
   upload each downloaded file back (Replace): `SELECT * FROM
   HLTEST.ALLTYPES` shows the same rows as before, NULLs, decimals, DECFLOAT

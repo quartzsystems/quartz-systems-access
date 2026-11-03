@@ -702,3 +702,82 @@ fn a_slow_select_holds_up_no_other_connection() {
 fn a_slow_select_under_repeatable_read_holds_up_no_other_connection() {
     independent_of_a_slow_query(CommitLevel::RepeatableRead);
 }
+
+/// Row 7's `C_DECFLOAT` set to `v` by a parameter, then read back.
+fn decfloat_through(q: &mut SqlConnection, v: &str) -> String {
+    let set = q
+        .prepare("UPDATE HLTEST.ALLTYPES SET C_DECFLOAT = ? WHERE ID = 7")
+        .unwrap();
+    let o = q
+        .execute_now(
+            set.statement,
+            vec![vec![SqlValue::Decimal { text: v.into() }]],
+        )
+        .unwrap();
+    assert_eq!(o.executed.updated, 1, "{v}");
+    q.release(set.statement).unwrap();
+    let rows = query(q, "SELECT C_DECFLOAT FROM HLTEST.ALLTYPES WHERE ID = 7");
+    text(&rows[0][0]).to_owned()
+}
+
+#[test]
+fn decfloat_comes_back_as_the_engines_text_exactly() {
+    let s = start(cfg());
+    let (_c, mut q) = bob(&s);
+    // The engine's decimal floating-point string: coefficient and
+    // exponent kept, compared here as text, never by value.
+    for (sent, back) in [
+        ("1.50", "1.50"),
+        ("1E+2", "1E+2"),
+        ("1.00E+2", "100"),
+        ("1e2", "1E+2"),
+        ("+1.5", "1.5"),
+        ("0.0000001", "1E-7"),
+        ("-0", "-0"),
+        ("0E+3", "0E+3"),
+        ("-12.50", "-12.50"),
+        ("1.5E-30", "1.5E-30"),
+        ("Infinity", "Infinity"),
+        ("sNaN", "sNaN"),
+    ] {
+        assert_eq!(decfloat_through(&mut q, sent), back, "{sent}");
+    }
+}
+
+#[test]
+fn decfloat_equals_by_value_in_a_where_clause() {
+    let s = start(cfg());
+    let (_c, mut q) = bob(&s);
+    let find = |q: &mut SqlConnection, v: &str| -> Vec<i64> {
+        let p = q
+            .prepare("SELECT ID FROM HLTEST.ALLTYPES WHERE C_DECFLOAT = ?")
+            .unwrap();
+        let o = q
+            .execute_now(p.statement, vec![vec![SqlValue::Decimal { text: v.into() }]])
+            .unwrap();
+        let cursor = o.executed.cursor.unwrap();
+        let mut ids = Vec::new();
+        q.fetch_into(
+            cursor,
+            None,
+            &mut |b| {
+                ids.extend(b.into_iter().map(|r| match r[0] {
+                    SqlValue::Integer { value } => value,
+                    ref other => panic!("{other:?}"),
+                }));
+                Ok(())
+            },
+            &AtomicBool::new(false),
+        )
+        .unwrap();
+        q.close_cursor(cursor).unwrap();
+        q.release(p.statement).unwrap();
+        ids
+    };
+    assert_eq!(decfloat_through(&mut q, "1.50"), "1.50");
+    assert_eq!(find(&mut q, "1.5"), [7]);
+    assert_eq!(find(&mut q, "15E-1"), [7]);
+    assert_eq!(decfloat_through(&mut q, "-0"), "-0");
+    assert_eq!(find(&mut q, "0"), [7]);
+    assert_eq!(find(&mut q, "1234.56780"), [1]);
+}
