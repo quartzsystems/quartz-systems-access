@@ -21,8 +21,16 @@ components below. Each is used under its own licence.
 | `sha2` | 0.10 | MIT OR Apache-2.0 | Certificate fingerprints |
 | `printpdf` (`text_layout` feature, for font subsetting) | 0.12 | MIT | PDF output of printer sessions |
 | `windows` | 0.61 | MIT OR Apache-2.0 | Windows printing: spooler, GDI, print setup dialog (Windows only) |
+| `rust_xlsxwriter` (`constant_memory` feature) | 0.102 | MIT OR Apache-2.0 | Data Transfer: XLSX files written |
+| `calamine` | 0.38 | MIT | Data Transfer: XLSX and ODS files read |
+| `zip` (`deflate` feature) | 9.2 | MIT | Data Transfer: ODS files written |
 
 Transitive dependencies are listed in `Cargo.lock`.
+
+The spreadsheet crates bring in `quick-xml` (MIT), `tempfile`, `fastrand`,
+`atoi_simd`, `fast-float2`, `codepage`, `typed-path`, `bumpalo`,
+`debug_unsafe` and `rustversion` (MIT or Apache-2.0), `byteorder`
+(Unlicense or MIT), `zopfli` (Apache-2.0) and `zlib-rs` (Zlib).
 
 `printpdf` brings in, among others, `lopdf` (MIT), `allsorts-azul` (Apache-2.0,
 the font subsetter) and the `azul-*` layout crates (MIT). One of those,

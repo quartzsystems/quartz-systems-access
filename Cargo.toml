@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "qsa-net", "qap-client", "qsa-sql", "tn5250", "scs", "qsa-print", "xtask"]
+members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "qsa-net", "qap-client", "qsa-sql", "qsa-transfer", "tn5250", "scs", "qsa-print", "xtask"]
 
 [workspace.package]
 version = "1.0.0"
@@ -30,6 +30,10 @@ zstd = "0.13"
 tar = "0.4"
 windows = "0.61"
 printpdf = { version = "0.12.8", default-features = false, features = ["text_layout"] }
+# Data Transfer's spreadsheets: XLSX written, XLSX and ODS read, ODS zipped.
+rust_xlsxwriter = { version = "0.102", default-features = false, features = ["constant_memory"] }
+calamine = { version = "0.38", default-features = false }
+zip = { version = "9.2", default-features = false, features = ["deflate"] }
 
 qsa-ui = { path = "qsa-ui" }
 qsa-glyph = { path = "qsa-glyph" }
@@ -42,6 +46,7 @@ scs = { path = "scs" }
 qsa-print = { path = "qsa-print" }
 qap-client = { path = "qap-client" }
 qsa-sql = { path = "qsa-sql" }
+qsa-transfer = { path = "qsa-transfer" }
 
 # QAP from the QS/400 repository, pinned to one commit. docs/qap-protocol-spec.md
 # is QS/400's docs/QAP.md at that commit and moves with it (ci/spec-mirror.sh).

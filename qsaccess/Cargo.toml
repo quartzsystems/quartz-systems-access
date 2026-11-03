@@ -16,6 +16,7 @@ qsa-msg.workspace = true
 qsa-net.workspace = true
 qap-client.workspace = true
 qsa-sql.workspace = true
+qsa-transfer.workspace = true
 tn5250.workspace = true
 scs.workspace = true
 qsa-print.workspace = true

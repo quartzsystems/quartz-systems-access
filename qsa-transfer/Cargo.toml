@@ -1,0 +1,30 @@
+[package]
+name = "qsa-transfer"
+description = "Data Transfer for QS/400 Access for Desktop: files to and from the system's tables, and .qdx requests"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+qap-client.workspace = true
+qsa-sql.workspace = true
+rust_xlsxwriter.workspace = true
+calamine.workspace = true
+zip.workspace = true
+serde.workspace = true
+toml.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+qapd.workspace = true
+qapd_v1.workspace = true
+qap_proto_v1.workspace = true
+qapd_v2.workspace = true
+qap_proto_v2.workspace = true
+qsa-net.workspace = true
+rustls.workspace = true
+
+[lints]
+workspace = true

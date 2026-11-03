@@ -141,6 +141,7 @@ pub enum Act {
     CopyRow,
     Details,
     BitData,
+    Export,
 }
 
 /// A result as a screenshot shows it: its columns, rows and how it stands.
@@ -297,6 +298,7 @@ fn build_widgets(
         add("&Run/&History...", Shortcut::Ctrl | 'h', Act::History, n);
         add("Re&sults/Fetch &More", Shortcut::None, Act::FetchMore, n);
         add("Re&sults/Fetch &All", Shortcut::None, Act::FetchAll, d);
+        add("Re&sults/&Export...", Shortcut::Ctrl | 'e', Act::Export, d);
         add("Re&sults/&Clear Results", Shortcut::None, Act::Clear, n);
         add(
             "&Options/Show CCSID 65535 Data as &Text",
@@ -1219,6 +1221,7 @@ impl RunSql {
             Act::CopyCell | Act::CopyRow => self.copy(a == Act::CopyRow),
             Act::Details => self.details(),
             Act::BitData => self.toggle_bit_data(),
+            Act::Export => self.export(),
         }
     }
 
@@ -1799,6 +1802,75 @@ pub fn pump() {
 /// Whether any Run SQL window is open.
 pub fn any_open() -> bool {
     WINDOWS.with(|v| v.borrow().iter().any(|w| w.w.window.shown()))
+}
+
+impl RunSql {
+    /// Results > Export: the result shown, its rows as fetched, through
+    /// Data Transfer's writers in the format the file's extension names
+    /// (CSV when it names none). An incomplete result is exported as it
+    /// is, labelled incomplete.
+    fn export(&self) {
+        let Some(i) = self.shown_result() else {
+            self.report("Show a result to export.", Status::Error);
+            return;
+        };
+        let (incomplete, rows) = {
+            let st = self.st.borrow();
+            let r = &st.results[i];
+            (matches!(r.standing, Standing::Incomplete(_)), r.rows.len())
+        };
+        let name = if incomplete {
+            format!("result-{}-incomplete.csv", i + 1)
+        } else {
+            format!("result-{}.csv", i + 1)
+        };
+        let pattern = "CSV (*.csv)\tTSV (*.tsv)\tExcel workbook (*.xlsx)\tOpenDocument spreadsheet (*.ods)\tFixed width (*.txt)";
+        let Some(path) = crate::files::choose_save("Export Result", pattern, &name) else {
+            return;
+        };
+        let format = qsa_transfer::Format::from_path(&path).unwrap_or_default();
+        let opts = qsa_transfer::FileOptions {
+            format,
+            sheet: format!("Result {}", i + 1),
+            bit_data_as_text: self.st.borrow().style.bit_data != BitData::Hex,
+            ..qsa_transfer::FileOptions::default()
+        };
+        let r = {
+            let st = self.st.borrow();
+            let res = &st.results[i];
+            let dates = st.style.dates;
+            let ccsid = st.job_ccsid;
+            qsa_transfer::writer::open(&path, &res.columns, &opts, dates, ccsid, false).and_then(
+                |mut sink| {
+                    for row in &res.rows {
+                        sink.row(row)?;
+                    }
+                    sink.finish()
+                },
+            )
+        };
+        match r {
+            Ok(()) => {
+                let note = if incomplete {
+                    " (an incomplete result)"
+                } else {
+                    ""
+                };
+                self.report(
+                    &format!("{rows} rows exported to {}{note}.", path.display()),
+                    if incomplete {
+                        Status::Error
+                    } else {
+                        Status::Neutral
+                    },
+                );
+            }
+            Err(e) => self.report(
+                &format!("{} cannot be written: {e}", path.display()),
+                Status::Error,
+            ),
+        }
+    }
 }
 
 #[cfg(test)]

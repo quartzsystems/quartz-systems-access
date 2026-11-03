@@ -229,6 +229,48 @@ Output.
   an operator ending one of its jobs), the window shows the system's
   message and offers **Sign On...**.
 
+## Data Transfer
+
+**Data Transfer** in the task pane's General group moves rows between a
+system's tables and files on this computer. It needs QAP version 4 (the
+`Sql` service); for an older system the link is dimmed (`QAD5001`). Every run
+has a connection of its own, attached to the session, closed when the run
+ends; it runs with a progress dialog (rows and time) and **Cancel**, and ends
+with a summary: `QAD7030` complete, `QAD7031` failed, `QAD7032` cancelled.
+
+### From the system
+
+- **Source.** A table (type the schema and table, or **Browse...** the
+  system's catalog) with an optional Where clause, or an SQL query; **Check**
+  prepares the query on the system without running it and lists its columns.
+- **Columns.** **Get Columns** reads the source's columns. Choose those to
+  write and their order (**Add**, **Remove**, **Up**, **Down**); none chosen
+  writes them all. A row limit stops the transfer there.
+- **Output.**
+  - CSV or TSV: delimiter, quote, a header row of column names, and UTF-8
+    with or without a byte order mark. NULL is an empty field and an empty
+    string `""`, so they read back apart.
+  - XLSX or ODS: the sheet's name and a header row. A value goes in a number
+    cell only when the spreadsheet keeps it exactly (15 significant digits
+    or fewer; a `DECFLOAT` only when it reads back the same), otherwise in a
+    text cell: special values and long E notation are always text. BOOLEAN
+    is a boolean cell, NULL an empty cell, and XLSX writes an empty string as
+    the formula `=""`.
+  - Fixed width: each column's width from its length, editable, numbers
+    right-aligned, with a `Y`/`N` NULL indicator after each nullable column.
+  - Dates, times and timestamps in ISO 8601 or the job's format; a
+    timestamp keeps every fractional digit it has. The decimal point is a
+    period or a comma. Decimals are written exactly, never through floating
+    point. Binary data (and CCSID 65535 character data) is hex.
+  - The output file, and what to do when it is there: replace it, ask, or
+    append (CSV, TSV and fixed width).
+- **Run.** Rows stream from the system to a temporary file beside the
+  output, renamed into place at the end; a cancel or a failure deletes it,
+  so the output is never left half written.
+
+Run SQL's **Results > Export...** writes the result shown the same way, in the
+format its file name's extension says.
+
 ## Printer Output
 
 **Printer Output** in the task pane's General group lists the spooled files

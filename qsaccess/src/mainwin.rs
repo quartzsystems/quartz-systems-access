@@ -156,6 +156,15 @@ impl Ui {
                     self.refresh_systems();
                 }
             }
+            Task::DataTransfer => {
+                if self.state.borrow().systems.is_empty() {
+                    crate::sysconfig::open(self);
+                }
+                if let Some(system) = self.selected_system() {
+                    crate::transfer::download::open(self.parent(), &self.state, &system, None);
+                    self.refresh_systems();
+                }
+            }
             Task::RunSql => {
                 if self.state.borrow().systems.is_empty() {
                     crate::sysconfig::open(self);

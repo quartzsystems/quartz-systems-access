@@ -29,6 +29,7 @@ pub mod shell;
 pub mod signon;
 pub mod splf;
 pub mod sysconfig;
+pub mod transfer;
 pub mod trust;
 pub mod verify;
 
