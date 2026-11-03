@@ -15,7 +15,7 @@
 //! in [`TlsError::Untrusted`] so the user can look at it.
 
 use std::io::{self, Read, Write};
-use std::net::{SocketAddr, TcpStream};
+use std::net::SocketAddr;
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
@@ -28,7 +28,7 @@ use rustls::{
     ClientConfig, ClientConnection, DigitallySignedStruct, RootCertStore, SignatureScheme,
 };
 
-use crate::transport::{Security, Tcp, Transport};
+use crate::transport::{Security, Sock, Tcp, Transport};
 use crate::x509::{self, CertInfo};
 
 /// Why a TLS session could not be set up.
@@ -217,7 +217,7 @@ impl ServerCertVerifier for Verifier {
 /// TLS over a TCP connection.
 pub struct Tls {
     conn: ClientConnection,
-    sock: TcpStream,
+    sock: Sock,
     peer: Option<SocketAddr>,
 }
 
@@ -282,7 +282,11 @@ impl Tls {
                 return Err(TlsError::Handshake(rustls_reason(&e)));
             }
         }
-        let t = Tls { conn, sock, peer };
+        let t = Tls {
+            conn,
+            sock: Sock::new(sock),
+            peer,
+        };
         if let Security::Tls { protocol, cipher } = t.security() {
             crate::debug!("tls: established, {protocol}, {cipher}");
         }
@@ -317,10 +321,13 @@ impl Transport for Tls {
     fn set_read_timeout(&mut self, timeout: Option<Duration>) -> io::Result<()> {
         self.sock.set_read_timeout(timeout)
     }
+    fn poll_reads(&mut self, wait: Duration) -> io::Result<()> {
+        self.sock.poll_reads(wait)
+    }
     fn shutdown(&mut self) {
         self.conn.send_close_notify();
         let _ = self.conn.complete_io(&mut self.sock);
-        let _ = self.sock.shutdown(std::net::Shutdown::Both);
+        let _ = self.sock.stream.shutdown(std::net::Shutdown::Both);
     }
     fn security(&self) -> Security {
         Security::Tls {

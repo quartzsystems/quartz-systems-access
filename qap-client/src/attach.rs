@@ -23,7 +23,9 @@
 //!   forgotten and nothing attaches again ([`Attached::ended`]).
 //! - When the connection closes quietly or drops, its job is gone, and
 //!   with it the job's statements, cursors and uncommitted changes. The next
-//!   request attaches a new connection ([`Attached::attaches`] counts them).
+//!   request attaches a new connection ([`Attached::attaches`] counts them),
+//!   and only a read-only request the drop cut off ([`crate::retryable`]) is
+//!   sent once more on it.
 
 use std::fmt;
 
@@ -32,7 +34,7 @@ use qap_proto::ops::connection::{HelloReply, JobInfoReply};
 use qap_proto::ops::signon::{Attach, SignOnReply};
 use qap_proto::{Op, ServerMessage, Status, Token};
 
-use crate::conn::{Closed, Connection, Event, Pending};
+use crate::conn::{Closed, Connection, Event, Pending, lost_and_retryable};
 use crate::{Error, Target};
 
 /// Why an attached connection's session is over.
@@ -235,11 +237,27 @@ impl Attached {
         self.call(Op::JobInfo, &())
     }
 
-    /// Any request, decoded.
+    /// Any request, decoded. When the connection closes quietly or drops
+    /// before the reply, a [`crate::retryable`] operation is sent once more
+    /// on a new attached connection (never `Resume`: that is the shared
+    /// connection's); anything else fails with [`Error::Closed`], and the
+    /// caller reports it.
     pub fn call<B: Wire, R: Wire>(&mut self, op: Op, body: &B) -> Result<R, Error> {
         let r = self.live()?.call(op, body);
         self.absorb_events();
-        r
+        match r {
+            Err(e) if lost_and_retryable(&e, op) && self.ended.is_none() => {
+                qsa_net::info!(
+                    "qap: {}: {op:?} lost with its connection ({e}); sending it once more",
+                    self.target.host
+                );
+                self.conn = None;
+                let r = self.live()?.call(op, body);
+                self.absorb_events();
+                r
+            }
+            r => r,
+        }
     }
 
     /// Sends a request and returns at once; never tried again.

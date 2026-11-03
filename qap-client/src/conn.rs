@@ -326,6 +326,36 @@ pub fn runs_long(op: Op) -> bool {
     matches!(op, Op::RunCommand | Op::ReadSpooledFile)
 }
 
+/// Whether `op` only reads, so that when its connection closed quietly or
+/// dropped before the reply came it may be sent once more, on a new
+/// connection: the lists (the `Sql` catalog's, operations 9 to 11,
+/// included), `ReadSpooledFile`, `SystemInfo`, `PasswordStatus`,
+/// `DescribeCommand`, `CheckCommand` and `JobInfo`. Nothing that changes
+/// state is ever sent again, nor `Execute` or `Fetch`: their callers report
+/// the lost connection.
+pub fn retryable(op: Op) -> bool {
+    matches!(
+        op,
+        Op::ListSpooledFiles
+            | Op::ListOutputQueues
+            | Op::ListSchemas
+            | Op::ListTables
+            | Op::ListColumns
+            | Op::ReadSpooledFile
+            | Op::SystemInfo
+            | Op::PasswordStatus
+            | Op::DescribeCommand
+            | Op::CheckCommand
+            | Op::JobInfo
+    )
+}
+
+/// Whether a request that failed with `e` may be sent once more on a new
+/// connection.
+pub(crate) fn lost_and_retryable(e: &Error, op: Op) -> bool {
+    matches!(e, Error::Closed(why) if why.resumable()) && retryable(op)
+}
+
 /// Whether a connection whose `Hello` answered `hello` may send `op`.
 pub(crate) fn supported(hello: &HelloReply, op: Op) -> Result<(), Error> {
     let (service, _) = op.code();
@@ -411,7 +441,7 @@ impl Connection {
         target: &Target,
         hold_pings: bool,
     ) -> Result<Connection, Error> {
-        t.set_read_timeout(Some(POLL))
+        t.poll_reads(POLL)
             .map_err(|e| Error::Protocol(e.to_string()))?;
         let security = t.security();
         let shared = Arc::new(Mutex::new(Shared {
@@ -436,6 +466,8 @@ impl Connection {
             asm: Reassembly::new(),
             joined: HashMap::new(),
             server_ending: false,
+            name: format!("{} port {}", target.host, target.port),
+            detail: String::new(),
         };
         std::thread::Builder::new()
             .name(format!("qap {}", target.host))
@@ -583,6 +615,10 @@ struct Pump {
     /// Bytes of each split reply joined so far.
     joined: HashMap<u32, usize>,
     server_ending: bool,
+    /// `host port n`, for the close line.
+    name: String,
+    /// What this side saw when the connection ended.
+    detail: String,
 }
 
 impl Pump {
@@ -597,10 +633,10 @@ impl Pump {
                 (s.last_traffic.elapsed(), s.pings_held)
             };
             if !held && quiet >= self.ping_after && !self.ping() {
-                break self.peer_closed();
+                break self.peer_closed("the ping could not be sent".into());
             }
             match self.t.read(&mut buf) {
-                Ok(0) => break self.peer_closed(),
+                Ok(0) => break self.peer_closed("end of stream".into()),
                 Ok(n) => {
                     lock(&self.shared).last_traffic = Instant::now();
                     self.frames.push(&buf[..n]);
@@ -621,14 +657,24 @@ impl Pump {
                     }
                 }
                 Err(e) if is_timeout(&e) => {}
-                Err(e) => {
-                    qsa_net::debug!("qap: read failed: {e}");
-                    break self.peer_closed();
-                }
+                Err(e) => break self.peer_closed(format!("read failed: {e}")),
             }
         };
         self.t.shutdown();
-        qsa_net::debug!("qap: connection closed ({why})");
+        let outstanding = lock(&self.shared)
+            .waiters
+            .values()
+            .filter(|w| w.is_some())
+            .count();
+        let detail = if self.detail.is_empty() {
+            String::new()
+        } else {
+            format!("; {}", self.detail)
+        };
+        qsa_net::info!(
+            "qap: {}: connection closed {why}{detail}; {outstanding} request(s) outstanding",
+            self.name
+        );
         self.frames.clear();
         {
             let mut s = lock(&self.shared);
@@ -645,7 +691,9 @@ impl Pump {
         }
     }
 
-    fn peer_closed(&self) -> Closed {
+    /// The server's side closed, or the link broke: `detail` says how.
+    fn peer_closed(&mut self, detail: String) -> Closed {
+        self.detail = detail;
         if self.server_ending {
             Closed::ServerEnding
         } else {
@@ -661,8 +709,7 @@ impl Pump {
                     let ok = self.t.write_all(&b).and_then(|()| self.t.flush());
                     wipe(&mut b);
                     if let Err(e) = ok {
-                        qsa_net::debug!("qap: write failed: {e}");
-                        return Some(self.peer_closed());
+                        return Some(self.peer_closed(format!("write failed: {e}")));
                     }
                     lock(&self.shared).last_traffic = Instant::now();
                 }

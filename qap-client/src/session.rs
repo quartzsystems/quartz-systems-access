@@ -11,8 +11,10 @@
 //! - [`Client::change_password`] also works while signed on, for the
 //!   session's own profile only.
 //! - When the server closes the connection without an event first (its
-//!   idle close), the next [`Client::poll`] or request opens a new one and
-//!   resumes the session quietly. `SessionExpired` on the resume means a new
+//!   idle close), or the link drops, the next [`Client::poll`] or request
+//!   opens a new one and resumes the session quietly. A read-only request
+//!   the close cut off ([`crate::retryable`]) is sent once more on it;
+//!   nothing that changes state ever is. `SessionExpired` on the resume means a new
 //!   sign-on ([`Notice::SignOnNeeded`]).
 //! - After `ServerEnding` nothing reconnects by itself: the user is offered
 //!   [`Client::reconnect`]. The server's end ends every session.
@@ -45,7 +47,7 @@ use qap_proto::{Op, Secret, ServerMessage, Status, Token};
 
 use crate::attach::Attached;
 use crate::command::CheckOutcome;
-use crate::conn::{Closed, Connection, Event, Pending, supported};
+use crate::conn::{Closed, Connection, Event, Pending, lost_and_retryable, supported};
 use crate::{Error, Target};
 
 /// What happened to the connection or the session since the last look.
@@ -255,11 +257,37 @@ impl Client {
         self.call(Op::SystemInfo, &())
     }
 
-    /// Any request, decoded, on a live connection.
+    /// Any request, decoded, on a live connection. When the connection
+    /// closes quietly or drops before the reply, a [`crate::retryable`] operation
+    /// is sent once more on a new connection that has resumed the session;
+    /// anything else fails with [`Error::Closed`].
     pub fn call<B: Wire, R: Wire>(&mut self, op: Op, body: &B) -> Result<R, Error> {
         let r = self.live()?.call(op, body);
         self.absorb_events();
-        r
+        match r {
+            Err(e) if self.may_retry(&e, op) => {
+                self.retrying(op, &e);
+                let r = self.live()?.call(op, body);
+                self.absorb_events();
+                r
+            }
+            r => r,
+        }
+    }
+
+    /// Whether a request that failed with `e` is sent once more.
+    fn may_retry(&self, e: &Error, op: Op) -> bool {
+        lost_and_retryable(e, op) && !self.ending
+    }
+
+    /// The connection is gone under `op`: the next [`Client::live`] opens a
+    /// new one and resumes.
+    fn retrying(&mut self, op: Op, e: &Error) {
+        qsa_net::info!(
+            "qap: {}: {op:?} lost with its connection ({e}); sending it once more",
+            self.target.host
+        );
+        self.conn = None;
     }
 
     /// Sends any request on a live connection and returns at once: the
@@ -304,8 +332,15 @@ impl Client {
         let body = CommandText {
             command: command.to_owned(),
         };
-        let reply = self.request(Op::CheckCommand, &body)?.wait(timeout);
+        let mut reply = self.request(Op::CheckCommand, &body)?.wait(timeout);
         self.absorb_events();
+        if let Err(e) = &reply
+            && self.may_retry(e, Op::CheckCommand)
+        {
+            self.retrying(Op::CheckCommand, e);
+            reply = self.request(Op::CheckCommand, &body)?.wait(timeout);
+            self.absorb_events();
+        }
         CheckOutcome::from_reply(reply?)
     }
 

@@ -19,7 +19,8 @@
 //!   file does. Progress after every batch; a cancel between batches, or
 //!   in one, sends QAP `Cancel` for the batch in flight and discards what
 //!   comes back. A text or PDF read is one request: those cannot be joined
-//!   from ranges.
+//!   from ranges. A batch whose connection closes quietly or drops before
+//!   it comes is read once more on the new connection.
 //!
 //! Statuses: lists answer `Ok`, `NotFound` (the queue, library or
 //! profile) or `NotAuthorized`; a read also `InUse` (still open or being
@@ -41,6 +42,7 @@ use qap_proto::ops::spool::{
 };
 use qap_proto::types::ObjectName;
 
+use crate::conn::lost_and_retryable;
 use crate::{Client, Error, Pending, Reply};
 
 /// Pages per read of an SCS file.
@@ -344,15 +346,30 @@ pub fn read(
                 first.saturating_add(batch - 1)
             },
         };
-        let pending = send(&req)?;
+        let mut pending = send(&req)?;
         let mut asked = false;
+        let mut sent_again = false;
         let reply = loop {
             if !asked && cancel.load(Ordering::SeqCst) {
                 pending.cancel();
                 asked = true;
             }
-            if let Some(r) = pending.wait_for(LOOK) {
-                break r?;
+            match pending.wait_for(LOOK) {
+                None => {}
+                // The connection went under the batch: it only reads, so it
+                // goes once more on the new connection `send` opens.
+                Some(Err(e))
+                    if !asked && !sent_again && lost_and_retryable(&e, Op::ReadSpooledFile) =>
+                {
+                    qsa_net::info!(
+                        "qap: pages {}-{} lost with the connection ({e}); reading them once more",
+                        req.first_page,
+                        req.last_page
+                    );
+                    sent_again = true;
+                    pending = send(&req)?;
+                }
+                Some(r) => break r?,
             }
         };
         if reply.status == Status::Cancelled || asked {

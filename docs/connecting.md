@@ -303,6 +303,15 @@ program comes back as `CPF22C6`, shown as it is.
   without asking. A session waits for a new connection for the system's idle
   timeout (`CHGQAPA IDLETIMO`); after that, resuming fails and the program asks
   you to sign on again (`QAD4026`).
+- **A dropped connection.** When a connection closes under a request (the
+  network drops it, or the system closes it without a word), the program
+  resumes the session on a new connection and sends the request once more
+  only if it changes nothing: a list, a spooled file read (the batch that
+  was cut off), system information, the password status, a command's
+  description or check, or the job's name. A command, a hold, release,
+  delete or move, and anything else that changes something is never sent
+  again: its window says the connection was lost, and you decide. Every
+  close is logged, with the reason as the program saw it.
 - **An operator ends the session.** The program shows `QAD4024` with the
   system's message and offers **Sign On...**.
 - **The QAP server ends.** The program shows `QAD4025` with the system's

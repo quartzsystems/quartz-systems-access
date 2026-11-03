@@ -52,7 +52,7 @@ use std::time::Duration;
 
 pub use attach::{Attached, Ended};
 pub use command::{CheckOutcome, CommandOutcome};
-pub use conn::{Closed, Connection, Event, Pending, Reply, runs_long};
+pub use conn::{Closed, Connection, Event, Pending, Reply, retryable, runs_long};
 pub use error::Error;
 pub use ipc::Wire;
 pub use qap_proto as proto;
