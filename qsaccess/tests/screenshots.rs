@@ -673,7 +673,40 @@ fn messages_views(state: &Shared) -> Vec<(String, Window)> {
             "messages-remove-unanswered".to_owned(),
             qsaccess::messages::remove_waiting_box(1, 3).build().0,
         ),
+        ("send-message".to_owned(), send_message(state, 0)),
+        ("send-message-waiting".to_owned(), send_message(state, 1)),
+        ("send-message-reply".to_owned(), send_message(state, 2)),
     ]
+}
+
+/// Send Message on sys1.example.net to ANN: as opened (`stage` 0), after an
+/// inquiry was sent (1), and once ANN's reply came (2).
+fn send_message(state: &Shared, stage: u8) -> Window {
+    use qap_client::proto::ops::messages::{MessageType, QueuedMessage};
+    use qsaccess::messages::send::SendDialog;
+    let st = state.borrow();
+    let sys = st.systems.get("sys1.example.net").expect("fixture system");
+    let d = SendDialog::build(sys, Some("ANN"));
+    let text = "Can you cover the help desk at noon?";
+    d.text.clone().set_value(text);
+    d.inquiry.clone().set_value(stage > 0);
+    let key = [0, 0, 0, 0x2A];
+    if stage > 0 {
+        d.show_waiting(key, "ANN");
+        d.text.clone().set_value("");
+    }
+    if stage > 1 {
+        d.take_reply(&QueuedMessage {
+            kind: MessageType::Reply,
+            text: "Yes, from 12:00 to 13:00.".into(),
+            from_user: "ANN".into(),
+            answers: Some(key),
+            ..QueuedMessage::default()
+        });
+    }
+    let w = d.window.clone();
+    std::mem::forget(d);
+    w
 }
 
 /// Run Command after two runs of CRTLIB (created, then already there), a

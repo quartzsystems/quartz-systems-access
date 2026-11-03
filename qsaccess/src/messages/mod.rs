@@ -32,6 +32,7 @@
 //! which holds the shared client only to send.
 
 pub mod model;
+pub mod send;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -96,6 +97,7 @@ pub enum Cmd {
     Remove,
     RemoveAnswered,
     Link,
+    Send,
     Close,
     About,
 }
@@ -184,6 +186,7 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Cmd>) {
     let mut add = |p: &str, sc: Shortcut, c: Cmd, f: MenuFlag| {
         menu.add_emit_to(p, sc, f, tx, c);
     };
+    add("&File/&Send Message...", Shortcut::Ctrl | 'n', Cmd::Send, d);
     add("&File/&Close", Shortcut::Ctrl | 'w', Cmd::Close, n);
     add(
         "&View/&Refresh",
@@ -685,6 +688,15 @@ impl MessagesWindow {
             Cmd::Remove => self.remove_selected(),
             Cmd::RemoveAnswered => self.remove_answered(),
             Cmd::Link => self.follow_link(),
+            Cmd::Send => {
+                let (state, system) = {
+                    let st = self.st.borrow();
+                    (st.state.clone(), st.system.name.clone())
+                };
+                if let Some(state) = state {
+                    send::open(self.parent(), &state, &system, None);
+                }
+            }
             Cmd::Close => self.w.window.clone().hide(),
             Cmd::About => crate::about::show(self.parent()),
         }
@@ -1021,8 +1033,10 @@ pub fn open(parent: Option<&dyn WindowExt>, state: &Shared, system: &str) {
     tick();
 }
 
-/// What `system`'s watches reported, for its Messages windows.
+/// What `system`'s watches reported, for its Messages windows and Send
+/// Message dialogs.
 pub fn watch_events(system: &str, events: &[WatchEvent]) {
+    send::watch_events(system, events);
     let windows: Vec<Rc<MessagesWindow>> = WINDOWS.with(|v| {
         v.borrow()
             .iter()
@@ -1057,6 +1071,7 @@ fn tick() {
 pub fn pump() {
     let windows: Vec<Rc<MessagesWindow>> = WINDOWS.with(|v| v.borrow().clone());
     let open: Vec<bool> = windows.iter().map(|w| w.pump()).collect();
+    send::pump();
     WINDOWS.with(|v| {
         let mut i = 0;
         v.borrow_mut().retain(|_| {
@@ -1067,7 +1082,7 @@ pub fn pump() {
     });
 }
 
-/// Whether any Messages window is open.
+/// Whether any Messages window or Send Message dialog is open.
 pub fn any_open() -> bool {
-    WINDOWS.with(|v| v.borrow().iter().any(|w| w.w.window.shown()))
+    WINDOWS.with(|v| v.borrow().iter().any(|w| w.w.window.shown())) || send::any_open()
 }
