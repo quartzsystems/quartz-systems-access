@@ -13,7 +13,7 @@ mod common;
 
 use std::time::Duration;
 
-use common::{cfg, start, start_with, until};
+use common::{cfg, start, start_listening, start_with, until};
 use qap_client::proto::ops::command::CommandText;
 use qap_client::proto::ops::connection::PingReply;
 use qap_client::proto::ops::signon::SignOn;
@@ -29,7 +29,7 @@ fn hello_over_tls13() {
     let s = start(cfg());
     let c = Connection::open(&s.target()).unwrap();
     let h = c.hello();
-    assert_eq!(h.version, 4);
+    assert_eq!(h.version, 5);
     assert_eq!(h.system_name, "QSHQ400");
     assert_eq!(h.release, "V1R0M0");
     assert_eq!(h.services, Service::ALL.to_vec());
@@ -75,8 +75,8 @@ fn an_untrusted_certificate_goes_to_the_trust_flow() {
 fn version_mismatch() {
     let s = start(cfg());
     let mut t = s.target();
-    // The server speaks versions 1 to 4.
-    t.options.min_version = 5;
+    // The server speaks versions 1 to 5.
+    t.options.min_version = 6;
     t.options.max_version = 9;
     let e = Connection::open(&t).unwrap_err();
     assert_eq!(e.status(), Some(Status::VersionUnsupported), "{e:?}");
@@ -266,9 +266,18 @@ fn the_idle_close_is_quiet() {
     ));
 }
 
+/// Whether a new connection to `t` is refused, as a connect to an ended
+/// server's closed port is.
+fn refused(t: &qap_client::Target) -> bool {
+    matches!(
+        Connection::open(t),
+        Err(Error::Connect(qsa_net::ConnectError::Refused(_)))
+    )
+}
+
 #[test]
 fn server_ending() {
-    let s = start(cfg());
+    let s = start_listening(cfg());
     let mut c = Client::new(s.target());
     c.sign_on("BOB", &Secret::from("SECRET1")).unwrap();
     s.c.end(Ending::Server);
@@ -291,15 +300,53 @@ fn server_ending() {
         c.system_info(),
         Err(Error::Closed(Closed::ServerEnding))
     ));
-    assert_eq!(s.ended(), [qapd::Closed::ServerEnding]);
-    // The test system keeps its end for connections opened later, as
-    // ENDTCPSVR does; once it is started again (STRTCPSVR), reconnect
-    // when asked.
-    s.c.server_ending
-        .store(false, std::sync::atomic::Ordering::SeqCst);
-    assert_eq!(c.reconnect().unwrap().system_name, "QSHQ400");
+    assert!(matches!(
+        s.next_close(),
+        Some((_, qapd::Closed::ServerEnding))
+    ));
+    // While the server is ended (ENDTCPSVR) its port is closed: connects
+    // are refused, and so is a reconnect when asked.
+    assert!(!s.listener.accepting());
+    until("connects refused", || refused(&s.target()));
+    assert!(matches!(
+        c.reconnect(),
+        Err(Error::Connect(qsa_net::ConnectError::Refused(_)))
+    ));
+    // Started again (STRTCPSVR) on the same port: reconnect when asked.
+    s.c.restart().unwrap();
+    assert!(s.listener.accepting());
+    let mut hello = None;
+    until("the port open again", || {
+        hello = c.reconnect().ok().map(|h| h.system_name.clone());
+        hello.is_some()
+    });
+    assert_eq!(hello.as_deref(), Some("QSHQ400"));
     c.sign_on("BOB", &Secret::from("SECRET1")).unwrap();
     assert_eq!(c.system_info().unwrap().system_name, "QSHQ400");
+}
+
+#[test]
+fn a_connection_opened_before_an_end_ends_with_it_after_a_quick_restart() {
+    let s = start_listening(cfg());
+    let mut c = Client::new(s.target());
+    c.sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    // The restart comes before the connection's next poll: it still ends
+    // with the server, as ENDTCPSVR then STRTCPSVR has it.
+    s.c.end(Ending::Server);
+    s.c.restart().unwrap();
+    let mut notices = Vec::new();
+    until("ServerEnding", || {
+        notices.extend(c.poll());
+        !notices.is_empty()
+    });
+    assert!(
+        matches!(&notices[..], [Notice::ServerEnding(Some(m))] if m.id == "TCP1A0A"),
+        "{notices:?}"
+    );
+    assert!(!c.is_signed_on());
+    // A new connection is taken at once.
+    let n = Connection::open(&s.target()).unwrap();
+    assert_eq!(n.version(), 5);
 }
 
 #[test]

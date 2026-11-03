@@ -103,7 +103,7 @@ fn spool_is_there_from_version_3() {
     let s = start(cfg());
     let mut c = Client::new(s.target());
     c.connect().unwrap();
-    assert_eq!(c.version(), Some(4));
+    assert_eq!(c.version(), Some(5));
     assert!(c.hello().unwrap().services.contains(&Service::Spool));
     assert_eq!(Op::ListSpooledFiles.since(), 3);
     let e = c.list_spooled_files(&list("*CURRENT")).unwrap_err();

@@ -158,8 +158,8 @@ fn a_version_3_system_offers_printer_output() {
     let s = common::start(common::cfg());
     let sys = system(s.port);
     let st = state(&sys);
-    assert_eq!(qap::version_of(&st, "127.0.0.1", true), Some(4));
-    assert!(printer_output_blocked("127.0.0.1", Some(4)).is_none());
+    assert_eq!(qap::version_of(&st, "127.0.0.1", true), Some(5));
+    assert!(printer_output_blocked("127.0.0.1", Some(5)).is_none());
     assert!(printer_output_blocked("127.0.0.1", None).is_none());
 }
 

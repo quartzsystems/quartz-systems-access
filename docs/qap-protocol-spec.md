@@ -1,7 +1,7 @@
-<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit dd1f61a4e93022bd53a4e6cd95b1badcd605bd22. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
+<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit 58e189dfffc7c540efcf7a5293839bb3bd6c9881. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
 # QAP: Quartz Access Protocol, version 1 (draft)
 
-QAP is how QS/400 Access talks to QS/400 for everything except 5250 and printer sessions, which stay on TN5250E (RFC 4777). It is an original Quartz design: it takes nothing from any other access protocol or from any other protocol's sources.
+QAP is how QS/400 Access talks to QS/400 for everything except display and printer sessions, which stay on the system's Telnet server. It is an original Quartz design.
 
 This draft settles the decisions below. Anything it leaves open is listed under Open questions; the first agent to reach one stops and asks Cody.
 
@@ -13,7 +13,7 @@ This draft settles the decisions below. Anything it leaves open is listed under 
 | Security | TLS 1.3 only, no plaintext mode. Server certificate from the QS/400 certificate manager, application ID `QS400_ACCESS_SERVER`. The client validates it with its existing untrusted-certificate trust flow |
 | Framing and encoding | Wire, from the QS/400 repository's `ipc` crate, the same framing and serialization QSI uses. Types below are Wire types; enums use `wire_enum!`. If Wire cannot express something below, stop and ask; do not invent a second encoding |
 | Where the code lives | `qap-proto` (envelope and message types) lives in the QS/400 repository beside `ipc`. QS/400 Access pins both by commit |
-| Multiplexing | One connection carries many concurrent requests. Every request has a service ID and a request ID; replies carry the request ID, in the order operations finish, not the order requests came. No port mapper and no per-service ports. Lanes: `Command` requests and `Sql` operations 1 to 8 (version 4) run one at a time, in arrival order, in the connection job, because they share its job state (library list, `QTEMP`, job attributes, commitment definition, statements and cursors). Every other operation, `Sql` operations 9 to 11 (the catalog lists, which keep no state) included, runs concurrently, up to the outstanding limit, as the signed-on profile, without waiting for the lane. `Ping` and `Cancel` are never queued behind anything |
+| Multiplexing | One connection carries many concurrent requests. Every request has a service ID and a request ID; replies carry the request ID, in the order operations finish, not the order requests came. No port mapper and no per-service ports. Lanes: `Command` requests and `Sql` operations 1 to 8 (version 4) run one at a time, in arrival order, in the connection job, because they share its job state (library list, `QTEMP`, job attributes, commitment definition, statements and cursors). Every other operation, `Sql` operations 9 to 11 (the catalog lists, which keep no state) and every `Ifs` operation (version 5) included, runs concurrently, up to the outstanding limit, as the signed-on profile, without waiting for the lane. `Ping` and `Cancel` are never queued behind anything |
 | Versioning | Client hello sends the range of protocol versions it supports; server picks one or refuses. Version 1 is this document |
 | Server jobs | Listener job `QAPD` in subsystem `QSYSWRK`; one job per connection in `QUSRWRK`, running as `QUSER` until sign-on and as the signed-on user profile after it |
 | Server control | `STRTCPSVR SERVER(*QAP)`, `ENDTCPSVR SERVER(*QAP)`, autostart attribute; shown on Navigator's Servers page |
@@ -35,7 +35,7 @@ Every frame is one Wire-encoded `Envelope`. The envelope layout never changes be
 
 `ServerMessage` = { `id`: String (seven characters, for example `CPF2204`), `severity`: u8, `data`: bytes (substitution data), `text`: String (first level), `help`: String (second level: cause and recovery) }, in the user's language once signed on, the system's before.
 
-**Status values (u16).** `Ok` 0 · `Error` 1 (the message says what) · `VersionUnsupported` 2 · `NotSignedOn` 3 · `SignOnFailed` 4 · `PasswordExpired` 5 · `NotAuthorized` 6 · `NotFound` 7 · `InvalidRequest` 8 · `Busy` 9 · `Cancelled` 10 · `SessionExpired` 11 · `ServerEnding` 12. Sign-on failures carry the same message a 5250 sign-on would show for the same case, and nothing more.
+**Status values (u16).** `Ok` 0 · `Error` 1 (the message says what) · `VersionUnsupported` 2 · `NotSignedOn` 3 · `SignOnFailed` 4 · `PasswordExpired` 5 · `NotAuthorized` 6 · `NotFound` 7 · `InvalidRequest` 8 · `Busy` 9 · `Cancelled` 10 · `SessionExpired` 11 · `ServerEnding` 12. Sign-on failures carry the same message the sign-on display would show for the same case, and nothing more.
 
 **Limits.** A frame is at most 1 MiB; larger results are sent as several reply frames with `More` set on all but the last. At most 64 outstanding requests per connection; beyond that the server replies `Busy`. The client sends `Ping` after 60 s without traffic; the server closes a connection after 300 s without frames. Closing a connection does not end the session: it can be resumed until its idle timeout.
 
@@ -60,7 +60,7 @@ Every frame is one Wire-encoded `Envelope`. The envelope layout never changes be
 **Rules.**
 
 - A `Hello` that is not the first request, or a second `Hello`, gets `InvalidRequest` and the connection closes. No version in the client's range gets `VersionUnsupported`, then the connection closes.
-- `SignOn` applies the same checks as a 5250 sign-on: `QMAXSIGN` and its action, disabled profiles, password expiry, `*NONE` passwords refused, and the same audit journal entries. An expired password gets `PasswordExpired` and no token; the client then sends `ChangePassword`, which applies the system password rules and on success returns a `SignOnReply`.
+- `SignOn` applies the same checks as the sign-on display: `QMAXSIGN` and its action, disabled profiles, password expiry, `*NONE` passwords refused, and the same audit journal entries. An expired password gets `PasswordExpired` and no token; the client then sends `ChangePassword`, which applies the system password rules and on success returns a `SignOnReply`.
 - `ChangePassword` is also allowed in a signed-on session for that session's own profile.
 - The token is 256 random bits, stored server-side only. `Resume` re-attaches a new connection to the session until the idle timeout; after it, `SessionExpired`. `SignOff` ends the session and invalidates the token.
 - Anything other than the operations marked "yes" before sign-on gets `NotSignedOn`. Before sign-on the connection job runs as `QUSER`; after it, as the signed-on profile.
@@ -68,11 +68,11 @@ Every frame is one Wire-encoded `Envelope`. The envelope layout never changes be
 
 ## Later phases (spec now, build later)
 
-The client agent inventories which system functions QS/400 Access uses, and adds each as a QAP service with its requests and replies to this document before building it. Expected, in this order: remote command (run CL, return messages and the job), spooled files (list, read as SCS, text or PDF, hold, release, delete, move), SQL, IFS files, message queues. Optional: a one-time `TelnetTicket` from a signed-on session that the Telnet server accepts for 5250 auto sign-on, which would remove the need for password substitution on Telnet.
+The client agent inventories which system functions QS/400 Access uses, and adds each as a QAP service with its requests and replies to this document before building it. Expected, in this order: remote command (run CL, return messages and the job), spooled files (list, read as SCS, text or PDF, hold, release, delete, move), SQL, IFS files, message queues. Optional: a one-time `TelnetTicket` from a signed-on session that the Telnet server accepts for automatic sign-on, which would remove the need for password substitution on Telnet.
 
 ### Inventory
 
-What QS/400 Access needs of the system besides 5250, from its task pane, README and messages, and the service each becomes:
+What QS/400 Access needs of the system besides display sessions, from its task pane, README and messages, and the service each becomes:
 
 | Function in QS/400 Access | Service |
 | --- | --- |
@@ -82,9 +82,9 @@ What QS/400 Access needs of the system besides 5250, from its task pane, README 
 | Integrated File System task | `Ifs` (6) |
 | Message queues: the user's own and `QSYSOPR`, inquiry replies | `Messages` (7) |
 | Password expiry warning (`QAD4031`), which the phase 0 `SignOnReply` cannot give | `SignOn` op 6 `PasswordStatus` |
-| 5250 automatic sign-on without a password on Telnet (the optional ticket) | `SignOn` op 5 `TelnetTicket` |
+| Automatic sign-on of a display session without a password on Telnet (the optional ticket) | `SignOn` op 5 `TelnetTicket` |
 
-Not in QAP: 5250 display and printer sessions (Telnet), the printer session's message queue (named in the TN5250E startup), the 5250 Console and Control Panel tasks (the service console), and Key and Certificate Management (this computer's trust store).
+Not in QAP: display and printer sessions (Telnet), the printer session's message queue (named in the Telnet session's startup), the Console and Control Panel tasks (the service console), and Key and Certificate Management (this computer's trust store).
 
 ### Rules for these additions
 
@@ -207,9 +207,9 @@ Statements run in the connection job through the system's database engine, as th
 - A statement or type the database does not support gets the database's own `SqlError`, as it reports it.
 - An `Execute` over several parameter rows stops at the first row that fails: `SqlError`, with `SqlFailure.row` the 0-based index of that row. The rows before it stay changed (uncommitted under commitment control).
 
-### Service 6 `Ifs`: Integrated File System files (planned version 5)
+### Service 6 `Ifs`: Integrated File System files (version 5)
 
-Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`).
+Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`). Every `Ifs` operation runs concurrently (see Multiplexing), as the signed-on profile, never in the lane.
 
 - `EntryKind` enum: `File` 0, `Directory` 1, `Symlink` 2, `Other` 3.
 - `Entry` = { `name` String, `kind` EntryKind, `size` u64, `modified` i64, `owner` String, `ccsid` u16, `target` Option of String (a symbolic link's) }.
@@ -219,18 +219,38 @@ Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`).
 | --- | --- | --- | --- | --- |
 | Ifs | 1 `ListDirectory` | `path` String, `pattern` String (`*` and `?` wildcards), `start` u32, `max` u32 | `total` u32, `entries` list of `Entry` | no |
 | Ifs | 2 `GetInfo` | `path` String | `Entry` | no |
-| Ifs | 3 `ReadFile` | `path` String, `offset` u64, `length` u64 (0 for to the end) | `size` u64 (the file's size now), `data` bytes (split with `More` when large) | no |
-| Ifs | 4 `WriteFile` | `path` String, `mode` WriteMode, `offset` u64, `ccsid` u16 (for a file created; 0 for 1208), `data` bytes | `size` u64 | no |
+| Ifs | 3 `ReadFile` | `path` String, `offset` u64, `length` u64 (0 for to the end), `as_ccsid` Option of u16 | `size` u64 (the file's size now), `next_offset` u64, `data` bytes (split with `More` when large) | no |
+| Ifs | 4 `WriteFile` | `path` String, `mode` WriteMode, `offset` u64, `ccsid` u16 (for a file created; 0 for 1208), `data` bytes, `data_ccsid` Option of u16 | `size` u64 | no |
 | Ifs | 5 `CreateDirectory` | `path` String, `parents` flag | — | no |
 | Ifs | 6 `Delete` | `path` String (a file, a symbolic link or an empty directory) | — | no |
 | Ifs | 7 `Rename` | `from` String, `to` String, `replace` flag | — | no |
+| Ifs | 8 `Copy` | `from` String, `to` String, `replace` flag | — | no |
 
 | Op | Statuses |
 | --- | --- |
-| `ListDirectory`, `GetInfo`, `ReadFile` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` (`ReadFile` of a file locked for writing) |
-| `WriteFile` | `Ok`; `NotFound` (the directory, or the file for `Update`); `NotAuthorized`; `Exists` (`Create`); `InUse` |
+| `ListDirectory`, `GetInfo`, `ReadFile` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` (`ReadFile` of a file locked for writing); `Error` (`ReadFile` with an `as_ccsid` the file's CCSID cannot be converted to) |
+| `WriteFile` | `Ok`; `NotFound` (the directory, or the file for `Update`); `NotAuthorized`; `Exists` (`Create`); `InUse`; `Error` (a `data_ccsid` that cannot be converted to the file's CCSID) |
 | `CreateDirectory`, `Rename` | `Ok`; `NotFound`; `NotAuthorized`; `Exists` (`Rename` without `replace`) |
 | `Delete` | `Ok`; `NotFound`; `NotAuthorized`; `InUse`; `Error` (a directory that is not empty) |
+| `Copy` | `Ok`; `NotFound`; `NotAuthorized`; `Exists` (without `replace`); `InUse` |
+
+**Reading with conversion.**
+
+- With `as_ccsid`, the server converts the file's data from the file's CCSID to `as_ccsid` (for example 1208 for UTF-8). `length` counts the file's bytes, not the converted ones.
+- A reply holds only whole characters. `next_offset` is the file offset just past the last byte converted; it may be less than `offset + length` when the range ends inside a character. The client continues from `next_offset`, never from `offset + length`. Without `as_ccsid`, `next_offset` is `offset` plus the bytes returned.
+- In a mixed single- and double-byte file, the server converts from `offset` in the shift state the file has at that offset, so reads that each start at the previous reply's `next_offset` join into exactly the whole file's conversion. When `as_ccsid` is itself a mixed CCSID, each reply's data starts and ends in single-byte state.
+- An `as_ccsid` equal to the file's CCSID returns the data as stored. A file whose CCSID cannot be converted to `as_ccsid` (for example 65535, binary) gets `Error` with the message.
+
+**Writing with conversion.**
+
+- With `data_ccsid`, `data` is in that CCSID and the server converts it to the file's CCSID: the `ccsid` given for a file created, or the existing file's. Without it, `data` is written as it is.
+- Conversion is per request; the client splits text only on whole characters.
+- For a mixed single- and double-byte target, each request's converted output ends in single-byte state. When a converted write lands at the end of the file, the file ends in the shift-in an earlier write left and the new output starts with a shift-out, the two are dropped, so text written in pieces makes the same file as one write.
+- `size` in the reply is the file's size in its own CCSID.
+
+**Copy.** `Copy` copies a file, not a directory, on the system, keeping its CCSID and data as stored, without sending the data to the client. `Exists` answers a `to` that exists when `replace` is 0; with `replace` 1 the copy replaces it.
+
+**Paths and authority.** Every operation applies the same authority checks as the system's own file-system commands for the same action: listing and reading as displaying a link, `WriteFile` as writing a stream file, `CreateDirectory` as creating a directory, `Delete` as removing a link or a directory, `Rename` as renaming or moving, `Copy` as copying. Paths under `/QSYS.LIB` behave as those commands allow; anything not allowed there gets `Error` with the system's message.
 
 ### Service 7 `Messages`: message queues (planned version 6)
 
@@ -272,7 +292,7 @@ Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`).
 | `TelnetTicket` | `Ok`; `NotAuthorized` (the profile may not sign on automatically) |
 | `PasswordStatus` | `Ok` |
 
-A ticket is 256 random bits for the session's own profile, kept by the server, good for one 5250 automatic sign-on within `expires_secs`, and only over Telnet with TLS. The client sends it, as 64 hexadecimal characters, where automatic sign-on otherwise carries the password; the client sends the RFC 4777 user variable, and the password variable carrying the ticket as 64 hexadecimal characters with an empty random-seed variable, and only over Telnet TLS. The client treats a ticket as it treats a token: never logged or stored, wiped after use.
+A ticket is 256 random bits for the session's own profile, kept by the server, good for one automatic sign-on of a display session within `expires_secs`, and only over Telnet with TLS. The client sends it, as 64 hexadecimal characters, where automatic sign-on otherwise carries the password; the client sends the Telnet environment's user variable, and the password variable carrying the ticket as 64 hexadecimal characters with an empty random-seed variable, and only over Telnet TLS. The client treats a ticket as it treats a token: never logged or stored, wiped after use.
 
 ### `SignOn` addition (version 4)
 
@@ -321,6 +341,10 @@ Version 3 is: `Spool` (service 4) operations 1 `ListSpooledFiles` to 7 `ListOutp
 ### Version 4 (fixed)
 
 Version 4 is: `Sql` (service 5) operations 1 `SetOptions` to 11 `ListColumns`, with the types and rules above; `SignOn` operation 7 `Attach`; `Connection` operation 3 `JobInfo`; and the status `SqlError` (15), which version 4 introduces. `Sql` does not use `Exists`: a name that is taken is the database's `SqlError` (for example SQLSTATE `42710`), so `Exists` (13) stays for the version that first uses it. A version 1 to 3 peer never receives `SqlError`, the `Sql` service or any `Sql` body; where `SqlError` would apply it gets `Error` with the same message. The server accepts versions 1 to 4 and picks the highest both sides support.
+
+### Version 5 (fixed)
+
+Version 5 is: `Ifs` (service 6) operations 1 `ListDirectory` to 8 `Copy`, with the types and rules above, `ReadFile`'s `as_ccsid` and `next_offset` and `WriteFile`'s `data_ccsid` included; and the status `Exists` (13), which version 5 introduces. `InUse` is version 3's. A version 1 to 4 peer never receives `Exists`, the `Ifs` service or any `Ifs` body; where `Exists` would apply it gets `Error` with the same message. The server accepts versions 1 to 5 and picks the highest both sides support.
 
 ## Open questions
 
@@ -390,7 +414,7 @@ Version 2, settled with Cody on 2026-11-02:
   `services` lists only what the chosen version defines, and a
   request for an operation the version does not define gets
   `InvalidRequest`.
-- `QRMTSIGN` decides automatic sign-on, for tickets and the RFC 4777
+- `QRMTSIGN` decides automatic sign-on, for tickets and the Telnet
   password substitute alike: `*VERIFY` and `*SAMEPRF` allow it,
   `*FRCSIGNON` shows the sign-on display, `*REJECT` refuses the
   connection. It ships as `*VERIFY`. `TelnetTicket` answers
@@ -406,7 +430,7 @@ Version 2, settled with Cody on 2026-11-02:
   Issue and use are audited (`PS` entries `P` and `V`); ticket values
   are never logged.
 - `DescribeCommand`'s `help` strings are empty: QS/400 ships no help
-  panel groups for commands yet, and the 5250 prompter shows none
+  panel groups for commands yet, and the display prompter shows none
   either. Elements and qualifiers have the prompt text their
   definitions give.
 - The lanes: `Command` requests run on the connection job's own
@@ -542,8 +566,8 @@ Version 4 Sql, as built on 2026-11-02 (decisions made in the build, for Cody to 
   once the unit changed something). The default schema is `SET
   SCHEMA` (none: `SET SCHEMA DEFAULT`); under `System` naming as
   under `Sql`, a default schema qualifies unqualified table, view,
-  index and alias names in place of the library list, as IBM i's
-  `DFTRDBCOL` and `SET SCHEMA` do.
+  index and alias names in place of the library list, as the
+  `DFTRDBCOL` parameter and `SET SCHEMA` do.
 - When the connection closes, and when the job runs as another
   profile (sign-off, resume), the lane rolls back, ends the scope
   `QAP:` (its cursors and statements go) and resets the options. The
@@ -552,7 +576,15 @@ Version 4 Sql, as built on 2026-11-02 (decisions made in the build, for Cody to 
   entry's CCSID): integers `Integer`; `DECIMAL` and `NUMERIC` the
   engine's exact text; `DECFLOAT` (SQLTYPE 996, `length` its 16 or 34
   digits) `Decimal` with the engine's scientific text (`1.5E-30`,
-  `-12.50`) or `Infinity`, `-Infinity`, `NaN`, `sNaN`; `REAL` and
+  `-12.50`) or `Infinity`, `-Infinity`, `NaN`, `sNaN`; a `DECFLOAT`
+  keeps its coefficient and exponent from insert to fetch (`1.50`,
+  `1E+2` apart from `100`, `0E+3`, `-0`; `DECIMAL.md` §9), and so do
+  `UPDATE`, column-to-column assignment, `CAST` to `DECFLOAT`, unary
+  minus and arithmetic's own exponents, while `=` compares by value
+  (`1.5 = 1.50`). A number literal with an exponent is a `DOUBLE`, but
+  into or beside a `DECFLOAT` it is read from its text, so `1E+2` stays
+  `1E+2` there; a `DOUBLE` value becomes a `DECFLOAT` of its shortest
+  digits, a whole one with exponent 0; `REAL` and
   `DOUBLE` the shorter of the plain and E notation that reads back the
   same; `CHAR`, `VARCHAR`, `GRAPHIC`, `VARGRAPHIC`, `CLOB` (408) and
   `DBCLOB` (412) `Text`, with CCSID 37 (graphic and `DBCLOB` 1200) when
@@ -578,19 +610,53 @@ Version 4 Sql, as built on 2026-11-02 (decisions made in the build, for Cody to 
   column's SQL name (the field's `ALIAS`, which `CREATE TABLE` keeps
   for a name longer than its system name; else the system name),
   `label` its heading (`LABEL ON` or DDS `COLHDG`) with each of its
-  three parts filled to 20 characters, as an SQLDA's label; a column
+  three parts filled to 20 characters, as a descriptor area's label; a column
   without a heading, or an expression, has its name as `label`. A
   column renamed with `AS` keeps its heading.
-- The storage service is one thread, but a query (`Execute` of a
-  `SELECT`, opened as a cursor) takes turns with every other request
-  there: between batches of its scan it lets the other jobs' requests
-  and this connection's catalog lists in (`STORAGE_SERVICE.md` "Long
-  statements"). Still waiting on it: statements that change data
-  (`UPDATE` of many rows), queries under `RepeatableRead` and
-  `Serializable` (`*ALL`), the sort or join of a query once its rows
-  are read, and a query met while another runs, which goes first (the
-  earlier window waits for it).
-- Engine limits the build met, now lifted as IBM i has them:
+- The storage service is one thread, but no statement holds up
+  another job: each query and each `INSERT`, `UPDATE` or `DELETE` runs
+  on a stack of its own and takes turns with every other request
+  there, and with the other statements in progress in any order
+  (`STORAGE_SERVICE.md` "Long statements"). It yields between batches
+  of every scan (a correlated subquery's too), between rows of the
+  steps after them (filters, `EXISTS`, joins, grouping and aggregates,
+  the select list, the sort's keys) and between rows a change writes,
+  at most every 5 ms; meanwhile the other jobs' requests and this
+  connection's catalog lists are answered. A query under
+  `RepeatableRead` or `Serializable` (`*ALL`, whether `SetOptions` or
+  `SET TRANSACTION` chose it) takes turns too: each row it reads is
+  read-locked until `Commit` or `Rollback`, so its reads repeat; other
+  jobs read those rows, but a change to one waits until then, up to
+  the table's record wait (`WAITRCD`, 60 s for a table SQL made) and
+  then fails with `SQL0913`; meanwhile everything else goes on, the
+  holder's `Commit` or `Rollback` included. Rows other jobs add meanwhile may be read (both levels are
+  `*ALL`; no table lock). `CREATE INDEX`, `ALTER TABLE` and `ROLLBACK`
+  take turns too, holding the locks the rules give meanwhile: an index
+  being built keeps its table from change (it is read) and is itself
+  out of reach, an altered table is the statement's alone, a
+  rolled-back unit keeps its rows locked; other tables and jobs go on.
+  An `UPDATE` or `DELETE` whose condition has a subquery takes turns
+  too, and so does `MERGE`, each decided as of its start: it finds its
+  rows (and a merge's matches and actions) first, its subqueries'
+  answers kept, and never sees its own changes. An index is loaded in
+  steps too (its keys sorted in runs, its tree written a few pages at a
+  time), and an altered table is rebuilt beside itself in parts and
+  switched in one short step at the end, so a crash leaves it as it
+  was. Still running to their end, each short: `CREATE TABLE`, `CREATE
+  VIEW`, `LABEL ON`, `COMMIT`, `DROP`. The long commands `RunCommand`
+  sends take turns the same way: `RUNSQL` and `RUNSQLSTM` (inside each
+  statement and between them), `CPYF`, `CPYFRMIMPF`, `CPYTOIMPF`,
+  `CRTLF` (its path built in steps) and `RGZPFM` (its reading; it
+  writes the reorganized member in one step), each holding the locks
+  its rules give throughout. Others still run to their end
+  (`STORAGE_SERVICE.md` lists them and why). Step 90 runs an aggregate
+  over `EXISTS` and a slow select on two connections and the third's
+  command, catalog lists and query beside them, then the aggregate
+  under `RepeatableRead` with the third's requests beside it and its
+  change of a row read refused, then a subquery `UPDATE`, a `CREATE
+  INDEX` and a `CPYF` over a large table with the third's requests
+  beside each.
+- Engine limits the build met, now lifted as the database rules have them:
   `SMALLINT`, `INTEGER` and `BIGINT` columns made by SQL take their
   whole 16, 32 and 64-bit range (a field flag, `DB_FORMAT.md`; a DDS
   `B` field keeps its digits), `SYSCOLUMNS` giving `LENGTH` 2, 4, 8 and
@@ -611,7 +677,7 @@ Version 4 Sql, as built on 2026-11-02 (decisions made in the build, for Cody to 
   `CPYTOIMPF` and `CPYFRMIMPF` copy LOB columns. `CURRENT
   TIMESTAMP(p)` has its precision; `SYSCOLUMNS.DATA_TYPE` spells a
   timestamp `TIMESTMP`; a predicate used as a value (`K = 1` in a select
-  list) is a `BOOLEAN` (SQLTYPE 2436), as on IBM i 7.5.
+  list) is a `BOOLEAN` (SQLTYPE 2436).
 
 The test system's database (`qapd::testing::sql`, for QS/400's tests
 and QS/400 Access's):
@@ -623,6 +689,12 @@ and QS/400 Access's):
   `UPDATE` and `DELETE` over one table; anything else is the syntax
   error `SQL0104`, as a database that does not know the statement
   reports it.
+- A `DECFLOAT` is assigned and compared with the engine's own code
+  (`qdecimal`'s `DecFloat`): a `Decimal` or literal read as
+  `DECFLOAT(34)` from its text and rounded to the column's 16 or 34
+  digits, its exponent kept and its text the engine's (`sNaN` for a
+  signaling NaN); `=` by value. So a value reads back the same here as
+  from QS/400.
 - Its fixtures and the cases they give are in the module's
   documentation: `HLINV.ASSETS` with Navigator's twelve assets in
   service, `HLTEST.ALLTYPES`, journaled and unjournaled tables
@@ -633,10 +705,18 @@ and QS/400 Access's):
   on `Prepare` and `ListColumns`, the status the operations' table
   gives, as the real job answers the engine's `SQL0551`. The catalog
   still lists it.
-- Ends from outside, for the client's tests: `System::end(Server)`
-  reaches every connection, open or opened later (each sends
-  `ServerEnding`); `System::end(Operator)` is one job's, as `ENDJOB`
-  is. `System::drop_connection(job)` and `drop_all()` close a
+- Ends from outside, for the client's tests: `System::end(Server)` is
+  `ENDTCPSVR` as the real system has it. Every open connection sends
+  `ServerEnding` and closes, and the listener is gone: a
+  `testing::Listener` (`System::listen`, one port, a job per
+  connection, as `QAPD` listens) closes its port, so connects are
+  refused, and `try_serve_loopback_as` answers `ConnectionRefused`
+  (`serve_loopback` panics). `System::restart()` is `STRTCPSVR`: the
+  listeners open the same ports again. A connection opened before an
+  end still ends with it when the restart comes before its next poll.
+  The real `QAPD` stops its accept loop, closing the port, before it
+  ends its connections (`servers` test `listen_stop`, QEMU step 89).
+  `System::end(Operator)` is one job's, as `ENDJOB` is. `System::drop_connection(job)` and `drop_all()` close a
   connection's socket on the server's side mid-request, as a network
   drop would: no reply and no event. `System::crash` still injects a
   panic. `System::wait_running(job, timeout)` tells a test when a
@@ -646,3 +726,81 @@ and QS/400 Access's):
   transaction changed as it was at its first change; unqualified
   names are in the default schema, else the profile's schema (`Sql`
   naming) or `QGPL` then `HLINV` (`System` naming).
+
+Version 5, as built on 2026-11-02 (decisions made in the build, for Cody to review):
+
+- The server accepts versions 1 to 5. `Ifs` runs on the connection
+  job's secondary threads, never in the lane, through the IFS requests
+  every job already makes of the storage service
+  (`stg::remote::RemoteIfs` on the thread's link). A thread's link
+  shares the job's handle and security session, so its calls are the
+  job's own: the signed-on profile, the service's one `Ifs`, its
+  authority checks and its `QAUDJRN` entries. No new rpc was needed.
+- The service's rules live in `net/qapd/src/files/`, over an
+  `IfsClient`; the job and the test system both answer through it.
+  Each operation makes the calls of the command it stands for:
+  - `ListDirectory` and `GetInfo` read as `WRKLNK` (`*R` on the
+    directory, `*X` on the path); names match as `WRKLNK`'s patterns
+    do (without case except under `/QOpenSys`) and come in its order
+    (by name without case, then with it). An empty `pattern` is `*`.
+    `GetInfo` does not follow a symbolic link; `ReadFile` does.
+    `kind` is by the mode: regular `File`, directory `Directory`
+    (`/QSYS.LIB` libraries and files too), link `Symlink`, anything
+    else `Other`. An entry whose attributes cannot be read is listed
+    by name, `Other`.
+  - `CreateDirectory` is `MD` with its defaults (`*INDIR`). A name
+    taken is `Exists`. With `parents` 1 each missing directory above
+    is made the same way, and a directory already there is `Ok` (as
+    `mkdir -p`); a component that is not a directory is `Error`.
+  - `Delete` is `RD` for a directory (empty only: `Error`, `CPFA0AC`)
+    and `RMVLNK` for anything else, a link and not what it names. As
+    those commands, it removes a file another job has open; `InUse`
+    is a file checked out to another user.
+  - `Rename` is `MOV`: a rename, or a copy and delete across file
+    systems; `replace` 1 replaces `to`.
+  - `Copy` is `CPY SUBTREE(*NODIR)` with `OWNER(*NEW)` and no
+    `DTAFMT`: a directory is `Error` (`CPFA0DA`).
+- A failure is the command's message for the `errno`: the `CPFA0xx`
+  escape with its substitution data as the command lays it out (a
+  path as `*CCHAR *VARY 4`). The status is by the message: `CPFA0A9`
+  `NotFound`, `CPFA09C` `NotAuthorized`, `CPFA0A0` `Exists`, `CPFA09E`
+  `InUse`, any other `Error`. For `Copy` that is the message `CPY`
+  gives as its diagnostic, not its `CPFA097` escape. `ThreadHost`
+  gained `with_ifs` and `message_data` (a message from data already
+  laid out).
+- `InUse`: another job's open whose share mode refuses this one, or a
+  byte-range lock of another job over the range read or written
+  (asked with `F_GETLK` once the file is open).
+- `ReadFile` opens the file for reading only, with the default share
+  mode. `as_ccsid` 0 is `InvalidRequest`. A file and an `as_ccsid`
+  that differ and cannot be converted (either 65535, or no table) is
+  `Error` with `TCP1A5A` (added to `QTCPMSG`). When the range reaches
+  the end of the file and a partial character is left, it is
+  converted as one substitution and `next_offset` is the file's
+  size, so a client reading on from `next_offset` always ends; a
+  `length` shorter than one character can make no progress inside
+  the file, which the client avoids. The memo of mixed files keeps 32
+  marks per connection (path, offset, the file's change time, the
+  state); a read from anywhere else scans from the start. The body is
+  built as it is read, so a large reply is copied once into frames.
+- `WriteFile` opens as the FTP server writes a stream file: a new file
+  tagged with `ccsid` (0: 1208), its data authorities from its
+  directory (`O_INHERITMODE`). `Replace` and `Append` make the file
+  when missing, `Update` does not; an existing file keeps its CCSID.
+  `data_ccsid` 0 is `InvalidRequest`; a request's data ends in whole
+  characters, so a partial one at its end is one substitution. The
+  shift-in/shift-out join applies to `Append`, and to `Update` at the
+  file's end. It reads the file's last byte, so such a write opens the
+  file for reading too; a profile without `*R` gets the data written
+  as converted, not joined.
+- The test system's file system (`qapd::testing::files`) is the `ifs`
+  crate over a `MemBackend` with `MemQsys`, its fixtures in the
+  module's documentation; each connection job is one owner of
+  descriptors and locks. `Delete` of a file another job holds open
+  succeeds, as `RMVLNK` does; `InUse` (`CPFA09E`) comes from a file
+  checked out to another user. `CHECKED_OUT` is such a file in `BOB`'s
+  home (checked out to `ANN`), refusing `Delete`, `Rename` and
+  `WriteFile` but not reads; `TREE` is a folder with two levels of
+  subfolders whose file `TREE_HELD`, deep inside, is checked out to
+  `ANN`, so a client's depth-first recursive delete removes what comes
+  before it and stops there with the system's message.

@@ -34,7 +34,7 @@ commit. It is never edited here: a change goes to QS/400 first, and the copy
 is refreshed in the same commit as the re-pin (`ci/spec-mirror.sh` checks
 both).
 
-- **Versions.** The program offers QAP versions 1 to 4, and the server
+- **Versions.** The program offers QAP versions 1 to 5, and the server
   picks the highest both speak. Version 2 adds Run Command (the `Command`
   service: run, check and describe CL commands), the password expiry
   warning (`PasswordStatus`) and 5250 automatic sign-on by ticket
@@ -43,7 +43,11 @@ both).
   which the system has; nothing of version 2 is ever sent to it, and
   sign-on and everything else work as before. Version 3 adds Printer
   Output (the `Spool` service), likewise disabled with `QAD5001` on a
-  system that speaks only version 1 or 2.
+  system that speaks only version 1 or 2. Version 4 adds Run SQL, Schemas
+  and Data Transfer of tables (the `Sql` service, on connections attached
+  to the session), and version 5 the Integrated File System window and
+  file transfers (the `Ifs` service); each is disabled with `QAD5001` on a
+  system older than the version it needs.
 - **Requests side by side.** One connection carries every request of a
   system's session. The server runs commands one at a time, in the order
   they came, and everything else beside them, so a reply can come back

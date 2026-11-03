@@ -9,16 +9,21 @@
 #   and NEW-ENVIRON variable names). Those values live in the crate's wire.rs
 #   and nowhere else; code elsewhere uses their constants by name. A new
 #   protocol crate adds its wire.rs to this list.
-# - docs/qap-protocol-spec.md, a read-only copy of QS/400's docs/QAP.md that
-#   ci/spec-mirror.sh holds byte-identical to QS/400's file at the pinned
-#   commit; nothing in it is written here. QS/400's version 4 build notes
-#   (from dd1f61a4) compare its engine with another platform by name; drop
-#   this entry again once QS/400 rewords them and the pin moves.
+#
+# docs/qap-protocol-spec.md, the read-only copy of QS/400's docs/QAP.md, is
+# checked like any other file: QS/400 words its spec clean-room (from
+# 58e189df), and a pin whose spec does not pass is not taken.
 set -euo pipefail
 allowed=(
   tn5250/src/wire.rs
-  docs/qap-protocol-spec.md
 )
+mirror=docs/qap-protocol-spec.md
+for a in "${allowed[@]}"; do
+  if [ "$a" = "$mirror" ]; then
+    echo "clean-room check: $mirror must not be allowlisted" >&2
+    exit 1
+  fi
+done
 cd "$(dirname "$0")/.."
 patterns="$(mktemp)"
 trap 'rm -f "$patterns"' EXIT

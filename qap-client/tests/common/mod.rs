@@ -95,9 +95,34 @@ fn listen_jobs<C: Send + 'static>(
     job: impl Fn() -> u32 + Send + 'static,
     serve: impl Fn(TlsConn, u32) -> C + Send + Sync + 'static,
 ) -> (u16, Arc<Mutex<Vec<C>>>) {
+    let tls = server_tls(versions);
+    let l = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = l.local_addr().unwrap().port();
+    let closed = Arc::new(Mutex::new(Vec::new()));
+    let hclosed = Arc::clone(&closed);
+    let serve = Arc::new(serve);
+    std::thread::spawn(move || {
+        for s in l.incoming() {
+            let Ok(s) = s else { continue };
+            let (closed, tls, serve) = (Arc::clone(&hclosed), Arc::clone(&tls), Arc::clone(&serve));
+            let job = job();
+            std::thread::spawn(move || {
+                let Some(t) = handshake(tls, s) else { return };
+                let why = serve(t, job);
+                closed.lock().unwrap().push(why);
+            });
+        }
+    });
+    (port, closed)
+}
+
+/// The test certificate's server configuration, offering `versions`.
+fn server_tls(
+    versions: &'static [&'static rustls::SupportedProtocolVersion],
+) -> Arc<rustls::ServerConfig> {
     let certs = qsa_net::tls::certs_from_pem(&file("server.pem"));
     let key = PrivateKeyDer::from_pem_slice(file("server.key").as_bytes()).unwrap();
-    let tls = Arc::new(
+    Arc::new(
         rustls::ServerConfig::builder_with_provider(Arc::new(
             rustls::crypto::ring::default_provider(),
         ))
@@ -106,38 +131,89 @@ fn listen_jobs<C: Send + 'static>(
         .with_no_client_auth()
         .with_single_cert(certs, key)
         .unwrap(),
-    );
-    let l = TcpListener::bind("127.0.0.1:0").unwrap();
-    let port = l.local_addr().unwrap().port();
-    let closed = Arc::new(Mutex::new(Vec::new()));
-    let hclosed = Arc::clone(&closed);
-    let serve = Arc::new(serve);
+    )
+}
+
+/// The server's side of the TLS handshake on `s`; `None` when it failed.
+fn handshake(tls: Arc<rustls::ServerConfig>, mut s: TcpStream) -> Option<TlsConn> {
+    let mut conn = rustls::ServerConnection::new(tls).unwrap();
+    // Only the handshake waits with a read timeout; after it the socket is
+    // non-blocking (see `Polled`).
+    s.set_nonblocking(false).ok()?;
+    s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
+    while conn.is_handshaking() {
+        conn.complete_io(&mut s).ok()?;
+    }
+    let raw = s.try_clone().unwrap();
+    Some(TlsConn {
+        tls: rustls::StreamOwned::new(conn, Polled::new(s).unwrap()),
+        raw,
+    })
+}
+
+/// QS/400's test system behind its own listener (`System::listen`, a job
+/// per connection, as `QAPD` listens), fronted over TLS on a port of its
+/// own. The front follows the listener: while the server is ended
+/// (`System::end(Ending::Server)`) its port is closed too, so a client's
+/// connect is refused, and `System::restart()` opens it again on the same
+/// port.
+pub struct Listening {
+    pub c: Arc<System>,
+    pub port: u16,
+    pub listener: Arc<qapd::testing::Listener>,
+}
+
+impl Listening {
+    /// A client target for this server, trusting the test CA only.
+    pub fn target(&self) -> Target {
+        target(self.port)
+    }
+
+    /// The next connection to close on the system's side, and why.
+    pub fn next_close(&self) -> Option<(u32, Closed)> {
+        self.listener.next_close(Duration::from_secs(5))
+    }
+}
+
+/// A [`Listening`] server of a new test system with `cfg`.
+pub fn start_listening(cfg: Config) -> Listening {
+    let c = System::new();
+    let listener = Arc::new(c.listen(cfg).unwrap());
+    let tls = server_tls(TLS13);
+    let first = TcpListener::bind("127.0.0.1:0").unwrap();
+    let port = first.local_addr().unwrap().port();
+    first.set_nonblocking(true).unwrap();
+    let l = Arc::clone(&listener);
     std::thread::spawn(move || {
-        for s in l.incoming() {
-            let Ok(mut s) = s else { continue };
-            let (closed, tls, serve) = (Arc::clone(&hclosed), Arc::clone(&tls), Arc::clone(&serve));
-            let job = job();
-            std::thread::spawn(move || {
-                let mut conn = rustls::ServerConnection::new(tls).unwrap();
-                // Only the handshake waits with a read timeout; after it the
-                // socket is non-blocking (see `Polled`).
-                s.set_read_timeout(Some(Duration::from_secs(5))).unwrap();
-                while conn.is_handshaking() {
-                    if conn.complete_io(&mut s).is_err() {
-                        return;
-                    }
+        let mut front = Some(first);
+        loop {
+            if !l.accepting() {
+                front = None;
+            } else if front.is_none()
+                && let Ok(f) = TcpListener::bind(("127.0.0.1", port))
+            {
+                f.set_nonblocking(true).unwrap();
+                front = Some(f);
+            }
+            match front.as_ref().map(TcpListener::accept) {
+                Some(Ok((s, _))) => {
+                    let (tls, l) = (Arc::clone(&tls), Arc::clone(&l));
+                    std::thread::spawn(move || {
+                        let Some(t) = handshake(tls, s) else { return };
+                        match l.connect() {
+                            Ok(plain) => relay(t, plain),
+                            Err(_) => drop(t),
+                        }
+                    });
                 }
-                let raw = s.try_clone().unwrap();
-                let t = TlsConn {
-                    tls: rustls::StreamOwned::new(conn, Polled::new(s).unwrap()),
-                    raw,
-                };
-                let why = serve(t, job);
-                closed.lock().unwrap().push(why);
-            });
+                _ => std::thread::sleep(Duration::from_millis(5)),
+            }
+            if Arc::strong_count(&l) == 1 {
+                return;
+            }
         }
     });
-    (port, closed)
+    Listening { c, port, listener }
 }
 
 /// Writes all of `b` to a non-blocking socket; false when it closed.

@@ -53,7 +53,7 @@ fn the_command_service_is_there_from_version_2() {
     let s = start(cfg());
     let mut c = Client::new(s.target());
     c.connect().unwrap();
-    assert_eq!(c.version(), Some(4));
+    assert_eq!(c.version(), Some(5));
     assert!(c.hello().unwrap().services.contains(&Service::Command));
     // Not before sign-on.
     let e = c.check_command("CRTLIB LIB(X)").unwrap_err();

@@ -35,7 +35,7 @@
 //!   what it did before the cancel.
 //!
 //! `Hello` offers versions [`proto::MIN_VERSION`] to [`proto::VERSION`] (1
-//! to 4) and the server picks the highest both speak. An operation is sent
+//! to 5) and the server picks the highest both speak. An operation is sent
 //! only when the connection's version defines it ([`proto::Op::since`]) and
 //! `Hello`'s `services` lists its service; otherwise it is refused here with
 //! [`Error::Unsupported`] and nothing is sent ([`Connection::supports`]).
