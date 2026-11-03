@@ -29,7 +29,7 @@ fn hello_over_tls13() {
     let s = start(cfg());
     let c = Connection::open(&s.target()).unwrap();
     let h = c.hello();
-    assert_eq!(h.version, 5);
+    assert_eq!(h.version, 6);
     assert_eq!(h.system_name, "QSHQ400");
     assert_eq!(h.release, "V1R0M0");
     assert_eq!(h.services, Service::ALL.to_vec());
@@ -75,8 +75,8 @@ fn an_untrusted_certificate_goes_to_the_trust_flow() {
 fn version_mismatch() {
     let s = start(cfg());
     let mut t = s.target();
-    // The server speaks versions 1 to 5.
-    t.options.min_version = 6;
+    // The server speaks versions 1 to 6.
+    t.options.min_version = 7;
     t.options.max_version = 9;
     let e = Connection::open(&t).unwrap_err();
     assert_eq!(e.status(), Some(Status::VersionUnsupported), "{e:?}");
@@ -346,7 +346,7 @@ fn a_connection_opened_before_an_end_ends_with_it_after_a_quick_restart() {
     assert!(!c.is_signed_on());
     // A new connection is taken at once.
     let n = Connection::open(&s.target()).unwrap();
-    assert_eq!(n.version(), 5);
+    assert_eq!(n.version(), 6);
 }
 
 #[test]

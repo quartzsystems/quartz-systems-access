@@ -85,7 +85,7 @@ fn everything_passes_with_a_test_sign_on() {
     assert!(result(&r, Check::QapTls).detail().starts_with("TLSv1_3"));
     assert_eq!(
         result(&r, Check::Hello).detail(),
-        "Version 5, system QSHQ400, release V1R0M0."
+        "Version 6, system QSHQ400, release V1R0M0."
     );
     assert_eq!(
         result(&r, Check::SignOn).detail(),
@@ -220,13 +220,13 @@ fn a_version_the_server_does_not_speak() {
     let s = start(cfg());
     let (_l, port) = telnet();
     let mut p = plan(&s, port, None);
-    p.target.options.min_version = 6;
-    p.target.options.max_version = 7;
+    p.target.options.min_version = 7;
+    p.target.options.max_version = 8;
     let r = run(&p);
     let o = result(&r, Check::Hello);
     assert_eq!(failed_id(o), id::QAP_VERSION_UNSUPPORTED);
     assert_eq!(
         o.detail(),
-        "QAD4055: QAP server on 127.0.0.1 supports none of protocol versions 6 to 7."
+        "QAD4055: QAP server on 127.0.0.1 supports none of protocol versions 7 to 8."
     );
 }

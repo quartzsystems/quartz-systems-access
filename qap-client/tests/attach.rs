@@ -19,7 +19,7 @@ fn an_attached_connection_has_its_own_job_as_the_sessions_profile() {
     let s = start(cfg());
     let mut c = Client::new(s.target());
     c.sign_on("BOB", &Secret::from("SECRET1")).unwrap();
-    assert_eq!(c.version(), Some(5));
+    assert_eq!(c.version(), Some(6));
     let shared = c.job_info().unwrap();
     assert_eq!(shared.user, "BOB");
 

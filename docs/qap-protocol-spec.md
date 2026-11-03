@@ -1,4 +1,4 @@
-<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit 58e189dfffc7c540efcf7a5293839bb3bd6c9881. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
+<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit 93c6350f69e4327163bc1357284785e5490388c0. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
 # QAP: Quartz Access Protocol, version 1 (draft)
 
 QAP is how QS/400 Access talks to QS/400 for everything except display and printer sessions, which stay on the system's Telnet server. It is an original Quartz design.
@@ -13,7 +13,7 @@ This draft settles the decisions below. Anything it leaves open is listed under 
 | Security | TLS 1.3 only, no plaintext mode. Server certificate from the QS/400 certificate manager, application ID `QS400_ACCESS_SERVER`. The client validates it with its existing untrusted-certificate trust flow |
 | Framing and encoding | Wire, from the QS/400 repository's `ipc` crate, the same framing and serialization QSI uses. Types below are Wire types; enums use `wire_enum!`. If Wire cannot express something below, stop and ask; do not invent a second encoding |
 | Where the code lives | `qap-proto` (envelope and message types) lives in the QS/400 repository beside `ipc`. QS/400 Access pins both by commit |
-| Multiplexing | One connection carries many concurrent requests. Every request has a service ID and a request ID; replies carry the request ID, in the order operations finish, not the order requests came. No port mapper and no per-service ports. Lanes: `Command` requests and `Sql` operations 1 to 8 (version 4) run one at a time, in arrival order, in the connection job, because they share its job state (library list, `QTEMP`, job attributes, commitment definition, statements and cursors). Every other operation, `Sql` operations 9 to 11 (the catalog lists, which keep no state) and every `Ifs` operation (version 5) included, runs concurrently, up to the outstanding limit, as the signed-on profile, without waiting for the lane. `Ping` and `Cancel` are never queued behind anything |
+| Multiplexing | One connection carries many concurrent requests. Every request has a service ID and a request ID; replies carry the request ID, in the order operations finish, not the order requests came. No port mapper and no per-service ports. Lanes: `Command` requests and `Sql` operations 1 to 8 (version 4) run one at a time, in arrival order, in the connection job, because they share its job state (library list, `QTEMP`, job attributes, commitment definition, statements and cursors). Every other operation, `Sql` operations 9 to 11 (the catalog lists, which keep no state) and every `Ifs` operation (version 5) included, runs concurrently, up to the outstanding limit, as the signed-on profile, without waiting for the lane; so do the watches' events (version 6). `Ping` and `Cancel` are never queued behind anything |
 | Versioning | Client hello sends the range of protocol versions it supports; server picks one or refuses. Version 1 is this document |
 | Server jobs | Listener job `QAPD` in subsystem `QSYSWRK`; one job per connection in `QUSRWRK`, running as `QUSER` until sign-on and as the signed-on user profile after it |
 | Server control | `STRTCPSVR SERVER(*QAP)`, `ENDTCPSVR SERVER(*QAP)`, autostart attribute; shown on Navigator's Servers page |
@@ -156,6 +156,29 @@ Commands run in the connection job, as the signed-on profile, with its job descr
 - Clients read large files in page batches.
 - The `Text` and `Pdf` formats are optional per device type. A file whose format cannot be made gets `Error`, with a message saying so.
 
+**Spool watches (version 6).**
+
+- `SpoolTarget` enum: `Queue` 0 { `outq` ObjectName }, `User` 1 { `profile` String (`*CURRENT` or a profile) }.
+- `SpoolChange` enum: `Added` 0, `Changed` 1 (status, queue or attributes), `Removed` 2.
+
+| Service | Op | Request body | Reply body | Allowed before sign-on |
+| --- | --- | --- | --- | --- |
+| Spool | 8 `WatchSpool` | `target` SpoolTarget | — | no |
+| Spool | 9 `UnwatchSpool` | `target` SpoolTarget | — | no |
+
+| Op | Statuses |
+| --- | --- |
+| `WatchSpool` | `Ok`; `NotFound` (the queue, or an unknown profile, `CPF2204`); `NotAuthorized` |
+| `UnwatchSpool` | `Ok`; `NotFound` (that target is not watched on this connection) |
+
+**Event (`request_id` 0).** `Spool` op 100 `SpooledFileChanged` (status `Ok`; body `target` SpoolTarget, `change` SpoolChange, `file` Option of SpooledFile (absent for `Removed`), `id` SpooledFileId), for each change to the files a watched target lists.
+
+- A target's files are the ones `ListSpooledFiles` lists for it, with the same authority: a `Queue` target as `ListSpooledFiles` with that `outq` and user `*ALL`, a `User` target as `ListSpooledFiles` with that user.
+- `file` is the file as `ListSpooledFiles` would list it after the change.
+- Moving a file between two watched queues sends `Removed` for one and `Added` for the other. For a `User` target the move is `Changed`.
+- Watches are passive and end with their connection (and a `SignOff` on it), as for messages. A watch reports the changes after its `Ok`.
+- A `profile` of `*ALL` is `InvalidRequest`.
+
 ### Service 5 `Sql`: SQL, the catalog and data transfer (version 4)
 
 Statements run in the connection job through the system's database engine, as the signed-on profile, with the same authority checks as any SQL interface. Statements and cursors belong to the connection and end with it; changes not committed are rolled back when it closes. Data Transfer downloads with `Prepare`, `Execute` and `Fetch`, and uploads with an `INSERT` prepared once and `Execute` repeated over batches of rows, each request under 1 MiB.
@@ -225,10 +248,11 @@ Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`). Every `I
 | Ifs | 6 `Delete` | `path` String (a file, a symbolic link or an empty directory) | — | no |
 | Ifs | 7 `Rename` | `from` String, `to` String, `replace` flag | — | no |
 | Ifs | 8 `Copy` | `from` String, `to` String, `replace` flag | — | no |
+| Ifs | 9 `Stat` | `path` String | `entry` Entry, `change` u64 (version 6) | no |
 
 | Op | Statuses |
 | --- | --- |
-| `ListDirectory`, `GetInfo`, `ReadFile` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` (`ReadFile` of a file locked for writing); `Error` (`ReadFile` with an `as_ccsid` the file's CCSID cannot be converted to) |
+| `ListDirectory`, `GetInfo`, `Stat`, `ReadFile` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` (`ReadFile` of a file locked for writing); `Error` (`ReadFile` with an `as_ccsid` the file's CCSID cannot be converted to) |
 | `WriteFile` | `Ok`; `NotFound` (the directory, or the file for `Update`); `NotAuthorized`; `Exists` (`Create`); `InUse`; `Error` (a `data_ccsid` that cannot be converted to the file's CCSID) |
 | `CreateDirectory`, `Rename` | `Ok`; `NotFound`; `NotAuthorized`; `Exists` (`Rename` without `replace`) |
 | `Delete` | `Ok`; `NotFound`; `NotAuthorized`; `InUse`; `Error` (a directory that is not empty) |
@@ -248,14 +272,23 @@ Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`). Every `I
 - For a mixed single- and double-byte target, each request's converted output ends in single-byte state. When a converted write lands at the end of the file, the file ends in the shift-in an earlier write left and the new output starts with a shift-out, the two are dropped, so text written in pieces makes the same file as one write.
 - `size` in the reply is the file's size in its own CCSID.
 
+**Stat (version 6).** `Stat` answers what `GetInfo` answers, and `change`: a counter of the object's changes.
+
+- `change` increases on every change to the object's data or attributes: data written, truncation, rename, owner, primary group, authority and CCSID. For a directory, an entry added, removed or renamed in it changes its data.
+- It never decreases, and a value is never reused for the same object. Two changes within one millisecond give two values, though `modified` may not differ.
+- A client that keeps a copy of a file compares `change` to know whether the file changed since; `modified` alone cannot tell it.
+- `Stat`, as `GetInfo`, does not follow a symbolic link: it describes the link.
+
 **Copy.** `Copy` copies a file, not a directory, on the system, keeping its CCSID and data as stored, without sending the data to the client. `Exists` answers a `to` that exists when `replace` is 0; with `replace` 1 the copy replaces it.
 
 **Paths and authority.** Every operation applies the same authority checks as the system's own file-system commands for the same action: listing and reading as displaying a link, `WriteFile` as writing a stream file, `CreateDirectory` as creating a directory, `Delete` as removing a link or a directory, `Rename` as renaming or moving, `Copy` as copying. Paths under `/QSYS.LIB` behave as those commands allow; anything not allowed there gets `Error` with the system's message.
 
-### Service 7 `Messages`: message queues (planned version 6)
+### Service 7 `Messages`: message queues (version 6)
 
-- `MessageType` enum: `Informational` 0, `Inquiry` 1, `Reply` 2, `Completion` 3, `Diagnostic` 4, `Escape` 5, `Notify` 6.
-- `QueuedMessage` = { `key` 4 bytes, `id` String (empty for an impromptu message), `kind` MessageType, `severity` u8, `text` String, `help` String, `sent` i64, `from_user` String, `from_job` JobId, `needs_reply` flag, `reply` Option of String }.
+- `MessageType` enum: `Informational` 0, `Inquiry` 1, `Reply` 2, `Completion` 3, `Diagnostic` 4, `Escape` 5, `Notify` 6, `SenderCopy` 7 (the sender's copy of an inquiry, on the queue its reply goes to).
+- `QueuedMessage` = { `key` 4 bytes, `id` String (empty for an impromptu message), `kind` MessageType, `severity` u8, `text` String, `help` String, `sent` i64, `from_user` String, `from_job` JobId, `needs_reply` flag, `reply` Option of String, `answers` Option of 4 bytes }.
+  - `reply` is an inquiry's or a sender's copy's reply, once it has one.
+  - `answers` is a `Reply`'s: the key of the message it answers on the same queue, an inquiry or a sender's copy. Other types have none.
 - `Queue` enum: `Own` 0 (the signed-on profile's), `SystemOperator` 1 (`QSYSOPR`), `Named` 2 { `queue` ObjectName }.
 - `Recipient` enum: `User` 0 { `profile` String }, `Queue` 1 { `queue` Queue }.
 
@@ -264,7 +297,7 @@ Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`). Every `I
 | Messages | 1 `ListMessages` | `queue` Queue, `newest_first` flag, `start` u32, `max` u32 | `total` u32, `messages` list of `QueuedMessage` | no |
 | Messages | 2 `ReplyMessage` | `queue` Queue, `key` 4 bytes, `reply` String | — | no |
 | Messages | 3 `RemoveMessages` | `queue` Queue, `keys` list of 4 bytes | — | no |
-| Messages | 4 `SendMessage` | `to` Recipient, `text` String, `inquiry` flag | `key` Option of 4 bytes (an inquiry's, to find its reply) | no |
+| Messages | 4 `SendMessage` | `to` Recipient, `text` String, `inquiry` flag | `key` Option of 4 bytes (an inquiry's, to find its reply: see Inquiries and their replies) | no |
 | Messages | 5 `WatchQueue` | `queue` Queue | — | no |
 | Messages | 6 `UnwatchQueue` | `queue` Queue | — | no |
 
@@ -272,13 +305,30 @@ Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`). Every `I
 | --- | --- |
 | `ListMessages`, `SendMessage` | `Ok`; `NotFound` (the queue or profile); `NotAuthorized` |
 | `ReplyMessage` | `Ok`; `NotFound` (queue or key); `NotAuthorized`; `InvalidRequest` (not an inquiry, or already answered); `Error` (the reply is not valid for the message) |
-| `RemoveMessages` | `Ok`; `NotFound`; `NotAuthorized` |
-| `WatchQueue` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` (another job holds the queue in break mode) |
+| `RemoveMessages` | `Ok`; `NotFound` (the queue, or a key not on it: then nothing is removed); `NotAuthorized` |
+| `WatchQueue` | `Ok`; `NotFound`; `NotAuthorized` |
 | `UnwatchQueue` | `Ok`; `NotFound` (not watched on this connection) |
 
-**Event (`request_id` 0).** `Messages` op 100 `MessageArrived` (status `Ok`; body `queue` Queue, `message` QueuedMessage), for each queue watched on the connection. A watch ends with its connection.
+**Event (`request_id` 0).** `Messages` op 100 `MessageArrived` (status `Ok`; body `queue` Queue, `message` QueuedMessage), for each message that arrives on a queue watched on the connection, in arrival order per queue.
 
-**Spool events (planned for a later version).** Spool change events are planned for a later version: a watch on an output queue, like `WatchQueue`, with an event when a file arrives, changes status or leaves. Version 3 has none; version 3 clients poll with `ListSpooledFiles`.
+**Rules.**
+
+- Each operation does what the message commands do, with their authority checks: `ListMessages` and `WatchQueue` as displaying the queue's messages, `ReplyMessage` as sending a reply, `RemoveMessages` as removing a message, `SendMessage` as sending a message to the queue. `QSYSOPR` and named queues are checked as any queue is.
+- Text and second-level text are in the connection job's language.
+- Keys:
+  - A message's key is unique within its queue for the life of the message, and never reused while the message exists.
+  - Messages are kept in arrival order. `ListMessages` with `newest_first` 1 lists strictly newest first, so a client can stop at a key it already has; with 0, oldest first.
+- Watches:
+  - `WatchQueue` is passive. It never allocates the queue, never changes its delivery mode, and never conflicts with a job that holds the queue in break mode.
+  - A watch reports the messages that arrive after its `Ok`.
+  - A watch ends with its connection, and with a `SignOff` on it. A `Resume` on a new connection does not restore watches: clients watch again and catch up with `ListMessages`.
+- `ReplyMessage` checks the reply against the message's valid replies, as the reply command does; a reply it does not take is `Error` with the system's message. An empty reply is the message's default reply.
+- Inquiries and their replies:
+  - An inquiry sent with `SendMessage` gets its reply on the sender's own queue (`Own`).
+  - When the inquiry goes to another queue, a `SenderCopy` of it is put on the sender's own queue, and `key` in the reply is the copy's key. When the inquiry goes to the sender's own queue, `key` is the inquiry's.
+  - When the inquiry is answered, a `Reply` arrives on the sender's own queue whose `answers` is that `key`, and the copy's `reply` is set. A client matches a reply to its inquiry by `answers` = the `key` `SendMessage` returned.
+  - The queue the inquiry went to keeps it, with its `reply` set and `needs_reply` 0, followed by a `Reply` of its own whose `answers` is the inquiry's key there.
+- A `Recipient` `User` is the profile's message queue, as the profile names it; an unknown profile is `NotFound` (`CPF2204`).
 
 ### `SignOn` additions (version 2)
 
@@ -345,6 +395,16 @@ Version 4 is: `Sql` (service 5) operations 1 `SetOptions` to 11 `ListColumns`, w
 ### Version 5 (fixed)
 
 Version 5 is: `Ifs` (service 6) operations 1 `ListDirectory` to 8 `Copy`, with the types and rules above, `ReadFile`'s `as_ccsid` and `next_offset` and `WriteFile`'s `data_ccsid` included; and the status `Exists` (13), which version 5 introduces. `InUse` is version 3's. A version 1 to 4 peer never receives `Exists`, the `Ifs` service or any `Ifs` body; where `Exists` would apply it gets `Error` with the same message. The server accepts versions 1 to 5 and picks the highest both sides support.
+
+### Version 6 (fixed)
+
+Version 6 is:
+
+- `Messages` (service 7) operations 1 `ListMessages` to 6 `UnwatchQueue` and the event `MessageArrived` (100), with the types and rules above, `SenderCopy` and `answers` included;
+- `Spool` operations 8 `WatchSpool` and 9 `UnwatchSpool` and the event `SpooledFileChanged` (100);
+- `Ifs` operation 9 `Stat`.
+
+It introduces no status: every status these operations answer exists in an earlier version. Events are sent from the concurrent lane, as every operation outside the lane runs. A version 1 to 5 peer never receives the `Messages` service, a watch's event or any of these bodies. The server accepts versions 1 to 6 and picks the highest both sides support.
 
 ## Open questions
 
@@ -804,3 +864,111 @@ Version 5, as built on 2026-11-02 (decisions made in the build, for Cody to revi
   subfolders whose file `TREE_HELD`, deep inside, is checked out to
   `ANN`, so a client's depth-first recursive delete removes what comes
   before it and stops there with the system's message.
+
+Version 6, as built on 2026-11-03 (decisions made in the build, for Cody to review):
+
+- The server accepts versions 1 to 6. `Messages` runs on the connection
+  job's secondary threads, never in the lane, through rpcs 760 to 763
+  (`stgsvc/qap/messages.rs`) over the functions the message commands
+  use (`stgsvc/msgs.rs`), as the signed-on profile: `ListMessages` and
+  `WatchQueue` check as `DSPMSG` (`msgq.receive`), `ReplyMessage` as
+  `SNDRPYMSG` (`msgq.reply`), `RemoveMessages` as `RMVMSG`
+  (`msgq.remove`), `SendMessage` as `SNDMSG` (`msgq.send`). A queue not
+  there is `NotFound` with `CPF2403`, a key `CPF2410`; a refused queue
+  `NotAuthorized` with `CPF9802` naming it (`CPF9820` for its library);
+  not an inquiry waiting `InvalidRequest` with `CPF2422`.
+- `Own` is the queue the profile's `MSGQ` names (`*USRPRF`: its own in
+  `QUSRSYS`). A profile's own queue is made at its first sign-on, as
+  before; a `User` recipient who never signed on has none yet and is
+  `NotFound` (`CPF2403`).
+- The job gives each message the client's form: an identifier's text
+  and second-level text are its message file's description with the
+  message's data, looked up in the job, so in its language; an
+  impromptu message's are as sent.
+- Keys: a queue hands out the key after the last, never 0 and never
+  one a message on it has, so keys go up as messages arrive (a wrap
+  past 2^32 included). Lists are in that order, counted back from the
+  queue's next key; a reply, kept just after its inquiry on the queue,
+  lists where it arrived.
+- Inquiries and replies (`stgsvc/msgs.rs`, so the commands do the
+  same): a reply is checked against the valid replies of the message's
+  description (`MsgDesc::reply_ok`; an impromptu inquiry takes any),
+  `CPF2420` when refused (added to `QCPFMSG`); `SNDRPYMSG` and the
+  replies typed on `DSPMSG` are now checked the same way. An inquiry
+  whose reply goes to another queue leaves a sender's copy there: a
+  new `*MSGQ` message type, `*COPY` (8), its `ReplyTo` the queue the
+  inquiry went to and its `ReplyKey` the inquiry's key there
+  (`WORKMGMT.md`, `MessageEntry`). Answering the inquiry answers the
+  copy too, as the system, whatever the replier may do with the
+  sender's queue. `SNDMSG MSGTYPE(*INQ)` leaves a copy on its
+  `RPYMSGQ` (by default `QSYSOPR`) as well. If the copy cannot be put,
+  the inquiry is taken back and the send fails.
+- `RemoveMessages` removes exactly the keys given, all or none; an
+  inquiry removed before its reply gets none, as `RMVMSG` removes it.
+- `SendMessage` with empty text is `InvalidRequest` (`CPD0071`). Its
+  messages name `QAPCNN` as the sending program. A message or reply sent
+  through QAP names the signed-on profile as its sender's user, and so
+  as `from_user` and `from_job`'s user: a queue entry keeps one user
+  for its sender, and the connection job's own (`QUSER`) would say
+  nothing of who sent it.
+- Watches (`net/qapd/src/watches.rs`): a connection's first watch makes
+  one more secondary thread, which looks at every watch each 250 ms
+  (`Config::watch_poll`) through the same calls as `ListMessages` and
+  `ListSpooledFiles`, with the profile's authority, and sends the
+  events. Nothing is allocated and no delivery mode changes, so a job
+  holding the queue in break mode keeps it.
+  - Messages: a look lists newest first, in pages of 32, until a key
+    the watch knows; what came before it is sent, oldest first. When
+    the keys known outgrow the queue by 256 (messages removed), the
+    next look lists it whole and keeps only what is there.
+  - Spool: a look lists the target's files and compares them with the
+    last: `Removed`, `Changed` (any field of `SpooledFile` differs),
+    then `Added`, each in the order the files were made.
+  - What changes and changes back between two looks is not seen: a
+    message sent and removed, a file added and deleted, within one
+    look's interval sends nothing; several changes to a file between
+    two looks send one `Changed`.
+  - A watch is of the `Queue` or `SpoolTarget` value given: `Own` and a
+    `Named` queue that is the same queue are two watches. A watch whose
+    queue or target can no longer be listed (deleted, authority
+    revoked) stays and sends nothing until it can be again.
+  - `UnwatchQueue` and `UnwatchSpool` of what is not watched are
+    `NotFound` with `TCP1A5B`; a host without message queues answers
+    `Error` with `TCP1A5C` (both added to `QTCPMSG`).
+  - `SignOff` ends the connection's watches with its profile (the
+    spec's rule says a watch ends with its connection; a watch carried
+    across a sign-off would list as nobody).
+- The test system (`qapd::testing::messages`): message queues under the
+  same rules, its fixtures in the module's documentation (`QSYSOPR` and
+  `BOB`'s own with every type, `CPA0701` taking `C`, `D`, `I`, `R`
+  with default `C`, `CPA5305` taking `Y` or `N`, 149 messages on
+  `QSYSOPR`, `QGPL/SECRETQ` only `ANN` may use, `QGPL/TEAMQ` held in
+  break mode by job 4242). `System::inject_message` puts a message on a
+  queue as another job sends it; `System::spool_add`, `spool_change`
+  and `spool_remove` change spooled files from outside. Watches in
+  tests look every 20 ms (`Config::watch_poll`).
+- QEMU step 93 runs the `Messages` service and a spool watch through the
+  real connection jobs as `QAPTEST` and `QAPTEST2`, and answers a batch
+  job's `CEE9901` on `QSYSOPR` (a job with `INQMSGRPY(*RQD)` whose
+  program fails unmonitored waits in `MSGW` for it): `X` is refused
+  with `CPF2420`, `C` lets the job go on.
+- `Stat` (`net/qapd/src/files/entries.rs`) answers `GetInfo`'s entry,
+  with its checks and messages, and the object's change counter
+  (`IFS.md`, "Change counter"). In root, `/QOpenSys` and user-defined
+  file systems it is the metadata record's (tag 21), from one counter
+  of the volume handed out in reserved blocks whose top is kept on the
+  volume: data writes, truncation, a rename (and both directories),
+  owner, group, authority, CCSID and the other attributes raise it,
+  entries made, removed or renamed raise their directory's, and an
+  object without a record or a counter gets one at its first change of
+  any kind. Under `/QSYS.LIB` it is the store object's change stamp,
+  the ID of the last transaction that changed it (`STORE_FORMAT.md`
+  §8): every change to the object's header, attributes, data or records
+  raises it, a member's records raising the member's. Under `/QOPT` a
+  read-only volume's files have a constant value from its descriptor,
+  a writable volume's the volume's counter, kept in its label and
+  raised by every change in it; devices and the virtual directories
+  answer 1. No value repeats for an object.
+- The test system's `Files::change_twice(path)` changes a file twice
+  with its `modified` held, for the client's test of two changes in one
+  millisecond.
