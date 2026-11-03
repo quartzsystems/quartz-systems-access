@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "qsa-net", "qap-client", "tn5250", "scs", "qsa-print", "xtask"]
+members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icons", "qsa-install", "qsa-net", "qap-client", "qsa-sql", "tn5250", "scs", "qsa-print", "xtask"]
 
 [workspace.package]
 version = "1.0.0"
@@ -41,6 +41,7 @@ tn5250 = { path = "tn5250" }
 scs = { path = "scs" }
 qsa-print = { path = "qsa-print" }
 qap-client = { path = "qap-client" }
+qsa-sql = { path = "qsa-sql" }
 
 # QAP from the QS/400 repository, pinned to one commit. docs/qap-protocol-spec.md
 # is QS/400's docs/QAP.md at that commit and moves with it (ci/spec-mirror.sh).

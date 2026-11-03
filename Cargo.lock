@@ -1126,6 +1126,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "qsa-sql"
+version = "1.0.0"
+dependencies = [
+ "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=dd1f61a4e93022bd53a4e6cd95b1badcd605bd22)",
+ "tn5250",
+]
+
+[[package]]
 name = "qsa-ui"
 version = "1.0.0"
 dependencies = [

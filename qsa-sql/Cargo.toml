@@ -1,0 +1,15 @@
+[package]
+name = "qsa-sql"
+description = "SQL values for QS/400 Access for Desktop: exact decimals, dates and times in the job's formats, CCSID 65535 data, and the conversions to and from transfer files"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+
+[dependencies]
+qap-proto.workspace = true
+tn5250.workspace = true
+
+[lints]
+workspace = true
