@@ -238,3 +238,161 @@ fn a_read_cancelled_keeps_nothing_of_its_batch() {
     assert!(matches!(finish(&mut r), ReadEnd::Cancelled(_)));
     assert_eq!(std::fs::metadata(&r.path).unwrap().len(), 0);
 }
+
+/// The watch a filter keeps (version 6), and the files it takes from one.
+#[test]
+fn a_filter_watches_one_queue_or_one_user_or_polls() {
+    use qap_client::proto::ops::spool::SpoolTarget;
+    use qap_client::proto::types::ObjectName;
+    let q = |lib: &str, n: &str| SpoolTarget::Queue {
+        outq: ObjectName {
+            library: lib.into(),
+            name: n.into(),
+        },
+    };
+    let user = |p: &str| SpoolTarget::User { profile: p.into() };
+    assert_eq!(Filter::default().target(), Some(user("*CURRENT")));
+    let f = |u: &str, o: &str| Filter {
+        user: u.into(),
+        outq: o.into(),
+        ..Filter::default()
+    };
+    assert_eq!(f("ann", "*ALL").target(), Some(user("ANN")));
+    assert_eq!(f("*ALL", "*ALL").target(), None, "every user everywhere");
+    assert_eq!(f("*ALL", "QGPL/PRT01").target(), Some(q("QGPL", "PRT01")));
+    assert_eq!(
+        f("*CURRENT", "QGPL/PRT01").target(),
+        Some(q("QGPL", "PRT01"))
+    );
+}
+
+/// A watch's events keep the page shown as the system lists it, with no
+/// timer: in place for a change on the page, the page asked for again when
+/// files come, go or move.
+#[test]
+fn a_watch_keeps_the_page_as_the_system_lists_it() {
+    use model::{Effect, apply};
+    use qap_client::proto::ops::spool::{
+        DeviceType, SpoolChange, SpooledFileChanged, SpooledFileId,
+    };
+    use qap_client::proto::types::{JobId, ObjectName};
+    use qap_client::{Watch, WatchEvent};
+    let s = start(qapd::Config {
+        watch_poll: Duration::from_millis(20),
+        ..cfg()
+    });
+    let h = bob(&s);
+    let mine = Filter::default();
+    let prt01 = Filter {
+        user: "*ALL".into(),
+        outq: "QGPL/PRT01".into(),
+        ..Filter::default()
+    };
+    let qprint = Filter {
+        user: "*ALL".into(),
+        outq: "QGPL/QPRINT".into(),
+        ..Filter::default()
+    };
+    for f in [&mine, &prt01, &qprint] {
+        lock(&h).watch(Watch::Spool(f.target().unwrap())).unwrap();
+    }
+    lock(&h).watch_events();
+    let changes = |n: usize| -> Vec<SpooledFileChanged> {
+        let end = Instant::now() + Duration::from_secs(5);
+        let mut got = Vec::new();
+        while got.len() < n && Instant::now() < end {
+            let mut c = lock(&h);
+            c.poll();
+            got.extend(c.watch_events().into_iter().filter_map(|e| match e {
+                WatchEvent::SpoolChanged(c) => Some(c),
+                _ => None,
+            }));
+            drop(c);
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        got
+    };
+    // Each page as shown, kept by the events alone.
+    let mut pages: Vec<(Filter, u32, Vec<SpooledFile>)> = [&mine, &prt01, &qprint]
+        .into_iter()
+        .map(|f| {
+            let (t, files) = listed(&h, f);
+            (f.clone(), t, files)
+        })
+        .collect();
+    let take = |pages: &mut Vec<(Filter, u32, Vec<SpooledFile>)>, cs: &[SpooledFileChanged]| {
+        let mut relist = vec![false; pages.len()];
+        for c in cs {
+            for (i, (f, total, files)) in pages.iter_mut().enumerate() {
+                if Some(&c.target) == f.target().as_ref()
+                    && apply(f, "BOB", files, total, c) == Effect::Relist
+                {
+                    relist[i] = true;
+                }
+            }
+        }
+        // What a window does with Relist: asks for the page once.
+        for (i, (f, total, files)) in pages.iter_mut().enumerate() {
+            if relist[i] {
+                (*total, *files) = listed(&h, f);
+            }
+        }
+        relist
+    };
+    let id = s.c.spool_add(qapd::testing::spool::File {
+        id: SpooledFileId {
+            job: JobId {
+                name: "QPADEV0001".into(),
+                user: "BOB".into(),
+                number: "001234".into(),
+            },
+            file: "WATCHED".into(),
+            number: 1,
+        },
+        outq: ObjectName {
+            library: "QGPL".into(),
+            name: "QPRINT".into(),
+        },
+        device: DeviceType::Ascii,
+        pages: 1,
+        copies: 1,
+        data: b"hello\n".to_vec(),
+        ..qapd::testing::spool::File::default()
+    });
+    // Added: BOB's list and QPRINT's ask for their pages; PRT01's does not.
+    let relist = take(&mut pages, &changes(2));
+    assert_eq!(relist, [true, false, true]);
+    // Held: in place, nothing asked for.
+    assert!(s.c.spool_change(&id, |f| f.status = SpoolStatus::Held));
+    let relist = take(&mut pages, &changes(2));
+    assert_eq!(relist, [false, false, false]);
+    for (f, total, files) in &pages {
+        assert_eq!((*total, files.clone()), listed(&h, f), "{f:?}");
+    }
+    // Moved from QPRINT to PRT01: Removed there, Added here, Changed in
+    // BOB's own list (in place: its queue column).
+    assert!(s.c.spool_change(&id, |f| f.outq.name = "PRT01".into()));
+    let cs = changes(3);
+    let of = |t: &Filter| {
+        cs.iter()
+            .filter(|c| Some(&c.target) == t.target().as_ref())
+            .map(|c| c.change)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(of(&qprint), [SpoolChange::Removed]);
+    assert_eq!(of(&prt01), [SpoolChange::Added]);
+    assert_eq!(of(&mine), [SpoolChange::Changed]);
+    let relist = take(&mut pages, &cs);
+    assert_eq!(relist, [false, true, true]);
+    for (f, total, files) in &pages {
+        assert_eq!((*total, files.clone()), listed(&h, f), "{f:?}");
+    }
+    // Deleted: gone from the two lists that had it.
+    assert!(s.c.spool_remove(&id));
+    let relist = take(&mut pages, &changes(2));
+    assert_eq!(relist, [true, true, false]);
+    for (f, total, files) in &pages {
+        assert_eq!((*total, files.clone()), listed(&h, f), "{f:?}");
+        assert!(files.iter().all(|x| x.id != id));
+    }
+}

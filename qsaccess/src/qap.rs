@@ -701,6 +701,7 @@ pub fn pump(ui: &Ui) {
         if !events.is_empty() {
             crate::messages::watching::events(ui, &system, &profile, &events);
             crate::messages::watch_events(&system.name, &events);
+            crate::splf::watch_events(&system.name, &events);
         }
         if ui.state.borrow_mut().qap.resumed(&k) {
             warn_expiry(Some(&ui.window), &ui.state, &system.name);

@@ -10,7 +10,8 @@ use std::cmp::Ordering;
 
 use qap_client::proto::ServerMessage;
 use qap_client::proto::ops::spool::{
-    DeviceType, ListSpooledFiles, OutputQueue, SpoolStatus, SpooledFile, SpooledFileId,
+    DeviceType, ListSpooledFiles, OutputQueue, SpoolChange, SpoolStatus, SpoolTarget, SpooledFile,
+    SpooledFileChanged, SpooledFileId,
 };
 use qap_client::proto::types::{JobId, ObjectName};
 use qap_client::spool::Action;
@@ -171,6 +172,49 @@ impl Filter {
             start,
             max,
         }
+    }
+
+    /// The spool watch that tells this filter's list what changes (QAP
+    /// version 6): the output queue's files when one queue is chosen, else
+    /// the user's files on every queue. `None` for every user's files on
+    /// every queue, which cannot be watched: the list is then refreshed on
+    /// a timer.
+    pub fn target(&self) -> Option<SpoolTarget> {
+        if !any(&self.outq) {
+            return object_named(&self.outq).map(|outq| SpoolTarget::Queue { outq });
+        }
+        let user = self.user.trim().to_ascii_uppercase();
+        match user.as_str() {
+            "*ALL" => None,
+            "" => Some(SpoolTarget::User {
+                profile: "*CURRENT".into(),
+            }),
+            _ => Some(SpoolTarget::User { profile: user }),
+        }
+    }
+
+    /// Whether `f`, as the system lists it, belongs in this filter's list;
+    /// `me` is the signed-on profile, for `*CURRENT`.
+    pub fn matches(&self, f: &SpooledFile, me: &str) -> bool {
+        let user = self.user.trim();
+        let user_ok = if user.is_empty() || user.eq_ignore_ascii_case("*CURRENT") {
+            f.user.trim().eq_ignore_ascii_case(me.trim())
+        } else {
+            any(user) || f.user.trim().eq_ignore_ascii_case(user)
+        };
+        let queue_ok = any(&self.outq)
+            || object_named(&self.outq).is_some_and(|q| {
+                q.name.eq_ignore_ascii_case(f.outq.name.trim())
+                    && (q.library.eq_ignore_ascii_case("*LIBL")
+                        || q.library.eq_ignore_ascii_case(f.outq.library.trim()))
+            });
+        let status_ok = self.status.is_none_or(|s| s == f.status);
+        let form_ok = any(&self.form_type)
+            || f.form_type
+                .trim()
+                .eq_ignore_ascii_case(self.form_type.trim());
+        let data_ok = any(&self.user_data) || f.user_data.trim() == self.user_data.trim();
+        user_ok && queue_ok && status_ok && form_ok && data_ok
     }
 
     /// What the list's title says it shows: `on QGPL/QPRINT` and the like.
@@ -440,6 +484,52 @@ pub fn scs_options(system_ccsid: u16, paper: qsa_config::qsp::Paper) -> scs::Opt
             qsa_config::qsp::Paper::Legal => scs::Paper::Legal,
         },
         font: scs::font::DEFAULT_FONT,
+    }
+}
+
+/// What a watch's change did to the page shown.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Effect {
+    /// Nothing on the page, nor its bounds.
+    Nothing,
+    /// A row on the page changed in place.
+    Shown,
+    /// The page's rows or bounds may have moved: ask for the page again.
+    Relist,
+}
+
+/// Applies a watch's change to the page shown, `files`, of `total` files
+/// that `filter` lists for `me`. A file on the page that changed and still
+/// belongs is replaced in place; one that went, or no longer belongs, is
+/// taken off. A file added, one that now belongs, or one gone from
+/// elsewhere in the list may move the page's bounds: the page is asked
+/// for again.
+pub fn apply(
+    filter: &Filter,
+    me: &str,
+    files: &mut Vec<SpooledFile>,
+    total: &mut u32,
+    c: &SpooledFileChanged,
+) -> Effect {
+    let at = files.iter().position(|f| f.id == c.id);
+    match (c.change, &c.file, at) {
+        (SpoolChange::Changed, Some(f), Some(i)) if filter.matches(f, me) => {
+            files[i] = f.clone();
+            Effect::Shown
+        }
+        (SpoolChange::Changed | SpoolChange::Removed, _, Some(i)) => {
+            files.remove(i);
+            *total = total.saturating_sub(1);
+            Effect::Relist
+        }
+        (SpoolChange::Changed | SpoolChange::Added, Some(f), None) if filter.matches(f, me) => {
+            if c.change == SpoolChange::Added {
+                *total = total.saturating_add(1);
+            }
+            Effect::Relist
+        }
+        (SpoolChange::Removed, _, None) => Effect::Relist,
+        _ => Effect::Nothing,
     }
 }
 

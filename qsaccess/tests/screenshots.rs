@@ -517,6 +517,18 @@ fn printer_output_views(state: &Shared) -> Vec<(String, Window)> {
             "printer-output-empty".to_owned(),
             printer_output(state, empty_filter, Vec::new(), 0),
         ),
+        ("printer-output-live".to_owned(), {
+            use qsaccess::splf::PrinterOutput;
+            let st = state.borrow();
+            let sys = st.systems.get("sys1.example.net").expect("fixture system");
+            let p = PrinterOutput::build(sys, &st.settings.printer_output);
+            let first: Vec<_> = bobs.iter().take(25).cloned().collect();
+            p.show_files(&model::Filter::default(), first, total, &model::utc_time);
+            p.show_live(qap_client::proto::ops::spool::SpoolTarget::User {
+                profile: "*CURRENT".into(),
+            });
+            p.window().clone()
+        }),
         (
             "printer-output-hold".to_owned(),
             dialogs::hold_box(&picked).build().0,

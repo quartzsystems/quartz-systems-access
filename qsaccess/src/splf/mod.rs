@@ -30,6 +30,15 @@
 //! - Refresh, and Auto-refresh (Off, 15, 30 or 60 seconds): only while the
 //!   window is shown and not minimised, only the page in view, keeping the
 //!   selection and the scroll position.
+//! - On QAP version 6 the list keeps up as changes happen instead
+//!   (`QAD9020`): the filter's output queue, or with every queue its one
+//!   user (`*CURRENT` or a profile), is watched on the shared connection;
+//!   a file changed on the page changes in place, and one added or gone
+//!   asks for the page once. Auto-refresh is set aside while the watch
+//!   works. Every user on every queue cannot be watched, and a system
+//!   before version 6 has no watches: the timer refreshes the list as
+//!   before (`QAD9021`), as it does when a watch fails. After a
+//!   reconnect the watch is watched again and the page asked for once.
 //!
 //! The network never runs on the GUI thread, which never waits for the
 //! shared client either: workers lock it only to send. A repeating timeout
@@ -55,12 +64,13 @@ use fltk::menu::{Choice, MenuBar, MenuFlag, MenuItem};
 use fltk::misc::InputChoice;
 use fltk::prelude::*;
 use fltk::window::Window;
-use qap_client::Error;
 use qap_client::proto::Op;
 use qap_client::proto::ops::spool::{
-    ListOutputQueues, OutputQueue, OutputQueues, SpooledFile, SpooledFileId, SpooledFiles,
+    ListOutputQueues, OutputQueue, OutputQueues, SpoolTarget, SpooledFile, SpooledFileId,
+    SpooledFiles,
 };
 use qap_client::spool::{Action, Paging, ReadEnd};
+use qap_client::{Error, Watch, WatchEvent};
 use qsa_config::System;
 use qsa_msg::id;
 use qsa_ui::chan::{self, Emit, MenuEmit};
@@ -81,6 +91,10 @@ pub const H: i32 = 560;
 
 /// How often the window looks at its workers.
 const POLL: f64 = 0.1;
+
+/// A watch's burst of changes is over this long after its last one, and
+/// the page is asked for again once.
+const RELIST_AFTER: Duration = Duration::from_millis(300);
 
 /// What menus, toolbar, buttons and the list ask for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,6 +134,8 @@ pub struct Widgets {
     pub previous: Button,
     pub next: Button,
     pub auto_refresh: Choice,
+    /// Sets Auto-refresh aside while a spool watch keeps the list up.
+    pub auto_refresh_switch: controls::Switch,
     pub cancel_read: Button,
     pub status: StatusBar,
 }
@@ -153,6 +169,32 @@ struct St {
     reads: Vec<(Reading, Purpose)>,
     /// The page model's options for this system.
     scs: scs::Options,
+    /// How the list keeps up with the system: a spool watch (version 6)
+    /// or the auto-refresh timer.
+    watch: Watching,
+    /// Ask for the page again at this time: a watch's changes moved it.
+    relist_at: Option<Instant>,
+}
+
+/// How a Printer Output window keeps up with the system.
+enum Watching {
+    /// The auto-refresh timer: no watch for this filter (every user on
+    /// every queue), none on the system (before version 6), or one that
+    /// failed.
+    Polling,
+    /// A watch of the target asked for, its outcome to come.
+    Asking(SpoolTarget, mpsc::Receiver<Result<(), Error>>),
+    /// The target is watched: its changes come as they happen.
+    Live(SpoolTarget),
+}
+
+impl Watching {
+    fn target(&self) -> Option<&SpoolTarget> {
+        match self {
+            Watching::Polling => None,
+            Watching::Asking(t, _) | Watching::Live(t) => Some(t),
+        }
+    }
 }
 
 /// One Printer Output window.
@@ -371,6 +413,7 @@ fn build_widgets(system: &str, rows: u32, refresh_secs: u32) -> (Widgets, chan::
         .unwrap_or(2);
     auto_refresh.set_value(at as i32);
     auto_refresh.set_callback(move |_| tx.send(Cmd::AutoRefresh));
+    let auto_refresh_switch = controls::Switch::for_choice(&mut auto_refresh);
 
     let status = StatusBar::new(0, H - StatusBar::HEIGHT, W);
     window.resizable(list.table());
@@ -390,6 +433,7 @@ fn build_widgets(system: &str, rows: u32, refresh_secs: u32) -> (Widgets, chan::
             previous,
             next,
             auto_refresh,
+            auto_refresh_switch,
             cancel_read,
             status,
         },
@@ -434,6 +478,8 @@ impl PrinterOutput {
                 acting: None,
                 reads: Vec::new(),
                 scs: model::scs_options(37, settings.paper),
+                watch: Watching::Polling,
+                relist_at: None,
             }),
         }
     }
@@ -631,6 +677,8 @@ impl PrinterOutput {
         self.take_queues();
         self.take_actions();
         self.take_reads();
+        self.take_watch();
+        self.relist_when_due();
         self.auto_refresh();
         self.w.window.shown()
     }
@@ -704,11 +752,19 @@ impl PrinterOutput {
         }
     }
 
-    fn auto_refresh(&self) {
-        let secs = usize::try_from(self.w.auto_refresh.value())
+    fn refresh_secs(&self) -> u32 {
+        usize::try_from(self.w.auto_refresh.value())
             .ok()
             .and_then(|i| qsa_config::settings::AUTO_REFRESH.get(i).copied())
-            .unwrap_or(0);
+            .unwrap_or(0)
+    }
+
+    fn auto_refresh(&self) {
+        // A watch that works says what changes; the timer waits.
+        if matches!(self.st.borrow().watch, Watching::Live(_)) {
+            return;
+        }
+        let secs = self.refresh_secs();
         let w = &self.w.window;
         // Shown and not minimised.
         if secs == 0 || !w.shown() || !w.visible() {
@@ -730,6 +786,205 @@ impl PrinterOutput {
         *self.selected_ids.borrow_mut() = ids;
     }
 
+    /// Watches what the filter lists (version 6), off the GUI thread, and
+    /// stops watching what it listed before; or polls when the filter
+    /// cannot be watched.
+    fn watch_filter(&self) {
+        let Some(h) = self.handle() else { return };
+        let target = self.st.borrow().filter.target();
+        let before = self.st.borrow().watch.target().cloned();
+        if target == before {
+            return;
+        }
+        if let Some(old) = before {
+            self.unwatch(&h, old);
+        }
+        let Some(t) = target else {
+            self.st.borrow_mut().watch = Watching::Polling;
+            self.show_mode();
+            return;
+        };
+        let (tx, rx) = mpsc::channel();
+        let w = Watch::Spool(t.clone());
+        std::thread::spawn(move || {
+            let _ = tx.send(lock(&h).watch(w));
+            app::awake();
+        });
+        self.st.borrow_mut().watch = Watching::Asking(t, rx);
+    }
+
+    /// Stops watching `t` unless another Printer Output window of the
+    /// system watches it too.
+    fn unwatch(&self, h: &Handle, t: SpoolTarget) {
+        let system = self.system();
+        let shared = WINDOWS.with(|v| {
+            v.borrow().iter().any(|p| {
+                !std::ptr::eq(&**p, self)
+                    && p.w.window.shown()
+                    && p.system().eq_ignore_ascii_case(&system)
+                    && p.st.borrow().watch.target() == Some(&t)
+            })
+        });
+        if shared {
+            return;
+        }
+        let h = h.clone();
+        std::thread::spawn(move || {
+            if let Err(e) = lock(&h).unwatch(&Watch::Spool(t)) {
+                crate::log!("{system}: no longer watching spooled files: {e}");
+            }
+        });
+    }
+
+    fn take_watch(&self) {
+        let r = {
+            let st = self.st.borrow();
+            match &st.watch {
+                Watching::Asking(t, rx) => match rx.try_recv() {
+                    Ok(r) => Some((t.clone(), r)),
+                    Err(mpsc::TryRecvError::Empty) => None,
+                    Err(mpsc::TryRecvError::Disconnected) => {
+                        Some((t.clone(), Err(Error::Closed(qap_client::Closed::ByClient))))
+                    }
+                },
+                _ => None,
+            }
+        };
+        let Some((t, r)) = r else { return };
+        match r {
+            Ok(()) => {
+                self.st.borrow_mut().watch = Watching::Live(t);
+                // What changed while the watch was asked for.
+                self.keep_selection();
+                self.list();
+            }
+            Err(e) => {
+                // Before version 6 this is no failure: the list polls, as
+                // it always did.
+                if !matches!(e, Error::Unsupported { .. }) {
+                    self.watch_failed(&t, &e.to_string());
+                }
+                self.st.borrow_mut().watch = Watching::Polling;
+            }
+        }
+        self.show_mode();
+    }
+
+    /// `QAD9011` for a spool watch of this window's.
+    fn watch_failed(&self, t: &SpoolTarget, why: &str) {
+        let me = self.me();
+        let name = crate::messages::watching::watch_name(&Watch::Spool(t.clone()), &me);
+        let m = qsa_msg::message(
+            id::WATCH_STOPPED,
+            &[&name, &self.system(), why.trim_end_matches('.')],
+        );
+        crate::log!("{m}");
+    }
+
+    /// The signed-on profile, for `*CURRENT`.
+    fn me(&self) -> String {
+        self.state
+            .as_ref()
+            .and_then(|s| crate::qap::signed_on(s, &self.system()))
+            .unwrap_or_default()
+    }
+
+    /// Says how the list keeps up: `QAD9020` while watched, with
+    /// Auto-refresh set aside; `QAD9021` while the timer refreshes it.
+    fn show_mode(&self) {
+        let live = matches!(self.st.borrow().watch, Watching::Live(_));
+        let mut ar = self.w.auto_refresh.clone();
+        self.w.auto_refresh_switch.set_enabled(!live);
+        let m = if live {
+            Some(qsa_msg::message(id::SPOOL_LIVE, &[]))
+        } else {
+            let secs = self.refresh_secs();
+            (secs > 0).then(|| qsa_msg::message(id::SPOOL_POLLING, &[&secs.to_string()]))
+        };
+        ar.set_tooltip(&m.as_ref().map(|m| m.text.clone()).unwrap_or_default());
+        if let Some(m) = m {
+            self.report(&m.to_string());
+        }
+    }
+
+    /// Shows the window as a watch keeps it, without a system
+    /// (screenshots).
+    pub fn show_live(&self, target: SpoolTarget) {
+        self.st.borrow_mut().watch = Watching::Live(target);
+        self.show_mode();
+    }
+
+    /// Asks for the page again once a burst of changes is over.
+    fn relist_when_due(&self) {
+        let due = self
+            .st
+            .borrow()
+            .relist_at
+            .is_some_and(|at| Instant::now() >= at);
+        if due {
+            self.st.borrow_mut().relist_at = None;
+            self.keep_selection();
+            self.list();
+        }
+    }
+
+    /// What the system's watches reported, for this window.
+    fn watch_event(&self, e: &WatchEvent) {
+        let target = self.st.borrow().watch.target().cloned();
+        let live = matches!(self.st.borrow().watch, Watching::Live(_));
+        match e {
+            WatchEvent::SpoolChanged(c) if live && Some(&c.target) == target.as_ref() => {
+                let me = self.me();
+                self.keep_selection();
+                let effect = {
+                    let mut st = self.st.borrow_mut();
+                    let St {
+                        filter,
+                        files,
+                        paging,
+                        ..
+                    } = &mut *st;
+                    model::apply(filter, &me, files, &mut paging.total, c)
+                };
+                match effect {
+                    model::Effect::Nothing => {}
+                    model::Effect::Shown => self.fill(&model::local_time),
+                    model::Effect::Relist => {
+                        self.fill(&model::local_time);
+                        // One list for a burst of changes.
+                        let mut st = self.st.borrow_mut();
+                        st.relist_at.get_or_insert(Instant::now() + RELIST_AFTER);
+                    }
+                }
+            }
+            // Watched again after a reconnect: what changed meanwhile was
+            // not reported, so the page is asked for once.
+            WatchEvent::SpoolRewatched(t) if live && Some(t) == target.as_ref() => {
+                self.keep_selection();
+                self.list();
+            }
+            WatchEvent::Failed {
+                watch: Watch::Spool(t),
+                failure,
+            } if Some(t) == target.as_ref() => {
+                self.watch_failed(t, &failure.text);
+                self.st.borrow_mut().watch = Watching::Polling;
+                self.show_mode();
+            }
+            _ => {}
+        }
+    }
+
+    /// The window is closing: its watch goes unless another window shares
+    /// it.
+    fn closing(&self) {
+        let t = self.st.borrow().watch.target().cloned();
+        if let (Some(t), Some(h)) = (t, self.handle()) {
+            self.st.borrow_mut().watch = Watching::Polling;
+            self.unwatch(&h, t);
+        }
+    }
+
     fn command(&self, c: Cmd) {
         match c {
             Cmd::Go => {
@@ -742,6 +997,7 @@ impl PrinterOutput {
                 }
                 self.selected_ids.borrow_mut().clear();
                 self.list();
+                self.watch_filter();
             }
             Cmd::Refresh => {
                 self.keep_selection();
@@ -845,6 +1101,7 @@ impl PrinterOutput {
                     }
                 }
                 self.st.borrow_mut().last_list = Instant::now();
+                self.show_mode();
             }
             Cmd::CancelRead => {
                 for (r, _) in &self.st.borrow().reads {
@@ -1152,6 +1409,7 @@ pub fn open(
         Status::Active,
     );
     p.list();
+    p.watch_filter();
     p.list_queues();
     WINDOWS.with(|v| v.borrow_mut().push(p));
     tick();
@@ -1180,6 +1438,11 @@ pub fn pump() {
     }
     let windows: Vec<Rc<PrinterOutput>> = WINDOWS.with(|v| v.borrow().clone());
     let open: Vec<bool> = windows.iter().map(|p| p.pump()).collect();
+    for (p, open) in windows.iter().zip(&open) {
+        if !open {
+            p.closing();
+        }
+    }
     queues::pump();
     viewer::pump();
     WINDOWS.with(|v| {
@@ -1192,6 +1455,22 @@ pub fn pump() {
         });
     });
     PUMPING.with(|p| p.set(false));
+}
+
+/// What `system`'s watches reported, for its Printer Output windows.
+pub fn watch_events(system: &str, events: &[WatchEvent]) {
+    let windows: Vec<Rc<PrinterOutput>> = WINDOWS.with(|v| {
+        v.borrow()
+            .iter()
+            .filter(|p| p.w.window.shown() && p.system().eq_ignore_ascii_case(system))
+            .cloned()
+            .collect()
+    });
+    for p in windows {
+        for e in events {
+            p.watch_event(e);
+        }
+    }
 }
 
 /// Whether any Printer Output or Output Queues window is open.
