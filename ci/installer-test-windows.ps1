@@ -17,6 +17,10 @@ param(
 
 $ErrorActionPreference = 'Stop'
 $Installer = (Resolve-Path $Installer).Path
+# The release in the file name, QS400-Access-VxRyMz-..., gives the version
+# the binaries must carry, x.y.z (VxRyMz).
+if ((Split-Path -Leaf $Installer) -notmatch '-V(\d+)R(\d+)M(\d+)-') { throw "no VxRyMz release in $Installer" }
+$productVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3]) (V$($Matches[1])R$($Matches[2])M$($Matches[3]))"
 $failures = New-Object System.Collections.Generic.List[string]
 function Check($ok, $what) {
     if ($ok) { Write-Host "ok    $what" } else { Write-Host "FAIL  $what"; $failures.Add($what) }
@@ -98,7 +102,7 @@ Check (Test-Path "$dir\qsaccess.exe") "qsaccess.exe installed"
 Check (Test-Path "$dir\uninstall.exe") "uninstall.exe installed"
 Check (Test-Path "$dir\install-manifest.toml") "install manifest written"
 $v = (Get-Item "$dir\qsaccess.exe").VersionInfo
-Check ($v.ProductName -eq 'QS/400 Access for Desktop' -and $v.CompanyName -eq 'Quartz Systems' -and $v.ProductVersion -eq '1.0.0 (V1R0M0)') "version information embedded"
+Check ($v.ProductName -eq 'QS/400 Access for Desktop' -and $v.CompanyName -eq 'Quartz Systems' -and $v.ProductVersion -eq $productVersion) "version information embedded"
 $cmd = (Get-ItemProperty "$hive\Software\Classes\QuartzSystems.Access.Session.1\shell\open\command").'(default)'
 Check ($cmd -eq "`"$dir\qsaccess.exe`" open `"%1`"") "open command for .qsd"
 Check ((Get-ItemProperty "$hive\Software\Classes\.qsd").'(default)' -eq 'QuartzSystems.Access.Session.1') ".qsd names its ProgID"

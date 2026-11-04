@@ -44,7 +44,15 @@ pub const PAGES: [(&str, &str, &str); 8] = [
     (
         "welcome",
         "Welcome",
-        "This installs QS/400 Access for Desktop V1R0M0 on this computer.",
+        concat!(
+            "This installs QS/400 Access for Desktop V",
+            env!("CARGO_PKG_VERSION_MAJOR"),
+            "R",
+            env!("CARGO_PKG_VERSION_MINOR"),
+            "M",
+            env!("CARGO_PKG_VERSION_PATCH"),
+            " on this computer."
+        ),
     ),
     (
         "licence",

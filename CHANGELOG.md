@@ -1,10 +1,40 @@
 # Changelog
 
-Changes to the public API of the crates other projects depend on by git
-(QS/400 pins them to a commit), and removals of crates that were published
-here. Breaking changes are marked **Breaking**.
+One section per release, newest first, headed with its version (the one in
+VERSION) and date; a release's section is its GitHub release's notes. Work
+not yet released goes under Unreleased, which `ci/version.sh prepare X.Y.Z`
+turns into X.Y.Z's section (see docs/releasing.md).
+
+Each section has the changes to QS/400 Access for Desktop, then the changes
+to the public API of the crates other projects depend on by git (QS/400 pins
+them to a commit) and removals of crates that were published here, under
+each crate's name. Breaking changes are marked **Breaking**.
 
 ## Unreleased
+
+## 1.1.0 (2026-11-04)
+
+### QS/400 Access for Desktop
+
+First release, V1R0M0, for QS/400 over QAP versions 1 to 6.
+
+- 5250 display sessions over Telnet or Telnet TLS (TN5250E), with keyboard
+  maps, the keypad, copy and paste, Print Screen, clickable function-key
+  hotspots, macros, automatic sign-on by QAP ticket, and `.qsd` session
+  files in Session Manager.
+- 5250 printer sessions (`.qsp`) writing PDF or printing to a system
+  printer, with spooled jobs, a test page and reconnecting.
+- System Configurations with Verify Connection, Sign On and Change Password
+  over QAP, one shared connection per system, and the password expiry
+  warning. Passwords are never saved.
+- Run Command with Prompt (F4), Printer Output with Output Queues and the
+  spooled file viewer, Run SQL, Schemas, Data Transfer to and from the
+  system with `.qdx` transfer requests and `qsaccess run`, the Integrated
+  File System window with its transfer queue, editor and Properties, and
+  Messages with Send Message, Message Arrived and the Messages-waiting
+  indicator.
+- Installers for Windows (just me or all users) and Linux (glibc 2.31 or
+  later, root or user), with upgrade, repair, uninstall and a silent mode.
 
 ### tn5250
 

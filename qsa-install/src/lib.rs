@@ -31,10 +31,10 @@ pub mod windows;
 
 /// Product name.
 pub const PRODUCT: &str = "QS/400 Access for Desktop";
-/// Version installed.
-pub const VERSION: &str = "1.0.0";
-/// Release installed.
-pub const RELEASE: &str = "V1R0M0";
+/// Version installed: VERSION's, through the workspace version.
+pub const VERSION: &str = env!("CARGO_PKG_VERSION");
+/// Release installed, VxRyMz from the version.
+pub const RELEASE: &str = qsaccess::VERSION;
 /// Publisher.
 pub const PUBLISHER: &str = "Quartz Systems";
 

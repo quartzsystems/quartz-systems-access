@@ -1,8 +1,12 @@
 name: ci
 
 on:
+  # Branches only: a tag runs this through release.yml instead.
   push:
+    branches: ["**"]
   pull_request:
+  # release.yml runs every check before it publishes.
+  workflow_call:
   workflow_dispatch:
     inputs:
       bless:
@@ -43,6 +47,9 @@ jobs:
 
       - name: QAP spec mirror matches the pinned commit
         run: ci/spec-mirror.sh
+
+      - name: Cargo.toml's version is VERSION's
+        run: ci/version.sh check
 
       - name: Format
         run: cargo fmt --all --check
@@ -132,6 +139,9 @@ jobs:
       - name: QAP spec mirror matches the pinned commit
         run: ci/spec-mirror.sh
 
+      - name: Cargo.toml's version is VERSION's
+        run: ci/version.sh check
+
       - name: Format
         run: cargo fmt --all --check
 
@@ -195,32 +205,41 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           key: installer-windows
+      - name: Installer file name, from VERSION
+        id: name
+        shell: bash
+        run: echo "installer=target/dist/QS400-Access-$(ci/version.sh release)-windows-x86_64.exe" >> "$GITHUB_OUTPUT"
       - name: Build the installer
         run: cargo xtask dist
       - name: Just me
-        run: ci/installer-test-windows.ps1 -Installer target/dist/QS400-Access-V1R0M0-windows-x86_64.exe -Scope user
+        run: ci/installer-test-windows.ps1 -Installer ${{ steps.name.outputs.installer }} -Scope user
       # The runner's account is an administrator, so there is no consent
       # prompt.
       - name: All users
-        run: ci/installer-test-windows.ps1 -Installer target/dist/QS400-Access-V1R0M0-windows-x86_64.exe -Scope machine
+        run: ci/installer-test-windows.ps1 -Installer ${{ steps.name.outputs.installer }} -Scope machine
       - uses: actions/upload-artifact@v4
         with:
           name: installer-windows
-          path: target/dist/QS400-Access-V1R0M0-windows-x86_64.exe
+          path: ${{ steps.name.outputs.installer }}
+          if-no-files-found: error
 
   installer-linux:
     name: installer (Linux, glibc 2.31 build; Ubuntu 24.04 and AlmaLinux 9)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+      - name: Installer file name, from VERSION
+        id: name
+        run: echo "installer=target/dist/QS400-Access-$(ci/version.sh release)-linux-x86_64" >> "$GITHUB_OUTPUT"
       - name: Build the installer in the glibc 2.31 image
         run: ci/dist-linux.sh
       - name: Root and user, in fresh containers
-        run: ci/installer-test-linux-containers.sh target/dist/QS400-Access-V1R0M0-linux-x86_64
+        run: ci/installer-test-linux-containers.sh ${{ steps.name.outputs.installer }}
       - uses: actions/upload-artifact@v4
         with:
           name: installer-linux
-          path: target/dist/QS400-Access-V1R0M0-linux-x86_64
+          path: ${{ steps.name.outputs.installer }}
+          if-no-files-found: error
 
   screenshot-report:
     name: screenshot report (Windows vs Linux)

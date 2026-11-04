@@ -38,5 +38,36 @@ pub mod verify;
 
 /// Product name, as shown in titles.
 pub const PRODUCT: &str = "QS/400 Access for Desktop";
-/// Product version.
-pub const VERSION: &str = "V1R0M0";
+/// Product version as a release, VxRyMz: the version in VERSION (through
+/// the workspace version), major as V, minor as R and patch as M.
+pub const VERSION: &str = concat!(
+    "V",
+    env!("CARGO_PKG_VERSION_MAJOR"),
+    "R",
+    env!("CARGO_PKG_VERSION_MINOR"),
+    "M",
+    env!("CARGO_PKG_VERSION_PATCH")
+);
+
+#[cfg(test)]
+mod tests {
+    /// VERSION at the root is the version: Cargo.toml's must follow it
+    /// (ci/version.sh prepare changes both).
+    #[test]
+    fn version_follows_the_version_file() {
+        let file = include_str!("../../VERSION").trim();
+        assert_eq!(
+            env!("CARGO_PKG_VERSION"),
+            file,
+            "ci/version.sh prepare {file}"
+        );
+        let mut parts = file.split('.');
+        let release = format!(
+            "V{}R{}M{}",
+            parts.next().unwrap(),
+            parts.next().unwrap(),
+            parts.next().unwrap()
+        );
+        assert_eq!(super::VERSION, release);
+    }
+}

@@ -188,6 +188,10 @@ Each platform has one installer file, built with `cargo xtask dist` (Linux:
 - `QS400-Access-V1R0M0-windows-x86_64.exe`
 - `QS400-Access-V1R0M0-linux-x86_64` (make it executable and run it)
 
+V1R0M0 is the release of the version in `VERSION`. Tagged versions are
+built, tested and published as GitHub releases with their `CHANGELOG.md`
+section: see [docs/releasing.md](docs/releasing.md).
+
 Run it for the Setup wizard: Welcome, Licence, Install for (Just me or All
 users), Location, Options (menu entries, desktop shortcut, file types),
 Ready, Progress, Finish. The installer checks its own checksum before it

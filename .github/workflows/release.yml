@@ -1,0 +1,81 @@
+name: release
+
+# A tag v<VERSION> publishes a GitHub release: the tag is checked against
+# VERSION and CHANGELOG.md, every check in ci.yml runs (the installers built
+# and tested on both platforms among them), and the two installers, their
+# SHA-256 sums and CHANGELOG.md's section for the version are published.
+# See docs/releasing.md.
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: tag, VERSION and CHANGELOG.md agree
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          ci/version.sh check "$GITHUB_REF_NAME"
+          echo "version=$(ci/version.sh)" >> "$GITHUB_OUTPUT"
+          echo "release=$(ci/version.sh release)" >> "$GITHUB_OUTPUT"
+
+  ci:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  publish:
+    name: publish ${{ needs.version.outputs.release }}
+    needs: [version, ci]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      # The installers ci.yml built and tested in this run.
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: installer-*
+          merge-multiple: true
+          path: dist
+
+      - name: Installers and their sums
+        working-directory: dist
+        run: |
+          r=${{ needs.version.outputs.release }}
+          test -f "QS400-Access-$r-windows-x86_64.exe"
+          test -f "QS400-Access-$r-linux-x86_64"
+          chmod +x "QS400-Access-$r-linux-x86_64"
+          sha256sum QS400-Access-* > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Release notes from CHANGELOG.md
+        run: |
+          {
+            ci/version.sh notes
+            echo
+            echo "The installers are not signed: see the README's Installing section. Check a download against SHA256SUMS."
+          } > notes.md
+          cat notes.md
+
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --verify-tag \
+            --title "QS/400 Access for Desktop ${{ needs.version.outputs.release }} (${{ needs.version.outputs.version }})" \
+            --notes-file notes.md

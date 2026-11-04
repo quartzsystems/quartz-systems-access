@@ -245,14 +245,21 @@ pub fn windows_res(icon: Icon, version: &VersionInfo) -> Vec<u8> {
     out
 }
 
-/// The version information of QS/400 Access for Desktop's binaries.
+/// The version information of QS/400 Access for Desktop's binaries: the
+/// version in VERSION, through the workspace version, and its release.
 pub fn product_version(description: &str, file: &str) -> VersionInfo {
+    let part = |s: &str| s.parse::<u16>().expect("version parts fit in 16 bits");
+    let (major, minor, patch) = (
+        env!("CARGO_PKG_VERSION_MAJOR"),
+        env!("CARGO_PKG_VERSION_MINOR"),
+        env!("CARGO_PKG_VERSION_PATCH"),
+    );
     VersionInfo {
         product: "QS/400 Access for Desktop".into(),
         company: "Quartz Systems".into(),
         description: description.into(),
-        version: [1, 0, 0, 0],
-        version_text: "1.0.0 (V1R0M0)".into(),
+        version: [part(major), part(minor), part(patch), 0],
+        version_text: format!("{major}.{minor}.{patch} (V{major}R{minor}M{patch})"),
         internal_name: file.trim_end_matches(".exe").into(),
         original_filename: file.into(),
         copyright: "(C) 2026 Quartz Systems".into(),
@@ -321,12 +328,13 @@ mod tests {
             .chunks(2)
             .map(|c| char::from_u32(u16::from_le_bytes([c[0], c[1]]).into()).unwrap_or('?'))
             .collect();
+        let file_version = format!("{}.0", env!("CARGO_PKG_VERSION"));
         for want in [
             "VS_VERSION_INFO",
             "QS/400 Access for Desktop",
             "Quartz Systems",
-            "1.0.0 (V1R0M0)",
-            "1.0.0.0",
+            v.version_text.as_str(),
+            file_version.as_str(),
             "Translation",
         ] {
             assert!(text.contains(want), "{want} missing");
