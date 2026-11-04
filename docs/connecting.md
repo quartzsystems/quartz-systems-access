@@ -34,7 +34,7 @@ commit. It is never edited here: a change goes to QS/400 first, and the copy
 is refreshed in the same commit as the re-pin (`ci/spec-mirror.sh` checks
 both).
 
-- **Versions.** The program offers QAP versions 1 to 5, and the server
+- **Versions.** The program offers QAP versions 1 to 6, and the server
   picks the highest both speak. Version 2 adds Run Command (the `Command`
   service: run, check and describe CL commands), the password expiry
   warning (`PasswordStatus`) and 5250 automatic sign-on by ticket
@@ -46,14 +46,23 @@ both).
   system that speaks only version 1 or 2. Version 4 adds Run SQL, Schemas
   and Data Transfer of tables (the `Sql` service, on connections attached
   to the session), and version 5 the Integrated File System window and
-  file transfers (the `Ifs` service); each is disabled with `QAD5001` on a
-  system older than the version it needs.
+  file transfers (the `Ifs` service), and version 6 Messages (the
+  `Messages` service), watches of message queues and spooled files that
+  report changes as they happen, and `Stat`, a file's change count; each
+  is disabled with `QAD5001` on a system older than the version it needs,
+  and Printer Output and the editor work there as before.
 - **Requests side by side.** One connection carries every request of a
   system's session. The server runs commands one at a time, in the order
   they came, and everything else beside them, so a reply can come back
   before one asked earlier: each is matched to its request by ID. Short
   requests time out; a command that runs and a spooled file being read run
   until they end or are cancelled, and nothing cancels them by itself.
+- **Watches (version 6).** The shared connection watches the profile's own
+  message queue, `QSYSOPR` when chosen, and what each Printer Output window
+  lists. Watches only look: a 5250 session holding a queue in break mode
+  keeps it. They end with their connection, so after a resume or a new
+  sign-on the program watches again and lists what arrived meanwhile, each
+  message once.
 - **TLS 1.3 only.** QAP has no plain mode and no older TLS version. A
   connection that cannot agree on TLS 1.3 fails with `QAD4054`.
 - **The server's certificate.** The QAP server presents the certificate

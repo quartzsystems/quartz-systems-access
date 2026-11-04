@@ -87,6 +87,28 @@ download is written beside its target as `<name>.qsapart` and renamed when
 complete; **Retry** goes on from where a binary transfer, or a text
 download, stopped.
 
+**Messages** (General) needs QAP version 6. It lists a message queue newest
+first, 100 a page: the profile's own, `QSYSOPR` when the profile may read
+it, or any other by library and name; inquiries waiting for a reply are in
+bold. Select a message for its second-level text as sent and, for an
+inquiry, reply to it (an empty reply is its default); Remove takes
+messages away, after asking, and asks again for an inquiry not answered,
+whose sender then gets no reply. **Send Message...** sends to a user or a
+queue; an inquiry's reply shows in the dialog when it comes. While signed
+on, the profile's own queue is watched, and `QSYSOPR` too when chosen in
+**Messages > Options** (off by default): a new message shows at once, and
+an inquiry opens **Message Arrived** (Options sets what does: inquiries
+only, all, or none) without taking the keyboard from the window being
+typed in; its taskbar entry flashes instead (marked urgent on X11). The
+main window's status bar says **Messages waiting: N**; a click opens
+Messages. After a dropped connection or a new sign-on the program watches
+again and lists what it missed, each message once. On version 6
+**Printer Output** keeps up as files are made, change or go, without
+refreshing on a timer, for one user or one output queue; every user on
+every queue, and older systems, refresh on the Auto-refresh timer as
+before. The editor's check for a file changed on the system uses the
+system's change count on version 6.
+
 ### Transfer requests and `qsaccess run`
 
 A transfer can be saved as a `.qdx` request (**Save Request...** in either

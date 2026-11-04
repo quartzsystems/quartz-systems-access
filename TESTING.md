@@ -155,8 +155,11 @@ database (`qapd::testing::sql`):
 - `qsaccess/tests/ifs_editor.rs`: the editor's reads (each CCSID, the mixed
   file, a link, binary as a hex dump read-only, over 8 MiB read-only, the
   200 MiB file refused, `InUse` then the read after the hold ends) and
-  saves (the CCSID kept, the change time moved, Save As in another CCSID,
-  `Exists` for a name taken).
+  saves (the CCSID kept, Save As in another CCSID, `Exists` for a name
+  taken). What a save checks: on version 6 `Stat`'s change count, moved by
+  a save with no wait and by `Files::change_twice` (two changes in one
+  millisecond, `modified` held), a link's by its target's; on version 5
+  (`max_version` 5) `GetInfo`'s change time, after a 20 ms wait.
 - `qsaccess/tests/run_request.rs` also runs a files request delegated to the
   instance: exit 0 with the files written, exit 3 for a folder refused.
 - `qsaccess/tests/fallback.rs` also: the Integrated File System is
@@ -171,6 +174,54 @@ database (`qapd::testing::sql`):
   connects refused while ended, taken after `System::restart()`, and a
   connection opened before the end still ending with it after a quick
   restart.
+
+Phase 9 (QAP version 6), against QS/400's engine at 93c6350f and its test
+message queues and spool changes (`qapd::testing::messages`,
+`System::inject_message`, `spool_add`, `spool_change`, `spool_remove`;
+watches looking every 20 ms with `Config::watch_poll`):
+
+- `qap-client/tests/messages.rs`: every `Messages` operation and status:
+  lists strictly newest and oldest first and paged over `QSYSOPR`'s 149;
+  `ReplyMessage` with `CPF2420` (a reply the inquiry does not take), the
+  default for an empty reply, `CPF2422` (answered, or not an inquiry) and
+  `CPF2410`; `RemoveMessages` all or none; `SendMessage` naming the
+  signed-on profile, `CPF2204`, `CPF2403` for a profile that never signed
+  on, `CPD0071`; `CPF9802` for `QGPL/SECRETQ`; `UnwatchQueue` and
+  `UnwatchSpool` of nothing watched (`TCP1A5B`), `*ALL` refused. The watch
+  manager: injected arrivals reported once with the inquiries counted; a
+  passive watch beside `QGPL/TEAMQ`'s break-mode holder; a forced close
+  (`System::drop_all`) with messages injected in the gap, caught up exactly
+  once after `Resume`; a gap of 250 (three pages); the newest known key
+  removed in the gap (stopped by time); `NotAuthorized` on a watch again
+  reported and the watch taken away; a new sign-on of the next client
+  watching again and catching up, and `Own` started afresh for another
+  profile; an inquiry's reply matched through the sender's copy and
+  `answers`, to another queue and to one's own; spool watches reporting an
+  add, a hold, a move between two watched queues (`Removed` then `Added`,
+  `Changed` for the user's target) and a delete, and watched again after a
+  resume. Refused before version 6.
+- `qap-client/tests/ifs.rs` also: `Stat`'s entry and change count (two
+  changes in one millisecond, a write, a directory's entries), a link
+  stamped by its target, refused before version 6 with `GetInfo`'s stamp
+  in its place.
+- `qsaccess/tests/messages.rs`: the Messages-waiting count across a drop
+  and resume, a catch-up, an inquiry answered elsewhere while away, a
+  session ended under a window's own connection and an operator's `ENDJOB`
+  (`TCP1A54`): the watches handed to the system's next client, which
+  watches again and catches up at Sign On.
+- `qsaccess/tests/printer_output.rs` also: each filter's watch target (one
+  queue, one user, or none for every user everywhere), and pages kept by
+  real spool events alone, a move between two watched queues included,
+  equal to fresh lists after each change.
+- `qsaccess/tests/fallback.rs` also: Messages is `QAD5001` before version
+  6, and nothing of version 6 goes to a session at version 5.
+- `qsaccess`'s `messages::model` unit tests: rows, bold inquiries, the
+  detail pane and its link, what Remove takes without the second
+  confirmation, what opens Message Arrived; `qsa-config`'s message options
+  per system in `settings.toml`; `qsa-msg`'s `QAD9001` to `QAD9021`.
+
+What is checked by hand only: Message Arrived never taking the focus from
+a 5250 session (Windows, X11 and Wayland; see the Phase 9 checklist).
 
 CI also runs `cargo fmt --check`, `cargo clippy -D warnings`, the clean-room
 check (`ci/cleanroom.sh`), the copyright header check and `ci/deps.sh`
@@ -237,7 +288,12 @@ on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 
 | View | Changed by |
 |---|---|
-| `main` | The task pane's groups and tasks as they now are, and the status bar's connection field for the selected system. |
+| `main` | The task pane's groups and tasks as they now are (Messages in General), and the status bar's connection field for the selected system. |
+| `main-messages-waiting` | New: the main window's status bar with "Messages waiting: 3". No golden yet. |
+| `messages`, `messages-operator`, `messages-operator-inquiries`, `messages-empty`, `messages-detail`, `messages-invalid-reply`, `messages-remove-unanswered` | New: Messages on BOB's own queue (every type, a sender's copy and its reply), on `QSYSOPR` page one of two and page two with its inquiries waiting in bold and the impromptu one selected, on the empty `QGPL/TEAMQ`, the detail pane with `CPA5305` and the reply field, `CPF2420` as the system sends it, and the confirmation for removing an unanswered inquiry. Times in UTC. No golden yet. |
+| `send-message`, `send-message-waiting`, `send-message-reply` | New: Send Message to ANN, after an inquiry was sent ("Waiting for reply..."), and with ANN's reply. No golden yet. |
+| `message-arrived`, `message-arrived-several`, `messages-options`, `messages-options-not-authorized` | New: Message Arrived with `QSYSOPR`'s `CPA0701`, and the second of three with Previous and Next; Messages > Options with `QSYSOPR` watched, and with it refused for a profile not authorized. No golden yet. |
+| `printer-output-live` | New: Printer Output kept up by a spool watch (`QAD9020`), Auto-refresh set aside. No golden yet. |
 | `system-configurations` | The Verify... button. |
 | `properties-general` | The check box's label position (the check box control changed). |
 | `properties-connection` | Passwords are never saved: one Default user ID field and a note in place of the three sign-on choices. |
@@ -717,6 +773,102 @@ automated tests cover version 2 with QS/400's engine at 8306ec41 and a
 session that agrees version 4 with the current one): Integrated File System
 is dimmed with `QAD5001`, and opening a files `.qdx` says the same; Run SQL,
 Schemas, Data Transfer and everything earlier work as before.
+
+## Live acceptance (Phase 9: QAP version 6)
+
+On QS/400 at 10.42.70.150, prepared first:
+
+1. QS/400 at 93c6350f installed (`STRTCPSVR SERVER(*QAP)`; Verify... says
+   "Version 6"), with the Phase 7 setup done (profiles `BOB` and `ANN`), and
+   `BOB` and `ANN` each signed on once in 5250, so their own message queues
+   exist;
+2. `fixtures/live/msgs-setup.sh` put in `/home/QSECOFR/` and run as
+   `QSECOFR`: `QSH CMD('/home/QSECOFR/msgs-setup.sh')`. It makes
+   `QGPL/QSA9FAIL`, an ILE CL program that ends with `CEE9901`, and
+   excludes `ANN` from `QSYSOPR`; its header says how to undo both;
+3. `STRSBS QSYS/QBATCH`, for the batch job below;
+4. this program installed by its installer, signed on as `BOB`, with
+   `QSACCESS_LOG=trace`, and a 5250 session of `QSECOFR`'s open beside it.
+
+Then:
+
+- [ ] **Messages, and an arrival from 5250.** Messages (General) opens on My
+  messages (BOB), newest first, `QAD9001` with the count. In the 5250
+  session, `SNDMSG MSG('Hello from 5250') TOUSR(BOB)`: within a second the
+  message is at the top of the list (Type Informational, From user
+  `QSECOFR`); with the default options it opens no Message Arrived.
+  `SNDMSG MSG('Coffee?') TOUSR(BOB) MSGTYPE(*INQ)`: it comes in bold,
+  Message Arrived opens (below), the status bar says Messages waiting: 1
+  more than before, and a click on it opens Messages.
+- [ ] **`QSYSOPR` opted in.** Messages > Options: System operator is offered
+  (BOB may read it); turn it on, OK. Messages' queue list has System
+  operator; the log says `QAD9010` for `QSYSOPR`. Sign on as `ANN` instead
+  (Sign Off, Sign On): Options says ANN may not display `QSYSOPR`'s
+  messages and the box is dimmed; with the option set on in `settings.toml`
+  by hand for this system, signing on as `ANN` gives `QAD9012` and the
+  option turns off. Sign on as `BOB` again.
+- [ ] **A batch job's inquiry answered.** In 5250,
+  `SBMJOB CMD(CALL PGM(QGPL/QSA9FAIL)) JOB(QSA9FAIL) JOBQ(QBATCH) INQMSGRPY(*RQD)`.
+  `WRKACTJOB`: `QSA9FAIL` in `MSGW`. Here, `CEE9901` arrives on `QSYSOPR`
+  (Message Arrived, and in bold in Messages on System operator). Reply `X`:
+  the system's `CPF2420` as it sent it, and the job still waits. Reply `C`:
+  `QAD9002`, the inquiry is no longer bold, its reply `C` shows in the
+  detail pane, a `Reply` follows it on the queue and links back to it, and
+  the job ends (`WRKACTJOB`; its job log has `CEE9901`).
+- [ ] **A break-mode holder beside the watch.** In 5250,
+  `CHGMSGQ MSGQ(QSYSOPR) DLVRY(*BREAK)` and stay signed on. Submit
+  `QSA9FAIL` again: the 5250 session breaks with the message as it always
+  does, and here it arrives on `QSYSOPR` too; nothing is refused. Answer it
+  here (`C`). `CHGMSGQ MSGQ(QSYSOPR) DLVRY(*HOLD)` afterwards.
+- [ ] **Send Message with an inquiry.** Messages > File > Send Message...
+  To user profile `QSECOFR`, "Can you restart the writer?", Inquiry: Send
+  gives `QAD9004` and "Waiting for reply...". In 5250 `DSPMSG`, answer it
+  "Done". Here the dialog shows "Reply received from QSECOFR: Done"; on My
+  messages the sender's copy shows the reply and links to the `Reply`.
+  Send another, close the dialog, answer in 5250: the reply still arrives
+  in Messages.
+- [ ] **Remove.** Select two informational messages and an unanswered
+  inquiry, Remove: the separate confirmation says the sender gets no reply;
+  Remove gives `QAD9003`. Remove All Answered and Informational: the count
+  in the confirmation is what goes; inquiries waiting stay.
+- [ ] **`ENDJOB` of the shared connection's job.** Messages, then
+  `WRKACTJOB` in 5250: end the shared connection's `QAPCNN` job (Run
+  Command's `JobInfo` names it, or the log line at sign-on) with
+  `ENDJOB ... OPTION(*IMMED)`. Here: the session ended by an operator
+  (`TCP1A54` as sent) with Sign On...; meanwhile `SNDMSG MSG('While away')
+  TOUSR(BOB)` in 5250. Sign On: the log says `QAD9010` for both queues
+  and `QAD9013` with 1; 'While away' is in Messages once.
+- [ ] **A dropped network connection.** Disable the network adapter for 30
+  seconds; meanwhile send two messages to BOB from 5250. Enable it: the
+  session resumes (the log says so), `QAD9013` with 2 on the status bar,
+  each message once in Messages and the count right. Repeat with an
+  inquiry sent in the gap: Message Arrived opens for it once.
+- [ ] **Printer Output live.** Printer Output with User `*CURRENT` (the
+  default): `QAD9020` on the status bar, Auto-refresh dimmed. In 5250, as
+  BOB, `DSPLIB QGPL OUTPUT(*PRINT)`: the file appears within a second, with
+  no refresh. `HLDSPLF` it: its status turns Held in place. `DLTSPLF` it:
+  it goes. Choose output queue `QGPL/QPRINT` with User `*ALL`: watched
+  too. Set User `*ALL` with Output queue `*ALL`: `QAD9021` and the list
+  refreshes on the Auto-refresh timer. The trace shows no
+  `ListSpooledFiles` between changes while watched.
+- [ ] **Message Arrived does not take the focus (by hand).** In a 5250
+  session of this program, type steadily (a long `SNDMSG` text, say) while
+  someone sends `BOB` an inquiry from another session. Message Arrived
+  appears on the main monitor without the keyboard leaving the 5250
+  session: no typed character goes to Message Arrived; the taskbar entry
+  flashes (Windows) or the window is marked urgent (X11). Several
+  inquiries queue in it with Previous and Next. Check on Windows, on Linux
+  under X11, and under Wayland, where the compositor decides: note what
+  it did (focus kept or taken) in the run's record.
+- [ ] **Nothing secret logged.** Search `qsaccess.log` for the passwords
+  used and for any 64-hexadecimal-character run: none. Message texts are
+  not in it either (a watch's event is logged by kind only).
+
+Against a version-5 server (QS/400 at 58e189df, if one is at hand; the
+automated tests cover a session that agrees version 5 with the current
+engine): Messages is dimmed with `QAD5001`, Printer Output polls as before,
+the editor's changed-on-system check uses the last-change time, and
+everything earlier works as before.
 
 ## Keyboard: Right Ctrl
 
