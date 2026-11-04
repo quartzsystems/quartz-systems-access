@@ -194,3 +194,59 @@ fn arrivals_open_message_arrived_as_their_queue_says() {
         "QSYSOPR"
     );
 }
+
+/// An operator ends the shared connection's job (`ENDJOB`): the session is
+/// over (`TCP1A54`), the count goes with it, and the next sign-on takes the
+/// watches over, watches again, catches up and counts again.
+#[test]
+fn an_operator_ending_the_job_leaves_the_watches_for_the_next_sign_on() {
+    let s = common::start(quick());
+    let sys = system(s.port);
+    let st = state(&sys);
+    let h = qap::client(&st, &sys);
+    lock(&h).sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    lock(&h).watch(Watch::Queue(Queue::Own)).unwrap();
+    lock(&h).watch(Watch::Queue(Queue::SystemOperator)).unwrap();
+    assert_eq!(watching::waiting(&st, "127.0.0.1"), Some(3));
+
+    s.c.end(qapd::Ending::Operator);
+    let mut notices = Vec::new();
+    common::until("SessionEnded", || {
+        notices.extend(lock(&h).poll());
+        !notices.is_empty()
+    });
+    match &notices[..] {
+        [
+            Notice::SessionEnded {
+                by_operator: true,
+                message: Some(m),
+            },
+        ] => assert_eq!(m.id, "TCP1A54"),
+        other => panic!("{other:?}"),
+    }
+    assert_eq!(watching::waiting(&st, "127.0.0.1"), None, "not signed on");
+
+    // While signed off, an inquiry arrives on QSYSOPR.
+    s.c.inject_message("QSYS", "QSYSOPR", inquiry("Paper jam?", later(&s, 0)))
+        .unwrap();
+    // Sign On makes the system's next client: it has the watches.
+    let h2 = qap::client(&st, &sys);
+    assert!(!std::sync::Arc::ptr_eq(&h, &h2));
+    let watched = lock(&h2).watching();
+    assert!(watched.contains(&Watch::Queue(Queue::Own)));
+    assert!(watched.contains(&Watch::Queue(Queue::SystemOperator)));
+    lock(&h2).sign_on("BOB", &Secret::from("SECRET1")).unwrap();
+    let evs = lock(&h2).watch_events();
+    assert!(evs.contains(&WatchEvent::CaughtUp {
+        queue: Queue::SystemOperator,
+        count: 1
+    }));
+    assert_eq!(watching::waiting(&st, "127.0.0.1"), Some(4));
+    // Nothing twice afterwards.
+    let more = until_events(&h2, |_| false);
+    assert!(
+        more.iter()
+            .all(|e| !matches!(e, WatchEvent::Arrived { .. })),
+        "{more:?}"
+    );
+}
