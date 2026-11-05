@@ -20,7 +20,8 @@ $Installer = (Resolve-Path $Installer).Path
 # The release in the file name, QS400-Access-VxRyMz-..., gives the version
 # the binaries must carry, x.y.z (VxRyMz).
 if ((Split-Path -Leaf $Installer) -notmatch '-V(\d+)R(\d+)M(\d+)-') { throw "no VxRyMz release in $Installer" }
-$productVersion = "$($Matches[1]).$($Matches[2]).$($Matches[3]) (V$($Matches[1])R$($Matches[2])M$($Matches[3]))"
+$version = "$($Matches[1]).$($Matches[2]).$($Matches[3])"
+$productVersion = "$version (V$($Matches[1])R$($Matches[2])M$($Matches[3]))"
 $failures = New-Object System.Collections.Generic.List[string]
 function Check($ok, $what) {
     if ($ok) { Write-Host "ok    $what" } else { Write-Host "FAIL  $what"; $failures.Add($what) }
@@ -114,7 +115,7 @@ Check (Test-Path "$programs\Quartz Systems\QS400 Access for Desktop.lnk") "Start
 Check (Test-Path "$programs\Quartz Systems\Session Manager.lnk") "Session Manager shortcut"
 Check (Test-Path "$desktop\QS400 Access for Desktop.lnk") "desktop shortcut"
 $un = Get-ItemProperty "$hive\Software\Microsoft\Windows\CurrentVersion\Uninstall\QuartzSystemsAccess"
-Check ($un.DisplayName -eq 'QS/400 Access for Desktop' -and $un.Publisher -eq 'Quartz Systems' -and $un.DisplayVersion -eq '1.0.0') "Apps entry"
+Check ($un.DisplayName -eq 'QS/400 Access for Desktop' -and $un.Publisher -eq 'Quartz Systems' -and $un.DisplayVersion -eq $version) "Apps entry"
 
 # Double-click a session file: the shell runs "qsaccess.exe open <file>".
 # It names a configured system, so that no "Create system" question comes
@@ -151,10 +152,18 @@ if ($Scope -eq 'user') {
     # A printer session file opens in the same running instance.
     $qsp = Join-Path $env:TEMP "qsa-test-$PID.qsp"
     "[qsaccess]`nkind = `"printer`"`nversion = 1`n`n[system]`nname = `"$system`"`nhost = `"10.42.70.150`"`n`n[printer]`ndevice_name = `"QSATSTPRT`"`n`n[session]`nauto_connect = false`n" | Set-Content -Encoding utf8 $qsp
+    # The second qsaccess hands the file over and exits at once, so look
+    # for the running one's "opening" line in qsaccess.log, not a process.
+    # The file name alone: the shell may pass a short (8.3) TEMP path.
+    $primary = @($p)[0].ProcessId
+    $log = "$settingsDir\qsaccess.log"
     Start-Process $qsp
-    Start-Sleep 4
-    $p = Get-CimInstance Win32_Process -Filter "Name = 'qsaccess.exe'" | Where-Object { $_.CommandLine -like "*open*qsa-test-$PID.qsp*" }
-    Check ($p -ne $null) "double-clicking a .qsp runs qsaccess open"
+    $opened = $false
+    for ($i = 0; $i -lt 20 -and -not $opened; $i++) {
+        Start-Sleep -Milliseconds 500
+        $opened = (Test-Path $log) -and (Select-String -Path $log -Pattern "\[$primary\] opening .*qsa-test-$PID\.qsp$" -Quiet)
+    }
+    Check $opened "double-clicking a .qsp opens it in the running qsaccess"
     Remove-Item $qsp
     Start-Process "$dir\qsaccess.exe" -ArgumentList '--quit' -Wait
     Start-Sleep 2

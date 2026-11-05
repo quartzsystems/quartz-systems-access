@@ -41,7 +41,14 @@ window, `ci/version.sh` works as it is.
    ci\version.ps1 prepare 1.1.0     # PowerShell
    ```
 
-2. Read over the section (`ci/version.sh notes` prints it), then commit and
+2. Bless the screenshot goldens again: the installer's pages show the
+   release, so the old goldens no longer match. Commit the
+   prepared version on a branch, push it, and run the ci workflow on that
+   branch with **bless** ticked (Actions > ci > Run workflow). Download the
+   `goldens-windows` and `goldens-linux` artifacts, unpack them over the
+   tree, look over what changed, and commit them with the release.
+
+3. Read over the section (`ci/version.sh notes` prints it), then commit and
    tag, one command at a time (Windows PowerShell 5.1 has no `&&`):
 
    ```sh
