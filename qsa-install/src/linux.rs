@@ -493,6 +493,7 @@ mod tests {
             "kind = &quot;printer&quot;",
             "<glob pattern=\"*.qkm\"/>",
             "<glob pattern=\"*.qsm\"/>",
+            "<glob pattern=\"*.qdx\"/>",
             "value=\"[qsaccess]\" offset=\"0:256\"",
             "kind = &quot;macro&quot;",
         ] {
@@ -507,9 +508,12 @@ mod tests {
             d.contains("Exec=\"/opt/quartz-access/qsaccess\" open %f\n"),
             "{d}"
         );
-        assert!(d.contains(
-            "MimeType=application/x-qsaccess-session;application/x-qsaccess-printer;application/x-qsaccess-keymap;application/x-qsaccess-macro;\n"
-        ));
+        assert!(
+            d.contains(
+                "MimeType=application/x-qsaccess-session;application/x-qsaccess-printer;application/x-qsaccess-keymap;application/x-qsaccess-macro;application/x-qsaccess-transfer;\n"
+            ),
+            "{d}"
+        );
         assert!(!desktop_entry(Path::new("/x"), false).contains("MimeType"));
         assert!(
             sessions_entry(Path::new("/x y")).contains("Exec=\"/x y/qsaccess\" --session-manager")
