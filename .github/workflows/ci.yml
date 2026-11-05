@@ -22,6 +22,8 @@ jobs:
   windows:
     name: checks (x86_64-pc-windows-msvc)
     runs-on: windows-2022
+    # A test that hangs fails the job in an hour, not GitHub's six.
+    timeout-minutes: 60
     env:
       TARGET: x86_64-pc-windows-msvc
     defaults:
@@ -88,6 +90,8 @@ jobs:
   linux:
     name: checks (x86_64-unknown-linux-gnu)
     runs-on: ubuntu-24.04
+    # A test that hangs fails the job in an hour, not GitHub's six.
+    timeout-minutes: 60
     # The image is pinned by digest, so the libraries that draw the
     # screenshots (FreeType, Xft, Cairo, Pango) only change when this does.
     container:
