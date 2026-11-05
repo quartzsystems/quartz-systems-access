@@ -573,6 +573,7 @@ impl Client {
         while let Some(ev) = c.next_event() {
             events.push(ev);
         }
+        let mut session_ended = false;
         for ev in events {
             match ev {
                 Event::ServerEnding(m) => {
@@ -591,10 +592,17 @@ impl Client {
                         by_operator,
                         message,
                     });
+                    session_ended = true;
                 }
                 Event::MessageArrived(m) => self.watches.arrived(m),
                 Event::SpooledFileChanged(c) => self.watches.spool_changed(c),
             }
+        }
+        // The server closes the connection after `SessionEnded`. Let it go
+        // now, so a sign-on that comes before the close is seen opens a new
+        // one instead of being lost with this one.
+        if session_ended {
+            self.conn = None;
         }
     }
 }

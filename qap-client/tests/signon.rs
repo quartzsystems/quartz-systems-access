@@ -222,6 +222,9 @@ fn an_operator_ends_the_session() {
     }
     assert!(!c.is_signed_on());
     assert!(s.c.sessions.lock().unwrap().is_empty());
+    // The connection the server is closing is let go at once, so a sign-on
+    // before the close is seen does not go out on it.
+    assert!(c.connection().is_none());
     // Not ServerEnding: a new sign-on reconnects by itself.
     until("the close", || s.ended().len() == 1);
     c.sign_on("BOB", &Secret::from("SECRET1")).unwrap();
