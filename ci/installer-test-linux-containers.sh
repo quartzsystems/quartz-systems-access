@@ -16,10 +16,10 @@ ubuntu="ubuntu:24.04@sha256:fe81560990fae86dc4743202b2cb4d3df98d0bcf949173cecef1
 alma="almalinux:9@sha256:245f8aab832fe800aa42bdab5fad75ebbd8e0b4c9f24820a83c638b177857ae2"
 ubuntu_setup="apt-get update -qq && DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
   libwayland-client0 libwayland-cursor0 libxkbcommon0 libx11-6 libxinerama1 libxcursor1 libxfixes3 \
-  libfontconfig1 libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libglib2.0-0 \
+  libfontconfig1 libpango-1.0-0 libpangocairo-1.0-0 libcairo2 libglib2.0-0 libdbus-1-3 \
   shared-mime-info desktop-file-utils xdg-utils libglib2.0-bin xvfb xauth procps >/dev/null"
 alma_setup="dnf install -y -q libwayland-client libwayland-cursor libxkbcommon libX11 libXinerama libXcursor libXfixes \
-  fontconfig pango cairo glib2 shared-mime-info desktop-file-utils xdg-utils xorg-x11-server-Xvfb \
+  fontconfig pango cairo glib2 dbus-libs shared-mime-info desktop-file-utils xdg-utils xorg-x11-server-Xvfb \
   procps-ng findutils diffutils which >/dev/null"
 status=0
 for image in "$ubuntu" "$alma"; do

@@ -225,7 +225,7 @@ installation has:
 
 | Library | For |
 |---|---|
-| `libwayland-client.so.0`, `libwayland-cursor.so.0`, `libxkbcommon.so.0` | Wayland |
+| `libwayland-client.so.0`, `libwayland-cursor.so.0`, `libxkbcommon.so.0`, `libdbus-1.so.3` | Wayland (FLTK's desktop settings over D-Bus) |
 | `libX11.so.6`, `libXinerama.so.1`, `libXcursor.so.1`, `libXfixes.so.3` | X11 |
 | `libfontconfig.so.1`, `libpango-1.0.so.0`, `libpangocairo-1.0.so.0`, `libcairo.so.2`, `libgobject-2.0.so.0` | Text and drawing |
 | `libgcc_s.so.1`, `libc.so.6`, `libm.so.6`, `libdl.so.2`, `libpthread.so.0` | The C runtime |
