@@ -12,7 +12,7 @@
 mod common;
 
 use std::process::Command;
-use std::sync::mpsc;
+use std::sync::{Mutex, MutexGuard, mpsc};
 use std::time::Duration;
 
 use common::{Server, cfg, start};
@@ -26,6 +26,15 @@ use qsaccess::ipc::{self, Endpoint};
 use qsaccess::qap::lock;
 use qsaccess::request::Request;
 use qsaccess::transfer::cli;
+
+/// `qap::busy` runs FLTK's event loop while it waits, and that loop is for
+/// one thread at a time: the tests that serve a run take turns, or two of
+/// them in it at once can hang.
+static GUI: Mutex<()> = Mutex::new(());
+
+fn gui() -> MutexGuard<'static, ()> {
+    GUI.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 fn system(s: &Server) -> System {
     let mut sys = System::new("127.0.0.1");
@@ -69,6 +78,7 @@ fn forms(bytes: &[u8]) -> Vec<String> {
 
 #[test]
 fn a_run_is_delegated_to_the_instance_and_no_token_crosses_the_link() {
+    let _gui = gui();
     let s = start(cfg());
     let sys = system(&s);
     let mut systems = Systems::new();
@@ -245,6 +255,7 @@ fn bad_arguments_and_request_files_exit_1() {
 
 #[test]
 fn a_files_request_runs_on_the_instance_with_its_exit_code() {
+    let _gui = gui();
     use qsa_transfer::files::{Direction, Options};
     use qsa_transfer::request::FilesRequest;
     let s = start(cfg());
