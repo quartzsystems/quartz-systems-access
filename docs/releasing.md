@@ -41,8 +41,8 @@ window, `ci/version.sh` works as it is.
    ci\version.ps1 prepare 1.1.0     # PowerShell
    ```
 
-2. Bless the screenshot goldens again: the installer's pages show the
-   release, so the old goldens no longer match. Commit the
+2. Bless the screenshot goldens again: the main window and the installer's
+   pages show the release, so the old goldens no longer match. Commit the
    prepared version on a branch and bless it as TESTING.md's "Screenshot
    goldens" says, then commit the goldens with the release.
 

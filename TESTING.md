@@ -286,40 +286,9 @@ UTC, so a machine elsewhere shows those times differently.
 Views whose goldens are stale or missing until CI's bless run writes new ones,
 on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 
-| View | Changed by |
-|---|---|
-| `main` | The task pane's groups and tasks as they now are (Messages in General), and the status bar's connection field for the selected system. |
-| `main-messages-waiting` | New: the main window's status bar with "Messages waiting: 3". No golden yet. |
-| `messages`, `messages-operator`, `messages-operator-inquiries`, `messages-empty`, `messages-detail`, `messages-invalid-reply`, `messages-remove-unanswered` | New: Messages on BOB's own queue (every type, a sender's copy and its reply), on `QSYSOPR` page one of two and page two with its inquiries waiting in bold and the impromptu one selected, on the empty `QGPL/TEAMQ`, the detail pane with `CPA5305` and the reply field, `CPF2420` as the system sends it, and the confirmation for removing an unanswered inquiry. Times in UTC. No golden yet. |
-| `send-message`, `send-message-waiting`, `send-message-reply` | New: Send Message to ANN, after an inquiry was sent ("Waiting for reply..."), and with ANN's reply. No golden yet. |
-| `message-arrived`, `message-arrived-several`, `messages-options`, `messages-options-not-authorized` | New: Message Arrived with `QSYSOPR`'s `CPA0701`, and the second of three with Previous and Next; Messages > Options with `QSYSOPR` watched, and with it refused for a profile not authorized. No golden yet. |
-| `printer-output-live` | New: Printer Output kept up by a spool watch (`QAD9020`), Auto-refresh set aside. No golden yet. |
-| `system-configurations` | The Verify... button. |
-| `properties-general` | The check box's label position (the check box control changed). |
-| `properties-connection` | Passwords are never saved: one Default user ID field and a note in place of the three sign-on choices. |
-| `properties-ports` | Systems file version 3: the Telnet and QAP ports replace the earlier ports and Port lookup. |
-| `start-5250`, `macro-step`, `session-properties-general`, `session-properties-hotspots` | The check box's label position (the check box control changed), and the session properties' own changes since. |
-| `message-long-path`, `session-manager` | Changed since the last bless; check against the screenshot report. |
-| `start-5250-printer`, `printer-session`, `printer-settings` | New with the printer session. No golden yet. |
-| `sign-on`, `change-password`, `message-system` | New: the QAP Sign On and Change Password dialogs, and a system's message shown as sent. No golden yet. |
-| `verify-connection` | New: Verify Connection. No golden yet. |
-| `run-command`, `run-command-results` | New: Run Command, empty and after runs and a check; `run-command-results` also shows CHGAUT and CPYFRMSTMF with the test system's severities 10 and 20 (red from 20). No golden yet. |
-| `printer-output`, `printer-output-held`, `printer-output-empty` | New: Printer Output with the default filter (page one of BOB's files on QS/400's test system), with a status filter, and with nothing matching. Times are shown in UTC here, so they match on every machine. No golden yet. |
-| `viewer`, `viewer-landscape`, `viewer-find` | New: the spooled file viewer, fit to width, on page 1 of QS/400's test listing `QSYSPRT`, on page 2 of `LANDSCAPE` (198 columns, 15 pitch, 8 lines per inch), and on `QPJOBLOG` finding `TEST0`, every match on the page highlighted and the current one darker. No golden yet. |
-| `output-queues` | New: Output Queues listing QS/400's test system's queues in `*ALL`. No golden yet. |
-| `printer-output-hold`, `printer-output-move`, `printer-output-delete`, `printer-output-properties`, `printer-output-summary` | New: the hold choice, Move, the delete confirmation listing every file, Properties, and the summary of actions on several files with a refusal as the system sent it. No golden yet. |
-| `session-properties-auto-sign-on`, `session-properties-auto-sign-on-disabled` | New: Session Properties with automatic sign-on enabled (TLS, QAP version 2) and disabled without TLS (`QAD5030`). `session-properties-general` changes with them. No golden yet. |
-| `password-expiry` | New: the password expiry warning, `QAD4031` with Change Password.... No golden yet. |
-| `prompt-simple`, `prompt-qualifiers`, `prompt-list`, `prompt-additional`, `prompt-elements`, `prompt-checked`, `prompt-help` | New: Prompt for QS/400's test commands (`qapd::testing`): CRTLIB; DSPOBJD with a qualified name, then a list with "+"; CRTPF with its additional parameters shown, then its element list changed; DSPOBJD after a failed check; a qualifier's help. No golden yet. |
-| `run-sql`, `run-sql-results`, `run-sql-error`, `run-sql-incomplete`, `run-sql-commit`, `run-sql-uncommitted` | New: Run SQL empty; with two result tabs (`HLINV.ASSETS`, NULL notes a grey dash, dates in `*MDY`); with `SQL0104` as the system sent it; with a result cut short by a cancel (`QAD7011`, the tab marked Incomplete); under Read committed with Commit and Rollback enabled after `QAD7020`; and the uncommitted-changes prompt (`QAD7021`). No golden yet. |
-| `schemas`, `schemas-columns` | New: Schemas with the test system's schemas, and `HLINV.ASSETS`'s columns. No golden yet. |
-| `transfer-download-source`, `transfer-download-columns`, `transfer-download-output`, `transfer-download-fixed`, `transfer-download-query` | New: Data Transfer from the system: each page for `HLINV.ASSETS` with a Where clause, chosen columns and a row limit; the fixed-width widths; a query source. No golden yet. |
-| `transfer-upload-input`, `transfer-upload-target`, `transfer-upload-mapping`, `transfer-upload-commit` | New: Data Transfer to the system: each page, the mapping grid with a value that does not fit (`QAD7035`), and commit every 10 batches. No golden yet. |
-| `transfer-progress`, `transfer-summary`, `transfer-no-commitment-control` | New: the progress dialog, the summary (`QAD7030`), and `SQL7008` as sent with `QAD7034` and Upload Without Commitment Control. No golden yet. |
-| `ifs-home`, `ifs-large-folder`, `ifs-unauthorized`, `ifs-broken-link`, `ifs-delete-files`, `ifs-delete-folder` | New: the Integrated File System window on `/home/BOB` with links (the broken one red), on a 1,200-entry folder with its first 500 loaded, on a folder refused with `CPFA09C` in the list area, on two links, and the delete confirmations for files and for a folder with its counts. No golden yet. |
-| `ifs-transfers-running`, `ifs-transfers-failed`, `ifs-transfers-finished`, `ifs-transfer-options`, `ifs-existing-file` | New: the transfer queue running (a download at 28.5 MiB/s), with a failure as the system sent it and a cancel, and all finished; the transfer options; the existing-file prompt (`QAD8010`) with Keep Both. No golden yet. |
-| `ifs-editor`, `ifs-editor-read-only`, `ifs-editor-changed`, `ifs-properties`, `ifs-properties-link` | New: the editor on a CCSID 37 file, a binary file read-only as a hex dump (`QAD8013`), the changed-on-system prompt (`QAD8011`), and Properties of a file and of a link. No golden yet. |
-| `qsa-install`: `wizard-0-welcome`, `wizard-1-licence`, `wizard-2-install-for`, `wizard-3-location`, `wizard-4-options`, `wizard-5-ready`, `wizard-7-finish`, `uninstall`, `repair` | The licence text, the check box control, and no saved passwords in the Welcome, Uninstall and Repair text; `.qdx` among the file types on Options and Ready. |
+None: every view was blessed on CI's runners at V1R1M0. The main window and
+the installer's pages show the release, so they wait for a bless again after
+each `ci/version.sh prepare` (docs/releasing.md).
 
 ## PDF goldens
 
