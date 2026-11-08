@@ -47,8 +47,8 @@
 //!   every resume and sign-on, each queue caught up, every message reported
 //!   once ([`WatchEvent`]).
 //!
-//! `Hello` offers versions [`proto::MIN_VERSION`] to [`proto::VERSION`] (1
-//! to 6) and the server picks the highest both speak. An operation is sent
+//! `Hello` offers versions [`proto::MIN_VERSION`] to [`OFFERED_VERSION`] (1
+//! to 6) by default and the server picks the highest both speak. An operation is sent
 //! only when the connection's version defines it ([`proto::Op::since`]) and
 //! `Hello`'s `services` lists its service; otherwise it is refused here with
 //! [`Error::Unsupported`] and nothing is sent ([`Connection::supports`]).
@@ -84,6 +84,10 @@ pub use qap_proto::{Secret, ServerMessage, Status, Token};
 pub use session::{Client, Notice};
 pub use sql::{ExecuteOutcome, FetchEnd, FetchOutcome, SqlConnection};
 pub use watch::{Watch, WatchEvent};
+
+/// The newest version `Hello` offers unless asked for more: QS/400 Access
+/// for Desktop speaks 6, whatever newer versions `qap-proto` defines.
+pub const OFFERED_VERSION: u16 = 6;
 
 /// The most a split reply is joined to: 64 MiB.
 pub const MAX_REPLY: usize = 64 << 20;
@@ -169,7 +173,7 @@ impl Default for Options {
             ping_after: proto::PING_AFTER,
             max_reply: MAX_REPLY,
             min_version: proto::MIN_VERSION,
-            max_version: proto::VERSION,
+            max_version: OFFERED_VERSION,
         }
     }
 }

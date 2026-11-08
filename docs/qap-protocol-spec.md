@@ -1,4 +1,4 @@
-<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit 93c6350f69e4327163bc1357284785e5490388c0. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
+<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit f6cb4aa2284e087791a631972980bb0aa06fb0c2. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
 # QAP: Quartz Access Protocol, version 1 (draft)
 
 QAP is how QS/400 Access talks to QS/400 for everything except display and printer sessions, which stay on the system's Telnet server. It is an original Quartz design.
@@ -102,6 +102,14 @@ Not in QAP: display and printer sessions (Telnet), the printer session's message
 
 - `JobId` = { `name` String, `user` String, `number` String (six digits) }.
 - `ObjectName` = { `library` String, `name` String }. `library` may be `*LIBL` or `*CURLIB` where a library list search applies.
+- `EndHow` enum: `Controlled` 0 (`*CNTRLD`), `Immediate` 1 (`*IMMED`). Defined by version 7 for `Manage`; a common type from version 8, which `Jobs` uses too. Its values and their numbers are version 7's.
+
+**Common types (version 8).**
+
+- `MemberName` = { `file` ObjectName (a source physical file; `library` may be `*LIBL` or `*CURLIB`), `member` String }.
+- `SourceRecord` = { `seq` u32 (the sequence number in hundredths: `100` is `0001.00`, at most `999999`), `date` u32 (`yymmdd`, 0 for none), `data` String (UTF-8, trailing blanks removed) }.
+- `Where` enum: `Member` 0 { `member` MemberName }, `Path` 1 { `path` String }, `None` 2.
+- `Diagnostic` = { `where` Where (the source the message points into: the member compiled, a `/COPY` member, a stream file, or nowhere), `line` u32 (from 1; 0 unknown), `column` u16 (from 1; 0 unknown), `end_line` u32 (0: `line`), `end_column` u16 (0 unknown), `severity` u8, `id` String (`RNF7030`), `text` String (first level), `help` String (second level) }. The Rust field of `where` is `r#where`; `rpg/compdiag` has the same type, its field `at`.
 
 ### Service 3 `Command`: run CL commands (version 2)
 
@@ -330,6 +338,241 @@ Paths are absolute and UTF-8 (`/home/BOB/a.txt`, `/QSYS.LIB/QGPL.LIB`). Every `I
   - The queue the inquiry went to keeps it, with its `reply` set and `needs_reply` 0, followed by a `Reply` of its own whose `answers` is the inquiry's key there.
 - A `Recipient` `User` is the profile's message queue, as the profile names it; an unknown profile is `NotFound` (`CPF2204`).
 
+### Service 8 `Manage`: managing the system (version 7, draft)
+
+**Draft until QS/400 ships it.** Version 7 is the management API of Phase 12 Section 7: one protocol surface for QS/MC and for scripts, so neither drives the system through screens. Nothing in versions 1 to 6 changes; a peer that negotiates 6 or less never sees `Manage`.
+
+Every operation runs as the signed-on profile, concurrently on the connection's secondary threads (never in the lane), and does what the command it stands for does: the same authority checks, the same messages, the same audit journal entries. There is no other way in: no operation is allowed before sign-on, and no operation skips the command's checks because the request came over QAP.
+
+- `SubsystemStatus` enum: `Active` 0, `Inactive` 1, `Ending` 2, `Starting` 3.
+- `Subsystem` = { `sbsd` ObjectName, `status` SubsystemStatus, `jobs` u32 (active jobs), `monitor` Option of JobId (while it runs), `text` String }.
+- `EndHow`: see Common types (from version 8 a common type; unchanged).
+- `ValueKind` enum: `Character` 0, `Decimal` 1, `Integer` 2, `List` 3.
+- `SystemValue` = { `name` String, `kind` ValueKind, `value` String (as `CHGSYSVAL VALUE()` takes it, without apostrophes; a list's entries separated by one blank), `text` String, `category` String (the catalog group: `SEC`, `DATTIM`, `SYSCTL`, `LIBL`...) }.
+- `PtfStatus` enum: `NotApplied` 0, `TemporarilyApplied` 1, `PermanentlyApplied` 2, `TemporarilyRemoved` 3, `PermanentlyRemoved` 4, `Superseded` 5, `Damaged` 6, `SaveFileOnly` 7 (only its save file or cover letter is here).
+- `IplAction` enum: `None` 0, `Apply` 1, `Remove` 2 (at the next IPL).
+- `Ptf` = { `product` String, `id` String, `release` String, `status` PtfStatus, `ipl_action` IplAction, `delayed` flag, `text` String }.
+- `UnitStatus` enum: `Active` 0, `Suspended` 1, `Resuming` 2, `Failed` 3, `NonConfigured` 4. `Protection` enum: `Unprotected` 0, `Mirrored` 1, `Parity` 2.
+- `DiskUnit` = { `unit` u16 (0: not configured), `asp` u16 (0: none), `resource` String (`DD001`), `type_model` String, `serial` String, `capacity` u64 (bytes), `used` u64, `status` UnitStatus, `protection` Protection }. `Asp` = { `asp` u16, `capacity` u64, `used` u64, `threshold` u8 (percent) }.
+- `ResourceType` enum, the `WRKHDWRSC TYPE` values: `All` 0 (`*AHW`), `Communication` 1 (`*CMN`), `LocalWorkStation` 2 (`*LWS`), `Processor` 3 (`*PRC`), `Storage` 4 (`*STG`), `Coupled` 5 (`*CSA`), `Cryptographic` 6 (`*CRP`). `ResourceStatus` enum: `Operational` 0, `NotDetected` 1.
+- `HardwareResource` = { `name` String (`CMN01`), `depth` u8 (levels below the top of the list), `type_model` String (`290A-001`, or the type alone), `status` ResourceStatus, `text` String, `location` String, `serial` String, `parent` String (empty at the top) }.
+- `IplMode` enum: `Normal` 0, `Manual` 1. `PreviousEnd` enum: `Normal` 0, `Abnormal` 1. `IplSource` enum: `Panel` 0 (`*PANEL`), `A` 1, `B` 2.
+
+| Service | Op | Request body | Reply body | Allowed before sign-on |
+| --- | --- | --- | --- | --- |
+| Manage | 1 `ListSubsystems` | `library` String (`*ALL`, `*LIBL` or a library), `start` u32, `max` u32 | `total` u32, `subsystems` list of `Subsystem` (active first, then by name) | no |
+| Manage | 2 `StartSubsystem` | `sbsd` ObjectName | — | no |
+| Manage | 3 `EndSubsystem` | `sbsd` Option of ObjectName (none: `*ALL`), `how` EndHow, `delay` Option of u32 (seconds; none: `*NOLIMIT`) | — | no |
+| Manage | 4 `GetSystemValues` | `names` list of String (empty: every value) | `values` list of `SystemValue` (in the order asked; by name for all) | no |
+| Manage | 5 `SetSystemValue` | `name` String, `value` String | `SystemValue` (as it now is) | no |
+| Manage | 6 `ListPtfs` | `product` String (`*ALL` or a product), `start` u32, `max` u32 | `total` u32, `ptfs` list of `Ptf` (by product, then identifier) | no |
+| Manage | 7 `ListDiskUnits` | — | `units` list of `DiskUnit` (configured by unit number, then the others), `asps` list of `Asp` | no |
+| Manage | 8 `ListHardwareResources` | `kind` ResourceType | `resources` list of `HardwareResource` (in tree order, as the list shows them) | no |
+| Manage | 9 `IplStatus` | — | `ipl_time` i64, `ipl_type` String, `mode` IplMode, `slot` String, `next_slot` Option of String, `last_src` String (eight characters), `src_text` String, `previous_end` PreviousEnd, `restricted` flag | no |
+| Manage | 10 `PowerDown` | `how` EndHow, `delay` Option of u32, `restart` flag, `ipl_source` IplSource | — | no |
+
+| Op | Stands for | Statuses |
+| --- | --- | --- |
+| `ListSubsystems` | `WRKSBS` | `Ok`; `NotFound` (the library); `NotAuthorized` |
+| `StartSubsystem` | `STRSBS` | `Ok`; `NotFound` (`CPF9801`); `NotAuthorized` (`CPF222E`: `*JOBCTL`); `Error` (`CPF1010`: already active) |
+| `EndSubsystem` | `ENDSBS` | `Ok`; `NotFound`; `NotAuthorized` (`*JOBCTL`); `Error` (`CPF1054`: not active; `CPF1034`: the controlling subsystem alone) |
+| `GetSystemValues` | `RTVSYSVAL`, `DSPSYSVAL` | `Ok`; `NotFound` (`CPF1842`, naming the first unknown value; nothing else is returned) |
+| `SetSystemValue` | `CHGSYSVAL` | `Ok`; `NotFound` (`CPF1842`); `NotAuthorized` (`CPF222E`; `CPF18B4` when DST locks security values); `Error` (`TCP1A5F`: a value it does not take) |
+| `ListPtfs` | `DSPPTF` | `Ok`; `NotAuthorized` |
+| `ListDiskUnits` | `WRKDSKSTS`, DST's configuration display | `Ok`; `NotAuthorized` |
+| `ListHardwareResources` | `WRKHDWRSC` | `Ok`; `NotAuthorized` |
+| `IplStatus` | `DSPSYSSTS`, the control panel | `Ok` |
+| `PowerDown` | `PWRDWNSYS` | `Ok`; `NotAuthorized` (`*JOBCTL`); `Error` (a power down already started) |
+
+**Authentication and authority.**
+
+- The profile signed on with `SignOn`, `Resume` or `Attach` is the only identity; there are no keys or tokens of another kind.
+- Each operation applies its command's checks in the connection job, as that profile, with its groups and the authority it adopts: `STRSBS`, `ENDSBS` and `PWRDWNSYS` need `*JOBCTL`; `CHGSYSVAL` needs `*ALLOBJ`, and for security values `*ALLOBJ` and `*SECADM`, for the auditing values `*AUDIT`, and DST's "allow system value security changes" for either (`sec::sysval`). Reads need what their displays need.
+- A refusal for a missing special authority is audited as the command's is (`AF` type `K`).
+
+**Exit point.** Every `Manage` request passes the exit point `QS400_QAP_MGMT`, format `QAPX0100`, before it runs, as the host servers' requests pass theirs:
+
+- registered at the first IPL with the shipped points (`WRKREGINF`); no deregistration, change allowed, at most one program, as the host servers' points;
+- the program gets two parameters, the return code (CHAR(1), `1` allows, anything else refuses) and the request: user CHAR(10), server CHAR(10) `*QAPMGMT`, format CHAR(8) `QAPX0100`, operation BINARY(4) (the `Manage` op code), operation name CHAR(20) (`EndSubsystem`), target CHAR(64) (`LIB/SBSD`, `*ALL`, a system value's name, a product, a `*CMN`-style type; blank when none), detail length BINARY(4), detail CHAR(*) (`*CNTRLD 600`, the new value, `*IMMED *NOLIMIT RESTART(*YES)`); big-endian, CCSID 37;
+- a refusal is `NotAuthorized` with `TCP1A5E` naming the program, audited `GR` (`F`, the function refused), and the operation does nothing; a program that cannot be called or ends in an exception refuses, as for the host servers. A point with no program allows everything.
+
+**Audit journal.** Beside the `AF` and `GR` entries above, the entries are the commands' own: `SV` for a system value changed (old and new value, as `CHGSYSVAL` writes it), and the job entries the subsystem and power commands write with `*JOBDTA` and `*SYSMGT` auditing. QAP adds no entry type and no entry of its own.
+
+**Rules.**
+
+- Lists that can be long (`ListSubsystems`, `ListPtfs`) take `start` and `max` and answer `total`, as every QAP list does. The others are short and come whole.
+- `EndSubsystem` with `sbsd` none is `ENDSBS *ALL`: the system is in restricted state when it answers, and `IplStatus` says so. The connection's own job ends with its subsystem (`QUSRWRK`): the client gets the reply, then `ServerEnding`.
+- `PowerDown` answers `Ok` once the power down has started, then every connection gets `ServerEnding` as the subsystems end. With `restart` the system comes back with an IPL; a client reconnects and reads `IplStatus` to see it complete.
+- `SetSystemValue`'s reply is the value as the system keeps it; a value that takes effect at the next IPL is the new value, as `DSPSYSVAL` shows it.
+- `ListHardwareResources` lists what `WRKHDWRSC TYPE()` lists, in its order, the guest agent's channel among the `*CMN` resources when the system runs under a hypervisor that offers one.
+- No event: a client that follows subsystems or IPL state asks again; message queue watches (version 6) carry the operator's messages.
+
+### Service 9 `Develop`: libraries, objects, source members and compiles (version 8, draft)
+
+**Draft until QS/400 ships it.** Version 8 is what Code for QS/400, a VS Code extension, needs beside versions 1 to 7: the library list, objects, source members with their sequence numbers and dates, and compiles that return their diagnostics. Nothing in versions 1 to 7 changes; a peer that negotiates 7 or less never sees `Develop`, and its requests for it get `InvalidRequest`.
+
+Every operation runs as the signed-on profile and does what the command named beside it does, with that command's authority checks and messages. Names are system names; the server folds them to upper case, as the command line folds a name not in quotes. A generic `pattern` is a name, a name ending in `*` (`ASSET*`), or `*ALL`; empty is `*ALL`.
+
+- `LibraryKind` enum: `Production` 0 (`TYPE(*PROD)`), `Test` 1 (`TYPE(*TEST)`).
+- `LibraryList` = { `current` Option of String (none: no current library), `system` list of String (the system part and then the product libraries, in search order), `user` list of String (in search order) }.
+- `Library` = { `name` String, `kind` LibraryKind, `text` String }.
+- `ObjectEntry` = { `library` String, `name` String, `type` String (`*FILE`), `attribute` String (`PF`, `RPGLE`; empty when none), `text` String, `size` u64 (bytes), `changed` i64, `owner` String }.
+- `Attribute` = { `name` String, `value` String }.
+- `MemberEntry` = { `name` String, `srctype` String, `text` String, `records` u32, `created` i64, `changed` i64 }.
+
+| Service | Op | Request body | Reply body | Lane | Stands for |
+| --- | --- | --- | --- | --- | --- |
+| Develop | 1 `GetLibraryList` | — | `LibraryList` | lane | `DSPLIBL` |
+| Develop | 2 `SetLibraryList` | `current` Option of String, `user` list of String | `LibraryList` (as it now is) | lane | `CHGLIBL` |
+| Develop | 3 `ListLibraries` | `pattern` String, `start` u32, `max` u32 | `total` u32, `libraries` list of `Library` (by name) | concurrent | `WRKLIB` |
+| Develop | 4 `ListObjects` | `library` String (`*LIBL`, `*CURLIB`, `*USRLIBL`, `*ALL` or a library), `pattern` String, `types` list of String (empty: every type), `attribute` Option of String, `start` u32, `max` u32 | `total` u32, `objects` list of `ObjectEntry` (by library in search order, then name, then type) | concurrent | `WRKOBJ` |
+| Develop | 5 `DescribeObject` | `object` ObjectName, `type` String | `attributes` list of `Attribute` (in `DSPOBJD DETAIL(*FULL)` order) | concurrent | `DSPOBJD` |
+| Develop | 6 `ListMembers` | `file` ObjectName, `pattern` String, `start` u32, `max` u32 | `total` u32, `members` list of `MemberEntry` (by name) | concurrent | `WRKMBRPDM`, `DSPFD TYPE(*MBRLIST)` |
+| Develop | 7 `ReadMember` | `member` MemberName, `lock` flag | `srctype` String, `text` String, `width` u16 (the record's data length), `ccsid` u16 (the file's), `records` list of `SourceRecord` (split with `More` when large) | concurrent | `STRSEU` |
+| Develop | 8 `WriteMember` | `member` MemberName, `records` list of `SourceRecord`, `renumber` flag, `srctype` Option of String, `text` Option of String, `first` flag, `last` flag | `records` u32 | concurrent | `STRSEU`'s save |
+| Develop | 9 `UnlockMember` | `member` MemberName | — | concurrent | `DLCOBJ` |
+| Develop | 10 `CreateMember` | `member` MemberName, `srctype` String, `text` String | — | concurrent | `ADDPFM` |
+| Develop | 11 `CopyMember` | `from` MemberName, `to` MemberName, `replace` flag | — | concurrent | `CPYSRCF` |
+| Develop | 12 `RenameMember` | `member` MemberName, `new_name` String | — | concurrent | `RNMM` |
+| Develop | 13 `DeleteMember` | `member` MemberName | — | concurrent | `RMVM` |
+| Develop | 14 `ChangeMember` | `member` MemberName, `srctype` Option of String, `text` Option of String | — | concurrent | `CHGPFM` |
+| Develop | 15 `Compile` | `command` String | `job` JobId, `messages` list of `ServerMessage`, `diagnostics` list of `Diagnostic` | lane | the command |
+
+| Op | Statuses |
+| --- | --- |
+| `GetLibraryList` | `Ok` |
+| `SetLibraryList` | `Ok`; `NotFound` (a library, `CPF2110`); `NotAuthorized` (`CPF2182`); `Error` (`CHGLIBL`'s escape message, for example a library named twice) |
+| `ListLibraries`, `ListObjects`, `ListMembers` | `Ok`; `NotFound` (the library or file); `NotAuthorized` |
+| `DescribeObject` | `Ok`; `NotFound`; `NotAuthorized` |
+| `ReadMember` | `Ok`; `NotFound` (the file or member); `NotAuthorized`; `InUse` (`lock` 1 and another job holds the member; `lock` 0 and another job holds it `*EXCL`); `Error` (not a source file, or data the server cannot convert) |
+| `WriteMember` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` (another job holds the member); `Error` (data that does not convert to the file's CCSID); `InvalidRequest` (pieces out of order, sequence numbers not ascending or out of range, a record longer than the file's data length) |
+| `UnlockMember` | `Ok`; `NotFound` (the member is not locked by this connection) |
+| `CreateMember` | `Ok`; `NotFound` (the file); `NotAuthorized`; `Exists` |
+| `CopyMember`, `RenameMember` | `Ok`; `NotFound`; `NotAuthorized`; `Exists` (`to` or `new_name` taken; for `CopyMember` only without `replace`); `InUse` |
+| `DeleteMember`, `ChangeMember` | `Ok`; `NotFound`; `NotAuthorized`; `InUse` |
+| `Compile` | as `RunCommand`; `Error` when the compile failed (the message is the command's escape message, and the body is still filled) |
+
+**Rules.**
+
+- Lanes: `GetLibraryList`, `SetLibraryList` and `Compile` run in the connection's lane, in arrival order with `Command` requests and `Sql` 1 to 8, since they use the job's library list. Every other `Develop` operation runs concurrently, as the signed-on profile.
+- The library list is the connection job's. `SetLibraryList` changes it as `CHGLIBL LIBL(..) CURLIB(..)` does: `user` empty is `LIBL(*NONE)`, `current` none is `CURLIB(*CRTDFT)` (no current library), so a list `GetLibraryList` answered can be set again as it is. `Command.RunCommand`, `Compile` and the `*LIBL` and `*CURLIB` searches of every other operation see it.
+- Lists show what the commands show the profile: libraries and objects it has some authority to, as `WRKLIB` and `WRKOBJ` list them. `ListObjects` `*ALL` is every library the profile can see; `*USRLIBL` the user part of the library list; `types` and `attribute` filter (`attribute` none: any).
+- `DescribeObject`'s `name`s are the server's labels (`Library`, `Object`, `Type`, `Attribute`, `Owner`, `Text`, `Created`, `Changed`, `Size`, ...), its `value`s the text `DSPOBJD` shows; a client shows them as they come.
+- `ReadMember`:
+  - `data` is the record's data converted from the file's CCSID to UTF-8, trailing blanks removed; `width` is the data length in the file's bytes. A file whose CCSID cannot be converted (65535) is `Error` with `TCP1A5A`.
+  - With `lock` 1 the member is held `*SHRNUP` for the connection, as `STRSEU` holds a member it edits, until `UnlockMember`, a `WriteMember` of it by the same connection, or the connection's end. Other jobs read it meanwhile; none changes it. A member another job holds (any lock but `*SHRRD`) is `InUse` with `CPF1002`.
+- `WriteMember` replaces the member's records:
+  - A member over 1 MiB is sent in pieces: `first` 1 on the first piece, `last` 1 on the last (one request is both). Each piece is sent after the reply to the one before. The server keeps the pieces for the connection and writes the member, whole and at once, when the last arrives, so no other job ever reads a member half written, and the comparison below is with the member as it was. `renumber`, `srctype` and `text` are the last piece's. A piece with `first` 0 when no write of that member is in progress on the connection is `InvalidRequest`; a `first` 1 discards a write of the same member in progress. Pieces not written are discarded when the connection ends. The reply's `records` is the records received so far on a piece that is not the last, and the member's records on the last.
+  - Without `renumber`, `seq` must be ascending, each from 1 to 999999; with `renumber` 1 the records are numbered from `0001.00` in steps of `0001.00` (at most 9999 records).
+  - Dates: a record whose data equals the data of the member's record with the same `seq` (its `seq` before renumbering) keeps the `date` sent; every other record, changed or new, is dated today (the job's date). A client that reads a member and writes the same records back leaves it as it was.
+  - `data` is converted to the file's CCSID; a character with no encoding there is `Error` with `TCP1A5A`, and nothing is written. Data longer than the record's data length once converted is `InvalidRequest`.
+  - The member must exist (`CreateMember` adds one). Another job's lock on it (any but `*SHRRD`) is `InUse` with `CPF1002`. A lock this connection holds ends with the write.
+  - `srctype` and `text` none leave the member's as they are.
+- `UnlockMember` ends this connection's lock; a member it does not hold is `NotFound` with `TCP1A61`.
+- `CreateMember` is `ADDPFM`; `CopyMember` is `CPYSRCF` of one member, sequence numbers and dates kept, `MBROPT(*REPLACE)` with `replace` 1; `RenameMember` is `RNMM`; `DeleteMember` is `RMVM`; `ChangeMember` is `CHGPFM`, `srctype` and `text` none leaving each as it is. Each answers with its command's messages; a name taken is `Exists`.
+- `Compile` runs `command` as `RunCommand` does, in the connection job, and answers its `CommandReply` with the diagnostics the compiler left on the job for that command (`rpg/compdiag`): `CRTBNDRPG`, `CRTRPGMOD`, `CRTSQLRPGI`, `CRTBNDCL`, `CRTCLMOD`, `CRTPF`, `CRTLF`, `CRTDSPF`, `CRTPRTF`, `CRTCMD`, `RUNSQLSTM`, `CRTPGM`, `CRTSRVPGM`. A command that is not a compile answers its messages and no diagnostics. `Error` when the compile failed, the body still filled; `Cancelled` as `RunCommand`.
+
+### Service 10 `Jobs`: jobs and job logs (version 8, draft)
+
+**Draft until QS/400 ships it**, with `Develop`. A peer of version 7 or less never sees `Jobs`.
+
+- `JobState` enum: `Active` 0, `OnJobQueue` 1, `OnOutputQueue` 2 (ended, its spooled files kept).
+- `JobEntry` = { `id` JobId, `state` JobState, `status` String (as `WRKUSRJOB` shows it: `*ACTIVE`, `*JOBQ`, `*OUTQ`), `type` String (`BATCH`, `INTER`, `AUTO`, `PJ`, `SBS`, `SYS`, `RDR`, `WTR`), `subsystem` String (empty when not active), `function` String (as `WRKACTJOB` shows it, `PGM-QCMD`; empty when none), `entered` i64 (when the job entered the system) }.
+- `JobLogEntry` = { `message` ServerMessage, `kind` MessageType (service 7's), `sent` i64, `from_program` String, `to_program` String }.
+
+| Service | Op | Request body | Reply body | Stands for |
+| --- | --- | --- | --- | --- |
+| Jobs | 1 `ListJobs` | `user` String (`*CURRENT`, `*ALL`, a profile), `status` Option of JobState, `start` u32, `max` u32 | `total` u32, `jobs` list of `JobEntry` (active first, then on job queues, then on output queues; each by when it entered) | `WRKUSRJOB` |
+| Jobs | 2 `JobLog` | `job` JobId, `start` u32, `max` u32 | `total` u32, `entries` list of `JobLogEntry` (oldest first) | `DSPJOBLOG` |
+| Jobs | 3 `HoldJob` | `job` JobId | — | `HLDJOB` |
+| Jobs | 4 `ReleaseJob` | `job` JobId | — | `RLSJOB` |
+| Jobs | 5 `EndJob` | `job` JobId, `how` EndHow, `delay` Option of u32 (seconds; none: the job's default) | — | `ENDJOB` |
+
+| Op | Statuses |
+| --- | --- |
+| `ListJobs` | `Ok`; `NotFound` (an unknown profile, `CPF2204`); `NotAuthorized` (another profile's jobs, or `*ALL`, without `*JOBCTL`) |
+| `JobLog` | `Ok`; `NotFound` (no such job, or an ended job without a spooled job log); `NotAuthorized` |
+| `HoldJob`, `ReleaseJob`, `EndJob` | `Ok`; `NotFound` (`CPF1321`); `NotAuthorized`; `Error` (the command's escape message, for example a job already held) |
+
+**Rules.** Every operation runs concurrently as the signed-on profile, with its command's checks: the profile's own jobs need nothing, another user's need `*JOBCTL`, as the commands require. `JobLog` of an active job is its job log now; of an ended job, its spooled job log (`QPJOBLOG`) if one exists, else `NotFound`. `EndJob` of the connection's own job is `InvalidRequest`: a client signs off instead.
+
+### `Sql` additions (version 8, draft)
+
+- `RoutineKind` enum: `Procedure` 0, `Function` 1.
+- `Routine` = { `schema` String, `name` String, `specific` String (the specific name), `kind` RoutineKind, `text` String }.
+- `Index` = { `schema` String, `name` String, `unique` flag, `columns` list of String (the key columns, in key order) }.
+
+| Service | Op | Request body | Reply body | Allowed before sign-on |
+| --- | --- | --- | --- | --- |
+| Sql | 12 `ListRoutines` | `schema` String, `pattern` String (SQL `LIKE`), `kinds` list of RoutineKind (empty for both), `start` u32, `max` u32 | `total` u32, `routines` list of `Routine` (by name, then specific name) | no |
+| Sql | 13 `ListIndexes` | `schema` String, `table` String | `indexes` list of `Index` (by name) | no |
+
+Statuses as `ListSchemas` to `ListColumns`: `Ok`; `NotFound`; `NotAuthorized`. Both read the catalog (`QSYS2.SYSROUTINES`, `SYSINDEXES`, `SYSKEYS`) with the user's authority, keep no state and run concurrently, as operations 9 to 11 do.
+
+### Service 11 `Debug`: the source debugger (version 9, draft)
+
+**Draft until QS/400 ships it.** Version 9 is the debugger Code for QS/400 needs: the system's own source debugger (`STRDBG`), its stops reported over QAP instead of on a display. Nothing in versions 1 to 8 changes; a peer that negotiates 8 or less never sees `Debug`, its bodies or its events.
+
+A connection has one debug session at a time. The session debugs either the connection job itself (`Own`: the programs `Command.RunCommand` calls while the session is active) or another job (`Job`), attached as `STRSRVJOB` attaches it, or attached by a service entry point when it calls the program the entry names. Every operation runs concurrently on the connection's secondary threads, never in the lane, as the signed-on profile; the events are sent from the concurrent lane, as the watches' are.
+
+- `DebugTarget` enum: `Own` 0, `Job` 1 { `job` JobId }.
+- `View` enum: `Statement` 0, `Source` 1, `Listing` 2.
+- `DebugModule` = { `name` String, `views` list of View }.
+- `LineBreakpoint` = { `line` u32 (the `*SOURCE` view's, 1-based), `condition` Option of String (`variable op value`, `op` one of `=`, `<>`, `<`, `<=`, `>`, `>=`) }.
+- `BreakpointSet` = { `line` u32 (the line it landed on), `stmt` u32 }.
+- `ResumeHow` enum: `Go` 0, `StepOver` 1, `StepInto` 2, `StepOut` 3.
+- `Frame` = { `program` ObjectName, `module` String, `procedure` String, `stmt` u32, `line` u32 (0 when not known), `view` View (the view `line` is of) }.
+- `Variable` = { `name` String, `type` String, `value` String (as `EVAL` shows it; empty for a structure or array with parts), `expandable` flag }.
+- `StopReason` enum: `Breakpoint` 0, `Step` 1, `ServiceEntry` 2, `Exception` 3 { `message` ServerMessage }, `ProgramEnd` 4.
+
+| Service | Op | Request body | Reply body | Allowed before sign-on |
+| --- | --- | --- | --- | --- |
+| Debug | 1 `Start` | `target` DebugTarget | `session` u32 | no |
+| Debug | 2 `End` | — | — | no |
+| Debug | 3 `AddProgram` | `program` ObjectName, `type` String (`*PGM`, `*SRVPGM`) | `modules` list of `DebugModule` | no |
+| Debug | 4 `SetBreakpoints` | `program` ObjectName, `module` String (empty: the first), `lines` list of `LineBreakpoint` | `set` list of `BreakpointSet`, one per line asked, in order | no |
+| Debug | 5 `Resume` | `how` ResumeHow | — | no |
+| Debug | 6 `Stack` | — | `frames` list of `Frame`, the newest first | no |
+| Debug | 7 `Variables` | `frame` u32 (0 the newest), `parent` Option of String (a structure or array to expand) | `variables` list of `Variable` | no |
+| Debug | 8 `Eval` | `frame` u32, `expression` String (`NAME`, `NAME:x`, `NAME:c`) | `value` String | no |
+| Debug | 9 `SetServiceEntry` | `program` ObjectName, `user` String (`*CURRENT` or a profile) | — | no |
+| Debug | 10 `RemoveServiceEntry` | `program` ObjectName | — | no |
+
+| Op | Statuses |
+| --- | --- |
+| `Start` | `Ok`; `InUse` (a session is active on the connection, `TCP1A72`; the job is serviced already, `CPF3503`); `NotFound` (no such job, `CPF3520`); `NotAuthorized` (another user's job without `*SERVICE`, `CPF3502`); `Error` (the connection's own job named, `CPF3501`) |
+| `End` | `Ok`; `Error` (no session, `TCP1A71`) |
+| `AddProgram` | `Ok`; `NotFound` (`CPF9801`); `NotAuthorized`; `Error` (compiled `DBGVIEW(*NONE)`: `CPF9C15`, the message `STRDBG` gives on the primary oracle, `tools/conformance/oracle/debug/primary`) |
+| `SetBreakpoints` | `Ok`; `NotFound` (the program was not added, or no such module, `CPF9801`); `Error` (no statement starts on or after a line, `CPD9CCB`; a condition that does not read, `CPF9C59`); nothing changes when one line fails |
+| `Resume`, `Stack` | `Ok`; `Error` (no job is stopped, `CPD9CCC`) |
+| `Variables`, `Eval` | `Ok`; `Error` (no job is stopped, `CPD9CCC`; `Eval` of a name that is not a variable of the frame, `CPF7E12`); `InvalidRequest` (no such frame, `TCP1A77`) |
+| `SetServiceEntry` | `Ok`; `NotFound` (`CPF9801`); `NotAuthorized` (another user's jobs without `*SERVICE`, `TCP1A74`) |
+| `RemoveServiceEntry` | `Ok`; `NotFound` (not set by this session, `TCP1A73`) |
+
+Every operation but `Start` answers `Error` with `TCP1A71` when no session is active on the connection.
+
+**Events (`request_id` 0, status `Ok`).** `Debug` op 100 `Stopped` (body `job` JobId, `reason` StopReason, `frame` Frame: the newest frame, as `Stack` gives it), each time a debugged job stops; it waits for `Resume`. `Debug` op 101 `DebugEnded` (body `message` Option of ServerMessage), when the session ends other than by `End`: the debugged job ended (`TCP1A75`), or the connection signed off (`TCP1A76`).
+
+**Authority.**
+
+- `Start` with `Job` checks as `STRSRVJOB`: a job of the signed-on profile needs nothing; another user's needs `*SERVICE`.
+- `SetServiceEntry` for a `user` other than the signed-on profile needs `*SERVICE`.
+- `AddProgram` finds the program as `STRDBG` does, in the connection job's library list for `*LIBL`.
+
+**Rules.**
+
+- Line numbers are the `*SOURCE` view's. A breakpoint lands on the first statement that starts on or after its line; `BreakpointSet` says where. A module without a source view takes statement numbers as lines and answers `Statement` frames.
+- `SetBreakpoints` replaces the module's breakpoints; an empty `lines` removes them. Breakpoints may change while a job is stopped.
+- A breakpoint with a `condition` stops only when the condition holds at the statement, the variable's value read as `EVAL` shows it (compared as numbers when both sides are numbers).
+- `Own`: programs added go under debug in the connection job and the breakpoints reach it from its next call. A `RunCommand` whose program stops gets no reply while it is stopped; meanwhile `Stack`, `Variables`, `Eval` and `Resume` answer, and its reply comes when the command ends. A `Cancel` of the command while it is stopped ends it as any cancel does.
+- `Job`: the job takes the session's programs and breakpoints at its next program call or break poll, as a job serviced by `STRSRVJOB` takes them. A stop holds the job exactly as `STRDBG` from the console holds it: a display session waits at its keyboard-locked display until `Resume`.
+- `SetServiceEntry`: the next call of the program (from a command line, a menu, a program's call) by a job running as `user` attaches that job to this session, puts the program under debug there and stops it at the program's first statement with reason `ServiceEntry`. The entry fires while the session debugs no other job; while a job is attached, other jobs' calls run on. An attached job stays attached until the session ends, and the session's breakpoints apply to it.
+- `StepOver` stops at the next statement of the stopped procedure or its callers, `StepInto` at the next statement anywhere, `StepOut` at the next statement of a caller.
+- `Variables` without `parent` lists a frame's own variables; with it, the parts of a structure (`DS.SUB`) or array (`ARR(1)`) whose `expandable` was 1.
+- `End`, a sign-off and the connection's close end the session: a stopped job goes on, an attached job is let go, the service entry points are removed.
+
+`ServerMessage`s in bodies are in the job's language, as every message is.
+
 ### `SignOn` additions (version 2)
 
 | Service | Op | Request body | Reply body | Allowed before sign-on |
@@ -405,6 +648,27 @@ Version 6 is:
 - `Ifs` operation 9 `Stat`.
 
 It introduces no status: every status these operations answer exists in an earlier version. Events are sent from the concurrent lane, as every operation outside the lane runs. A version 1 to 5 peer never receives the `Messages` service, a watch's event or any of these bodies. The server accepts versions 1 to 6 and picks the highest both sides support.
+
+### Version 7 (draft)
+
+Version 7 is `Manage` (service 8) operations 1 `ListSubsystems` to 10 `PowerDown`, with the types and rules above, and the exit point `QS400_QAP_MGMT`. It introduces no status and no event: every status these operations answer exists in an earlier version. A version 1 to 6 peer never receives the `Manage` service or any of its bodies, and its requests for them get `InvalidRequest`. The server accepts versions 1 to 7 and picks the highest both sides support. Until QS/400 ships version 7 its operations and bodies may still change; versions 1 to 6 may not.
+
+### Version 8 (draft)
+
+Version 8 is:
+
+- `Develop` (service 9) operations 1 `GetLibraryList` to 15 `Compile`, with the types and rules above;
+- `Jobs` (service 10) operations 1 `ListJobs` to 5 `EndJob`;
+- `Sql` operations 12 `ListRoutines` and 13 `ListIndexes`;
+- the common types `MemberName`, `SourceRecord`, `Where` and `Diagnostic`, and `EndHow` as a common type (its values unchanged).
+
+It introduces no status and no event: every status these operations answer exists in an earlier version. A version 1 to 7 peer never receives `Develop`, `Jobs`, `Sql` 12 or 13 or any of their bodies, and its requests for them get `InvalidRequest`; `Hello` lists services 9 and 10 only at version 8 and above. The server accepts versions 1 to 8 and picks the highest both sides support. Until QS/400 ships version 8 its operations and bodies may still change; versions 1 to 6 may not.
+
+**Why `WriteMember` pieces carry `first` and `last` rather than an offset.** A member is records, not bytes, and it is written whole: the server compares each record with the member's to keep or set its date, renumbers the whole list, and replaces the records in one step, so a reader never sees half of a write. With an offset, each piece would be a write of its own and the member would stand half old and half new between pieces (and after a client that stops); with the pair, the server holds the pieces and writes once, at `last`. A client that stops before `last` changes nothing.
+
+### Version 9 (draft)
+
+Version 9 is `Debug` (service 11) operations 1 `Start` to 10 `RemoveServiceEntry` and the events `Stopped` (100) and `DebugEnded` (101), with the types and rules above. It introduces no status: every status these operations answer exists in an earlier version. A version 1 to 8 peer never receives the `Debug` service, its events or any of its bodies, and its requests for them get `InvalidRequest`. The server accepts versions 1 to 9 and picks the highest both sides support. Until QS/400 ships version 9 its operations and bodies may still change.
 
 ## Open questions
 
@@ -972,3 +1236,234 @@ Version 6, as built on 2026-11-03 (decisions made in the build, for Cody to revi
 - The test system's `Files::change_twice(path)` changes a file twice
   with its `modified` held, for the client's test of two changes in one
   millisecond.
+
+Version 7, as built on 2026-11-04 (draft; decisions made in the build, for Cody to review):
+
+- `qap-proto` speaks 1 to 7 (`VERSION` 7, `tools/fmtcheck`'s lock bumped
+  with it); every value of versions 1 to 6 keeps its number and meaning
+  (`qap-proto` test `version7::versions_1_to_6_unchanged`, `fmtcheck`).
+  `Manage` is service 8; its ten operations are 1 to 10 and none is in
+  the lane or allowed before sign-on.
+- The service's rules live in `net/qapd/src/manage.rs`: the body
+  decoded (`InvalidRequest` when it does not), the exit request built
+  and given to `ThreadHost::exit_allows`, then the host's method; lists
+  are paged there from the host's whole list. A host without management
+  answers every operation `Error` with `TCP1A5D`; `TCP1A5E` (an exit
+  program refused) and `TCP1A5F` (a value a system value does not take)
+  are in `QTCPMSG` beside it.
+- `QS400_QAP_MGMT` (`QAPX0100`) is a shipped exit point of the
+  registration facility (`net/regfac/src/shipped.rs`), with the host
+  servers' flags and two parameters, so `regfac::call_exit` calls its
+  program with `ExitRequest::host("QAPX0100", ..)` and `GR` entries come
+  from the registry as for the host servers. `*QAP`'s row in the servers
+  table names it.
+- The test system (`qapd::testing::manage`): subsystems, system values,
+  PTFs, disks, hardware and the IPL under the commands' rules, its
+  fixtures in the module's documentation; profiles `OPER` (`*JOBCTL`)
+  and `SECOFR` (every special authority); `Manage::exit_refuses` is the
+  exit program, `exit_calls` what it was given. `PowerDown` answers, then
+  ends the server 50 ms later, so the client sees `ServerEnding`.
+- The connection job (`work/qsjob/src/work/qap/manage.rs`) answers
+  every `Manage` operation on a secondary thread's link, as the
+  signed-on profile. `StartSubsystem`, `EndSubsystem`,
+  `SetSystemValue` and `PowerDown` are first analyzed as the command
+  strings `STRSBS SBSD()`, `ENDSBS SBS() OPTION() DELAY()`,
+  `CHGSYSVAL SYSVAL() VALUE('')` and `PWRDWNSYS OPTION() DELAY()
+  RESTART() IPLSRC()` (the `*CMD` found and its authority checked as
+  for a typed line). `ENDSBS` and `CHGSYSVAL` then run their
+  processing programs in the service (`run_cmd`), with their checks
+  and `SV` entries; `STRSBS` asks the service's check (`sbs_check`,
+  `*JOBCTL`) and starts the monitor as the job's `STRSBS` does;
+  `PowerDown` goes to the service's request 773, which requires
+  `*JOBCTL` there (so a refusal is audited `AF K`) and hands the power
+  down to `slic` as `PWRDWNSYS` from a job does.
+- `SetSystemValue` checks the name (`CPF1842`) and the value against
+  the catalog's type, allowed values and range before the command
+  (`TCP1A5F`), and answers the value read back; a value the command
+  did not take is `TCP1A5F` too.
+- A read first finds its display's command with the authority to use
+  it: `WRKSBS`, `DSPSYSVAL`, `DSPPTF`, `WRKDSKSTS`, `WRKHDWRSC`; the
+  job looks it up through the analyzer's own source (`RemoteCmds`, the
+  service's `cmd_lookup`: the library list, then `*OBJOPR` and `*USE`
+  to the `*CMD`, `cmd.run`), so a request has exactly the profile's
+  authority, adopted authority included, and a command not found is
+  `NotFound` `CPD0030`, never a pass. The service checks again for the
+  reads it answers itself (`ListPtfs` `DSPPTF`, `ListDiskUnits`
+  `WRKDSKSTS`) rather than trust the job. `DSPPTF` is shipped `*PUBLIC
+  *EXCLUDE`, so `ListPtfs` is `NotAuthorized` for a user the security
+  officer has not authorized. `IplStatus` needs nothing. Commands,
+  programs and objects named in `RunCommand` are the analyzer's and the
+  store guard's checks as at a 5250 command line: a command, a program
+  or a library `*PUBLIC *EXCLUDE` refuses the profile (QEMU step 123;
+  `lic/osobjects/tests/exclude.rs`). In earlier builds the first IPL's
+  re-owning had widened the excluded commands to `*USE`
+  (`SECURITY.md` §1, Shipped profiles).
+- The lists: `ListSubsystems` from `sbs_list` and the `*SBSD` objects
+  of the library (`*ALL` every library, `*LIBL` the job's list; an
+  unknown library is `NotFound` `CPF2110`), a monitor's job named as
+  its subsystem under `QSYS`; `GetSystemValues` from `DSPSYSVAL`'s
+  data, `value` its elements joined by one blank, `category` the
+  group without `*`, `kind` the catalog's type (no value is
+  `Integer`); `ListHardwareResources` from the hardware table in
+  `WRKHDWRSC TYPE()`'s order, `parent` the row above at one level
+  less. `ListPtfs`, `ListDiskUnits` and `IplStatus` come from the
+  storage service's requests 770 to 772 (`stgsvc/qap/manage.rs`): the
+  PTF database (`text` the status's text, as no PTF carries one;
+  not-loaded, ordered and cover-letter-only PTFs are `SaveFileOnly`),
+  the disk configuration as DST shows it without a service tools
+  sign-on (units numbered from 1 as DST shows them; an ASP's capacity counts a mirrored pair once, its
+  threshold DST's), the LIC record's last IPL (type, mode, slot, its
+  final SRC) with `QABNORMSW`, the next slot a LIC PTF arms, and
+  `restricted` when no subsystem is active; `ipl_time` is the system
+  job `SCPF`'s start, as `SystemInfo` has it.
+- `QS400_QAP_MGMT`'s programs are listed through the registry
+  (`RemoteRegistry`); when one is registered the thread builds a
+  runtime job of its own over its link to call it, so a program runs
+  in the connection job beside the lane, never in it.
+- QEMU step 123 runs the service end to end as a user without special
+  authority and as `QSECOFR`.
+
+Version 8, as built on 2026-11-07 (draft; decisions made in the build, for Cody to review):
+
+- `qap-proto` speaks 1 to 8 (`VERSION` 8; `tools/fmtcheck`'s `qap` lock
+  bumped with it, `develop.rs` and `jobs.rs` registered as the draft
+  format `qap-v8`). The server accepts 1 to 8. Version 9 (`Debug`)
+  appends `Service::Debug` = 11 with `since` 9, its operations in `Op`
+  with `since` 9, and raises `VERSION` to 9; nothing else changes, and
+  `Hello` then lists service 11 only at 9. `EndHow` is
+  `qap_proto::types::EndHow`, re-exported from `ops::manage`.
+- `qap_proto::types::{MemberName, Where, Diagnostic}` convert to and from
+  `rpg/compdiag`'s (`From`), `MemberName`'s library and file becoming
+  the `ObjectName`. The Rust fields `where` and `type` are `r#where` and
+  `r#type`.
+- The rules shared by every host live in `net/qapd/src/develop.rs` and
+  `jobs.rs`: decoding, paging, `WriteMember`'s pieces (kept per
+  connection in `Shared`, by member, until `last`), the sequence-number
+  checks, the date rule (`develop::dated`) and `EndJob` of the
+  connection's own job (`InvalidRequest`). A host without `Develop` or
+  `Jobs` answers `Error` with `TCP1A60`; `TCP1A61` (`UnlockMember` of a
+  member not held) and `TCP1A62` (a record too long) are in `QTCPMSG`
+  beside it; a CCSID that cannot hold the data is version 5's `TCP1A5A`,
+  a member another job holds `CPF1002`.
+- The connection job (`work/qsjob/src/work/qap/develop.rs`, `jobs.rs`):
+  `GetLibraryList` reads the job's attributes, `SetLibraryList` runs
+  `CHGLIBL LIBL() CURLIB()` in the job's runtime, so the next
+  `RunCommand` and `Compile` see it. `ListLibraries` lists the `*LIB`
+  objects of `QSYS` with their `TYPE`; `ListObjects` the library's
+  objects with their sizes (`obj_sizes`); `DescribeObject` the object
+  and `DSPOBJD DETAIL(*FULL)`'s fields under readable labels;
+  `ListMembers` the file's members. `CreateMember`, `CopyMember`,
+  `RenameMember`, `DeleteMember` and `ChangeMember` are `ADDPFM`,
+  `CPYSRCF`, `RNMM`, `RMVM` and `CHGPFM` analyzed as typed lines and run
+  in the service; `HoldJob`, `ReleaseJob` and `EndJob` likewise
+  `HLDJOB`, `RLSJOB` and `ENDJOB`. `CPYSRCF` now keeps each record's
+  sequence number and date (`SRCOPT(*SAME)`, as IBM's does; `*SEQNBR`
+  renumbers from `SRCSEQ`, `*DATE` clears the dates) and takes
+  `MBROPT(*ADD)`; it used to renumber and redate every record.
+- `ReadMember`, `WriteMember` and `UnlockMember` are the service's
+  requests 780 to 782 (`stgsvc/qap/develop.rs`), as the job's user under
+  the store's guard, over `db::source` (`records`, `read_member` and the
+  new `write_records`). The lock is the store's `*SHRNUP`, held by the
+  connection job, so the job's end releases it. A write takes the member
+  `*EXCL` for the moment it writes, as SEU's save does, and ends the
+  connection's `*SHRNUP`. Today's date is the UTC date, as SEU's.
+- `ListJobs` reads what `WRKUSRJOB` reads (the active job table, the job
+  queues, the jobs with spooled files); its `type` is `INTER`, `BATCH`,
+  `AUTO` or the `WRKACTJOB` code. `JobLog` of an active job is the
+  service's copy (`joblog_of`); of an ended one its last spooled
+  `QPJOBLOG`, read back with `wm::joblog::parse_printed`. A request is
+  `Informational` (service 7 has no request type).
+- `ListRoutines` and `ListIndexes` read `QSYS2.SYSROUTINES`,
+  `SYSINDEXES` and `SYSKEYS` on the thread's link as 9 to 11 do; an
+  index is `unique` when `IS_UNIQUE` is `U` or `V`, its keys in
+  `ORDINAL_POSITION` order. `ListIndexes` checks the table as
+  `ListColumns` does.
+- `Compile` runs `work/qsjob/src/work/qap/compile.rs`'s `compile`: the job's last
+  compile cleared, the command run as `RunCommand` runs it, then the
+  diagnostics the compiler left on the job (`mi::Job::last_compile`),
+  converted from `compdiag`'s. A failed compile is `Error` with its
+  escape message and the body filled. The test system compiles
+  `CRTBNDRPG`, `CRTRPGMOD` and `CRTSQLRPGI` of its members, knowing one
+  error (`n = 'x';`, `RNF7416`; member `HLINV/QRPGLESRC BAD42` has it on
+  line 42). QEMU step 161 compiles `tools/conformance/qap/COMPILE42.rpgle`.
+- The test system (`qapd::testing::develop` and `jobs`): its fixtures
+  are in the modules' documentation. QS/400 ships no `CMPPFM`, so QEMU
+  step 160 compares the members record by record.
+
+Version 9, as built on 2026-11-07 (draft; decisions made in the build, for Cody to review):
+
+- `qap-proto` speaks 1 to 9 (`VERSION` 9). `Debug` is service 11; its
+  operations are 1 to 10 (`Op::DebugStart`, `DebugEnd`, `AddProgram`,
+  `SetBreakpoints`, `DebugResume`, `Stack`, `Variables`, `Eval`,
+  `SetServiceEntry`, `RemoveServiceEntry`), none in the lane or allowed
+  before sign-on; its events 100 and 101 are defined from version 9
+  (`ops::event::since`), so `Shared::send` drops them for an older peer.
+  `tools/fmtcheck` holds `ops/debug.rs` as the draft format `qap-debug`.
+- One session per connection, not per signed-on session: an attached
+  connection has a job of its own, and `Own` debugs the job of the
+  connection that started it. `Start` on a connection with a session is
+  `InUse` (`TCP1A72`). Messages `TCP1A70` to `TCP1A77` are in `QTCPMSG`.
+- The rules live in `net/qapd/src/debug.rs` over the host's `DebugHost`
+  (`ThreadHost::debugger`; a host without one answers `Error` with
+  `TCP1A70`). The events are the host's news, taken by the watches'
+  thread at each look (`Config::watch_poll`); a session started makes
+  that thread as a watch does. `End` sends no event; a sign-off ends the
+  session with `DebugEnded` (`TCP1A76`) before its reply; a connection
+  closing ends it quietly.
+- The connection job (`work/qsjob/src/work/qap/debug/`) keeps the
+  session for the process. `Own`: the programs added are put under
+  debug (`Job::strdbg`) and the breakpoints given to the core
+  (`mi::debug`) by the job's own thread at its next `CALL` and break
+  poll; its stop hook (installed before the display's, so `STRDBG` at a
+  display is unchanged) tells the client and waits, answering the
+  secondary threads' `Stack`, `Variables` and `Eval` (`Job::dbg_frames`,
+  `dbg_variables`, `eval_in`, added to the core) until `Resume`, `End`,
+  a `Cancel` of the command (`CPF1907`, as any cancel) or the job's end.
+- `Job`: `Start` is `STRSRVJOB`'s request (`srvjob_start`: the profile's
+  own jobs, or `*SERVICE`, or `*ALLOBJ` as `STRSRVJOB` allows it in
+  QS/400), and every order goes through its mailboxes (requests 384 to
+  387), with four new orders for QAP (`Frames`, `Vars`, `EvalAt`,
+  `StepOut`) and their answers. The serviced job takes them as it takes
+  `STRSRVJOB`'s, at a program call, a break poll, and while stopped, so a
+  5250 job holds at its locked display exactly as under `STRSRVJOB`. The
+  servicer learns the job ended when `srvjob_serving` finds it gone
+  (`DebugEnded`, `TCP1A75`).
+- Service entry points (requests 388 to 391, `stgsvc/dbg.rs`): the
+  storage service keeps owner, program (`LIB/NAME`, found in the owner's
+  library list) and user. Every job's dynamic calls (`Job::call_program`,
+  so `CALL` at a command line, a menu option and a program's call)
+  check a list of the programs with entries for the job's user, read
+  again at most once a second (`devtools/dbg/entry.rs`); a name on it
+  asks the service, which attaches the job to the owner as `STRSRVJOB`
+  would when the owner is active and services no job and nobody
+  services the caller. The job then puts the program under debug and
+  stops at its first statement; the owner's next look sees the
+  attachment, puts the entry's programs on the session and sends the
+  breakpoints, and reports the stop as `ServiceEntry`.
+- Lines: `AddProgram` reads the modules as Display Module Source does
+  (`dbg_program`, which now also gives the statements each module's
+  debug code has); a breakpoint lands on the first line at or after the
+  one asked whose statement the code has. RPG numbers statements by
+  source line, so an RPG module's lines and statements are the same.
+  `DBGVIEW(*SOURCE)` and `*COPY` give `Statement` and `Source`, `*LIST`
+  `Statement` and `Listing`, `*ALL` all three, `*STMT` `Statement`.
+- Conditions are those of `ADDBKP`'s and Display Module Source's
+  breakpoints (`dbg::cond`), evaluated at the stop: in the job for `Own`,
+  with an `EvalAt` order for `Job`.
+- Not sent in this build: `StopReason::Exception` and `ProgramEnd`. An
+  exception the program does not handle goes to the job's own handling
+  (an inquiry, a function check), as under `STRDBG` in QS/400 today; a
+  step past a program's end runs on without a stop.
+- The test system (`qapd::testing::debug`): `HLINV/ASSETS` with its
+  source and variables, `HLINV/NODEBUG`, display sessions' jobs
+  (`System::interactive_job`, `call_in`, `end_job`); `SECOFR` now has
+  `*SERVICE` too.
+- QEMU steps 162 (`Own`, a version 8 connection's gate) and 163 (a
+  service entry point stopping a 5250 session's job) run it end to end
+  as `QAPTEST`.
+
+## Frozen at V1R1M0
+
+Frozen: the envelope and versions 1 to 6 as specified above, the `qap-proto` crate's types for them, and the rules under "Compatibility of new values". A new operation, service, status or event is a new protocol version; nothing in versions 1 to 6 changes meaning. Draft: anything added after version 6 (the management API of Phase 12 Section 7 is specified in its own section and is draft until QS/400 ships it); the "Later phases" inventory describes what was planned and is history, not specification.
+
+Changes require a format version bump and a migration: a reader of the old version kept beside the new one, or a conversion run at IPL or on restore, and a row in the release notes. `tools/fmtcheck` holds the frozen definitions (`tools/fmtcheck/formats.toml`) and their hashes (`formats.lock`); `cargo test -p fmtcheck` and `build test` fail when a definition changes and its version does not.

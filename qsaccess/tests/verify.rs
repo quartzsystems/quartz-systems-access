@@ -220,13 +220,13 @@ fn a_version_the_server_does_not_speak() {
     let s = start(cfg());
     let (_l, port) = telnet();
     let mut p = plan(&s, port, None);
-    p.target.options.min_version = 7;
-    p.target.options.max_version = 8;
+    p.target.options.min_version = 10;
+    p.target.options.max_version = 11;
     let r = run(&p);
     let o = result(&r, Check::Hello);
     assert_eq!(failed_id(o), id::QAP_VERSION_UNSUPPORTED);
     assert_eq!(
         o.detail(),
-        "QAD4055: QAP server on 127.0.0.1 supports none of protocol versions 7 to 8."
+        "QAD4055: QAP server on 127.0.0.1 supports none of protocol versions 10 to 11."
     );
 }

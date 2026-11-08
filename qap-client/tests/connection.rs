@@ -75,9 +75,9 @@ fn an_untrusted_certificate_goes_to_the_trust_flow() {
 fn version_mismatch() {
     let s = start(cfg());
     let mut t = s.target();
-    // The server speaks versions 1 to 6.
-    t.options.min_version = 7;
-    t.options.max_version = 9;
+    // The server speaks versions 1 to 9.
+    t.options.min_version = 10;
+    t.options.max_version = 12;
     let e = Connection::open(&t).unwrap_err();
     assert_eq!(e.status(), Some(Status::VersionUnsupported), "{e:?}");
     until("the server to close", || {
