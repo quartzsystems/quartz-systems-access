@@ -18,7 +18,7 @@ use qap_client::jobs::Jobs;
 use qap_client::proto::ops::develop::{ListLibraries, ListMembers, ListObjects, SetLibraryList};
 use qap_client::proto::ops::jobs::{JobLog, JobState, ListJobs};
 use qap_client::proto::ops::sql::{ListRoutines, RoutineKind};
-use qap_client::proto::types::{EndHow, JobId, MemberName, ObjectName, Where};
+use qap_client::proto::types::{EndHow, JobId, MemberName, ObjectName, SourceRecord, Where};
 use qap_client::proto::{Op, Service, VERSION};
 use qap_client::{Attached, Client, CompileOutcome, Error, OFFERED_VERSION, Secret, Status};
 use qapd::testing::develop::BIG_RECORDS;
@@ -237,18 +237,33 @@ fn a_member_over_1_mib_is_read_whole_and_written_back_in_pieces() {
             .zip(1u32..)
             .all(|(r, i)| r.seq == i * 100)
     );
+    // The test system's BIG runs to sequence number 12000.00, past the
+    // 9999.99 a write takes, and has more records than renumbering takes:
+    // its records go back numbered from 0000.01 in steps of 0000.01.
+    let records: Vec<_> = big
+        .records
+        .iter()
+        .zip(1u32..)
+        .map(|(r, i)| SourceRecord {
+            seq: i,
+            ..r.clone()
+        })
+        .collect();
     // The pieces the write takes, each answered before the next.
-    let pieces = qap_client::develop::pieces(&mbr("BIG"), &big.records, &WriteOptions::default())
+    let pieces = qap_client::develop::pieces(&mbr("BIG"), &records, &WriteOptions::default())
         .unwrap()
         .len();
     assert!(pieces >= 2, "{pieces}");
     let before = frames(&c);
     let n = c
-        .write_member(&mbr("BIG"), &big.records, &WriteOptions::default())
+        .write_member(&mbr("BIG"), &records, &WriteOptions::default())
         .unwrap();
     assert_eq!(n as usize, BIG_RECORDS);
     assert_eq!(frames(&c) - before, pieces as u64);
-    assert_eq!(c.read_member(&mbr("BIG"), false).unwrap(), big);
+    let now = c.read_member(&mbr("BIG"), false).unwrap();
+    let got: Vec<_> = now.records.iter().map(|r| (r.seq, &r.data)).collect();
+    let sent: Vec<_> = records.iter().map(|r| (r.seq, &r.data)).collect();
+    assert_eq!(got, sent);
 }
 
 #[test]
