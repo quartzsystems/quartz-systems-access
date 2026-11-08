@@ -855,9 +855,9 @@ everything earlier works as before.
 
 For `qap-client` alone: the desktop app does not call these services and
 still agrees version 6, so nothing in its windows changes. On QS/400 at
-f6cb4aa2 (`QSHQ400`, at 10.42.70.150), prepared first:
+7f82a43f (`QSHQ400`, at 10.42.70.150), prepared first:
 
-1. QS/400 at f6cb4aa2 installed (`STRTCPSVR SERVER(*QAP)`; the check below
+1. QS/400 at 7f82a43f installed (`STRTCPSVR SERVER(*QAP)`; the check below
    prints "QAP version 9"), with the Phase 7 setup (library `HLINV` and its
    source file `QRPGLESRC` with member `ASSETS`), and `CWELLMAN` allowed to
    change `HLINV/QRPGLESRC`;

@@ -1,4 +1,4 @@
-<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit f6cb4aa2284e087791a631972980bb0aa06fb0c2. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
+<!-- Read-only copy of quartz-systems-400 docs/QAP.md at commit 7f82a43fc5edfb8bfd7a84753d6e77e23704fffb. Do not edit: change the spec in QS/400 first, then re-pin (ci/spec-mirror.sh). -->
 # QAP: Quartz Access Protocol, version 1 (draft)
 
 QAP is how QS/400 Access talks to QS/400 for everything except display and printer sessions, which stay on the system's Telnet server. It is an original Quartz design.
@@ -1357,7 +1357,7 @@ Version 8, as built on 2026-11-07 (draft; decisions made in the build, for Cody 
   `CPYSRCF`, `RNMM`, `RMVM` and `CHGPFM` analyzed as typed lines and run
   in the service; `HoldJob`, `ReleaseJob` and `EndJob` likewise
   `HLDJOB`, `RLSJOB` and `ENDJOB`. `CPYSRCF` now keeps each record's
-  sequence number and date (`SRCOPT(*SAME)`, as IBM's does; `*SEQNBR`
+  sequence number and date (`SRCOPT(*SAME)`, as the original command does; `*SEQNBR`
   renumbers from `SRCSEQ`, `*DATE` clears the dates) and takes
   `MBROPT(*ADD)`; it used to renumber and redate every record.
 - `ReadMember`, `WriteMember` and `UnlockMember` are the service's

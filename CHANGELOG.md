@@ -15,7 +15,7 @@ each crate's name. Breaking changes are marked **Breaking**.
 ### qap-client
 
 QAP versions 8 and 9 (drafts), for Code for QS/400; QS/400 pinned at
-f6cb4aa2. QS/400 Access for Desktop does not use them and still offers
+7f82a43f. QS/400 Access for Desktop does not use them and still offers
 versions 1 to 6.
 
 - `OFFERED_VERSION` (6), what `Options::default()` now offers instead of

@@ -44,9 +44,9 @@ use qap_client::proto::types::{MemberName, ObjectName, SourceRecord};
 use qap_client::{Client, CommandOutcome, CompileOutcome, Secret, Status};
 use qsa_config::ConfigDir;
 
-/// `tools/conformance/qap/COMPILE42.rpgle` at QS/400 f6cb4aa2.
+/// `tools/conformance/qap/COMPILE42.rpgle` at QS/400 7f82a43f.
 const COMPILE42: &str = include_str!("../../qap-client/tests/fixtures/COMPILE42.rpgle");
-/// `ASSETS` of `tools/conformance/src/qap/debug.rs` at QS/400 f6cb4aa2.
+/// `ASSETS` of `tools/conformance/src/qap/debug.rs` at QS/400 7f82a43f.
 const DBGASSETS: &str = include_str!("../../qap-client/tests/fixtures/ASSETS.rpgle");
 
 const WAIT: Duration = Duration::from_secs(90);

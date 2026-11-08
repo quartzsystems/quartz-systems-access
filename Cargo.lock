@@ -205,7 +205,7 @@ dependencies = [
 [[package]]
 name = "blockdev"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "rustix",
  "thiserror",
@@ -274,7 +274,7 @@ dependencies = [
 [[package]]
 name = "ccsid"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "thiserror",
 ]
@@ -345,7 +345,7 @@ dependencies = [
 [[package]]
 name = "compdiag"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 
 [[package]]
 name = "const-oid"
@@ -469,7 +469,7 @@ dependencies = [
 [[package]]
 name = "dds"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "ccsid",
  "compdiag",
@@ -545,7 +545,7 @@ dependencies = [
 [[package]]
 name = "diskimg"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "blockdev",
  "fatfs",
@@ -829,10 +829,10 @@ dependencies = [
 [[package]]
 name = "ifs"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "ccsid",
- "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "optical",
  "rustix",
  "sec",
@@ -844,7 +844,7 @@ dependencies = [
 [[package]]
 name = "ifscmd"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "ccsid",
  "ifs",
@@ -882,7 +882,7 @@ dependencies = [
 [[package]]
 name = "ipc"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3#8306ec412b4d8634bda5d3f0201bf0d465a680c3"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "thiserror",
 ]
@@ -890,7 +890,7 @@ dependencies = [
 [[package]]
 name = "ipc"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3#8306ec412b4d8634bda5d3f0201bf0d465a680c3"
 dependencies = [
  "thiserror",
 ]
@@ -914,7 +914,7 @@ dependencies = [
 [[package]]
 name = "jrn"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "ccsid",
  "qsname",
@@ -958,7 +958,7 @@ dependencies = [
 [[package]]
 name = "licpart"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "crc",
  "diskimg",
@@ -1113,7 +1113,7 @@ checksum = "7e036b411754132fd6b74e94b74e9a13c5cf606fa93d1885c35860d3060820b1"
 [[package]]
 name = "optical"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "thiserror",
 ]
@@ -1259,7 +1259,7 @@ dependencies = [
 [[package]]
 name = "pwdsub"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "ccsid",
  "des",
@@ -1272,13 +1272,13 @@ dependencies = [
 name = "qap-client"
 version = "1.1.0"
 dependencies = [
- "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
+ "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
- "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
  "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
+ "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
- "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
  "qsa-net",
  "rustls",
  "scs",
@@ -1297,19 +1297,19 @@ dependencies = [
 [[package]]
 name = "qap-proto"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3#8306ec412b4d8634bda5d3f0201bf0d465a680c3"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
- "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
+ "compdiag",
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "thiserror",
 ]
 
 [[package]]
 name = "qap-proto"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3#8306ec412b4d8634bda5d3f0201bf0d465a680c3"
 dependencies = [
- "compdiag",
- "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
  "thiserror",
 ]
 
@@ -1325,22 +1325,13 @@ dependencies = [
 [[package]]
 name = "qapd"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3#8306ec412b4d8634bda5d3f0201bf0d465a680c3"
-dependencies = [
- "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
- "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
-]
-
-[[package]]
-name = "qapd"
-version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "ccsid",
  "ifs",
  "ifscmd",
- "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
- "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
+ "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "qdecimal",
  "sec",
  "spool",
@@ -1348,9 +1339,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "qapd"
+version = "0.1.0"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3#8306ec412b4d8634bda5d3f0201bf0d465a680c3"
+dependencies = [
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
+ "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
+]
+
+[[package]]
 name = "qdecimal"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "thiserror",
 ]
@@ -1438,7 +1438,7 @@ dependencies = [
 name = "qsa-sql"
 version = "1.1.0"
 dependencies = [
- "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
+ "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "tn5250",
 ]
 
@@ -1451,8 +1451,8 @@ dependencies = [
  "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
  "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
  "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
+ "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
- "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
  "qsa-net",
  "qsa-sql",
  "rust_xlsxwriter",
@@ -1484,8 +1484,8 @@ dependencies = [
  "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
  "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
  "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
+ "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=8306ec412b4d8634bda5d3f0201bf0d465a680c3)",
- "qapd 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
  "qsa-config",
  "qsa-glyph",
  "qsa-icons",
@@ -1504,7 +1504,7 @@ dependencies = [
 [[package]]
 name = "qsname"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "ccsid",
  "thiserror",
@@ -1583,7 +1583,7 @@ checksum = "cab834c73d247e67f4fae452806d17d3c7501756d98c8808d7c9c7aa7d18f973"
 [[package]]
 name = "release"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "thiserror",
 ]
@@ -1728,11 +1728,11 @@ dependencies = [
 [[package]]
 name = "sec"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "argon2",
  "ccsid",
- "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2)",
+ "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "jrn",
  "pwdsub",
  "qsname",
@@ -1909,7 +1909,7 @@ dependencies = [
 [[package]]
 name = "spool"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "ccsid",
  "dds",
@@ -1925,7 +1925,7 @@ checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
 [[package]]
 name = "store"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "blockdev",
  "ccsid",
@@ -1978,7 +1978,7 @@ dependencies = [
 [[package]]
 name = "sysval"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "ccsid",
  "licpart",
@@ -2588,7 +2588,7 @@ dependencies = [
 [[package]]
 name = "xfsfmt"
 version = "0.1.0"
-source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=f6cb4aa2284e087791a631972980bb0aa06fb0c2#f6cb4aa2284e087791a631972980bb0aa06fb0c2"
+source = "git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb#7f82a43fc5edfb8bfd7a84753d6e77e23704fffb"
 dependencies = [
  "crc",
  "thiserror",

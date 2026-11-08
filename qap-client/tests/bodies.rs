@@ -8,7 +8,7 @@
 //! connection joins them; a `ReadMember` reply over 1 MiB split with
 //! `More`, and a `WriteMember` of three pieces from `develop::pieces`.
 //!
-//! Fixtures, from QS/400 at f6cb4aa2 (the commit the workspace pins):
+//! Fixtures, from QS/400 at 7f82a43f (the commit the workspace pins):
 //!
 //! - `tests/fixtures/COMPILE42.rpgle` is `tools/conformance/qap/COMPILE42.rpgle`,
 //!   byte for byte: the source the `Compile` exit test compiles (QEMU step
@@ -53,11 +53,11 @@ use qap_client::proto::types::{
 };
 use qap_client::proto::{Envelope, MAX_FRAME, Op, Reassembly, ServerMessage, Service, Status};
 
-/// `tools/conformance/qap/COMPILE42.rpgle` at f6cb4aa2.
+/// `tools/conformance/qap/COMPILE42.rpgle` at 7f82a43f.
 const COMPILE42: &str = include_str!("fixtures/COMPILE42.rpgle");
-/// `ASSETS` of `tools/conformance/src/qap/debug.rs` at f6cb4aa2.
+/// `ASSETS` of `tools/conformance/src/qap/debug.rs` at 7f82a43f.
 const ASSETS: &str = include_str!("fixtures/ASSETS.rpgle");
-/// `OLD` of `tools/conformance/src/qap/develop.rs` at f6cb4aa2.
+/// `OLD` of `tools/conformance/src/qap/develop.rs` at 7f82a43f.
 const OLD: u32 = 260_105;
 
 fn decode<T: Wire>(b: &[u8]) -> T {

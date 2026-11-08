@@ -52,9 +52,9 @@ qsa-transfer = { path = "qsa-transfer" }
 # QAP from the QS/400 repository, pinned to one commit. docs/qap-protocol-spec.md
 # is QS/400's docs/QAP.md at that commit and moves with it (ci/spec-mirror.sh).
 # qapd, the server's connection engine, is for tests only.
-ipc = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "f6cb4aa2284e087791a631972980bb0aa06fb0c2", package = "ipc" }
-qap-proto = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "f6cb4aa2284e087791a631972980bb0aa06fb0c2", package = "qap-proto" }
-qapd = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "f6cb4aa2284e087791a631972980bb0aa06fb0c2", package = "qapd" }
+ipc = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "7f82a43fc5edfb8bfd7a84753d6e77e23704fffb", package = "ipc" }
+qap-proto = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "7f82a43fc5edfb8bfd7a84753d6e77e23704fffb", package = "qap-proto" }
+qapd = { git = "https://github.com/quartzsystems/quartz-systems-400", rev = "7f82a43fc5edfb8bfd7a84753d6e77e23704fffb", package = "qapd" }
 # QAP version 1 only, for the fallback tests: qapd as it was before version 2,
 # and the qap-proto its Host is written in. They meet the current crates only
 # over loopback.
