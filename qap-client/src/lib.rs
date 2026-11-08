@@ -57,7 +57,9 @@
 //!   once ([`WatchEvent`]).
 //!
 //! `Hello` offers versions [`proto::MIN_VERSION`] to [`OFFERED_VERSION`] (1
-//! to 6) by default and the server picks the highest both speak. An operation is sent
+//! to 6) by default, as QS/400 Access for Desktop does, and up to 9 only
+//! when asked ([`Target::with_max_version`]); the server picks the highest
+//! both speak. An operation is sent
 //! only when the connection's version defines it ([`proto::Op::since`]) and
 //! `Hello`'s `services` lists its service; otherwise it is refused here with
 //! [`Error::Unsupported`] and nothing is sent ([`Connection::supports`]).
@@ -140,6 +142,18 @@ impl Target {
             options: Options::default(),
             wake: None,
         }
+    }
+
+    /// This target with `Hello` offering versions up to `max_version`
+    /// instead of [`OFFERED_VERSION`]: Code for QS/400 asks for
+    /// [`proto::VERSION`] to reach `Develop`, `Jobs` and `Debug`. The
+    /// server still picks the highest both speak, and an operation the
+    /// agreed version does not define is refused here, before anything is
+    /// sent, with the version it needs ([`Error::Unsupported`]).
+    #[must_use]
+    pub fn with_max_version(mut self, max_version: u16) -> Target {
+        self.options.max_version = max_version;
+        self
     }
 
     /// The TLS options for this target: TLS 1.3 only.
