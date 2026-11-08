@@ -46,6 +46,8 @@
 //!   libraries, objects and source members, a member read whole and
 //!   written in pieces under one frame each, on the shared connection or a
 //!   window's own ([`Requests`]).
+//! - [`jobs`]: version 8's `Jobs` service (draft): a user's jobs and job
+//!   logs, hold, release and end ([`Jobs`]).
 //! - [`watch`]: version 6's watches of message queues and spool targets,
 //!   owned by the [`Client`] on its shared connection: watched again after
 //!   every resume and sign-on, each queue caught up, every message reported
@@ -66,6 +68,7 @@ pub mod command;
 pub mod conn;
 pub mod develop;
 pub mod ifs;
+pub mod jobs;
 pub mod messages;
 pub mod session;
 pub mod spool;
@@ -85,6 +88,7 @@ pub use develop::{CompileOutcome, Develop};
 pub use error::Error;
 pub use ifs::Files;
 pub use ipc::Wire;
+pub use jobs::Jobs;
 pub use qap_proto as proto;
 pub use qap_proto::{Secret, ServerMessage, Status, Token};
 pub use session::{Client, Notice};

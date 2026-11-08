@@ -349,9 +349,10 @@ pub fn runs_long(op: Op) -> bool {
 /// connection: the lists (the `Sql` catalog's, operations 9 to 11, and
 /// `ListMessages` included), `ReadSpooledFile`, `SystemInfo`, `PasswordStatus`,
 /// `DescribeCommand`, `CheckCommand`, `JobInfo`, `Ifs`'s
-/// `ListDirectory`, `GetInfo`, `Stat` and `ReadFile`, and `Develop`'s lists,
+/// `ListDirectory`, `GetInfo`, `Stat` and `ReadFile`, `Develop`'s lists,
 /// `DescribeObject` and `ReadMember` (a lock it took ended with the
-/// connection's job, so a new one takes it again). Nothing that changes state is
+/// connection's job, so a new one takes it again), and `Jobs`' `ListJobs`
+/// and `JobLog`. Nothing that changes state is
 /// ever sent again (`WriteFile` included), nor `Execute` or `Fetch`: their
 /// callers report the lost connection.
 pub fn retryable(op: Op) -> bool {
@@ -364,6 +365,8 @@ pub fn retryable(op: Op) -> bool {
             | Op::DescribeObject
             | Op::ListMembers
             | Op::ReadMember
+            | Op::ListJobs
+            | Op::JobLog
             | Op::ListMessages
             | Op::ListSchemas
             | Op::ListTables
