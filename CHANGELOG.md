@@ -12,6 +12,35 @@ each crate's name. Breaking changes are marked **Breaking**.
 
 ## Unreleased
 
+### qap-client
+
+QAP versions 8 and 9 (drafts), for Code for QS/400; QS/400 pinned at
+f6cb4aa2. QS/400 Access for Desktop does not use them and still offers
+versions 1 to 6.
+
+- `OFFERED_VERSION` (6), what `Options::default()` now offers instead of
+  `proto::VERSION` (9 at this pin), and `Target::with_max_version` to offer
+  more. An operation the agreed version does not define is refused before
+  it is sent with `Error::Unsupported`, which names the version it needs.
+- `Requests`, the request paths `Client` and `Attached` share, with
+  `Client::request_here` (the connection open now, never a new one).
+- `develop` (version 8's `Develop`): the `Develop` trait with
+  `get_library_list`, `set_library_list` and `compile` sent as `RunCommand`
+  is (the lane), the lists, `describe_object`, `read_member` (a split reply
+  joined whole), `write_member` (the whole record list, sent in `pieces` of
+  at most one frame each), the member commands, `WriteOptions` and
+  `CompileOutcome`. `Compile` has no reply timeout (`runs_long`).
+- `jobs` (version 8's `Jobs`): the `Jobs` trait with `list_jobs`,
+  `all_jobs`, `job_log`, `hold_job`, `release_job` and `end_job`.
+- `Client::list_routines`, `all_routines` and `list_indexes` (`Sql` 12 and
+  13).
+- `debug` (version 9's `Debug`): the `Debugger` trait, one method per
+  operation, `start` handing back a `DebugSession` whose receiver gets
+  `DebugEvent::Stopped` and `DebugEvent::DebugEnded` from the connection's
+  thread.
+- `retryable` also takes the version 8 lists, `DescribeObject`,
+  `ReadMember`, `ListJobs` and `JobLog`.
+
 ## 1.1.0 (2026-11-04)
 
 ### QS/400 Access for Desktop

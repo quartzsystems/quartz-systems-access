@@ -40,6 +40,18 @@
 - `qap-client/tests/older.rs`: QS/400's engine at 8306ec41 (`qapd_v2`, its
   own `qapd::testing`, `tests/common/v2.rs`): version 2 agreed, every
   `Spool` operation refused before it is sent, version 2 still working.
+- `qap-client/tests/bodies.rs`: every QAP version 8 and 9 request, reply
+  and event body encoded, decoded, framed, and as a reply split with `More`
+  and joined; a `ReadMember` reply over 1 MiB and a `WriteMember` of three
+  pieces, from QS/400's conformance `COMPILE42.rpgle` and debug `ASSETS`
+  (`qap-client/tests/fixtures/`, each file's origin in the test's header).
+- `qap-client/tests/version8.rs` and `version9.rs`: `Develop`, `Jobs`,
+  `Sql` 12 and 13 and `Debug` against the test system: a member over 1 MiB
+  read whole and written back in pieces, dates kept, the library list per
+  connection job, `Compile`'s diagnostic on line 42, a debug session's
+  `Stopped` and `DebugEnded` on its receiver while other requests are out;
+  and the gate: the default still agrees version 6, and below 8 (or 9 for
+  `Debug`) each new method is refused before anything is sent.
 - `qsaccess/tests/fallback.rs`: against the version-1 engine, sign-on works
   and every version-2 function is `QAD5001` (the expiry warning silent);
   against version 1 and version 2, Printer Output is `QAD5001` and every
@@ -838,6 +850,53 @@ automated tests cover a session that agrees version 5 with the current
 engine): Messages is dimmed with `QAD5001`, Printer Output polls as before,
 the editor's changed-on-system check uses the last-change time, and
 everything earlier works as before.
+
+## Live acceptance (QAP versions 8 and 9, qap-client)
+
+For `qap-client` alone: the desktop app does not call these services and
+still agrees version 6, so nothing in its windows changes. On QS/400 at
+f6cb4aa2 (`QSHQ400`, at 10.42.70.150), prepared first:
+
+1. QS/400 at f6cb4aa2 installed (`STRTCPSVR SERVER(*QAP)`; the check below
+   prints "QAP version 9"), with the Phase 7 setup (library `HLINV` and its
+   source file `QRPGLESRC` with member `ASSETS`), and `CWELLMAN` allowed to
+   change `HLINV/QRPGLESRC`;
+2. the system in this user's System Configurations, as the other examples
+   use it, and a 5250 session of `CWELLMAN`'s open beside it.
+
+Then, from `qsaccess/examples/qap_v9_check.rs` (it adds members
+`ASSETSCPY`, `COMPILE42` and `DBGASSETS` to `HLINV/QRPGLESRC` and removes
+them at the end; programs go to `QTEMP`):
+
+```sh
+QSA_CHECK_PASSWORD=... cargo run -p qsaccess --example qap_v9_check -- 10.42.70.150 CWELLMAN
+```
+
+- [ ] **`ReadMember`.** It prints every record of `HLINV/QRPGLESRC ASSETS`
+  with its sequence number and date. In 5250,
+  `DSPPFM FILE(HLINV/QRPGLESRC) MBR(ASSETS)`, F20 to the right for the
+  sequence numbers and dates: each matches.
+- [ ] **`WriteMember` back.** PASS: `CPYSRCF` (`CopyMember`) to
+  `ASSETSCPY` first, the records written back, then both members read and
+  compared record by record: identical, dates unchanged. QS/400 ships no
+  `CMPPFM`, so the check compares them itself, as QS/400's QEMU step 160
+  does; on a system that has it, `CMPPFM NEWFILE(HLINV/QRPGLESRC)
+  NEWMBR(ASSETS) OLDFILE(HLINV/QRPGLESRC) OLDMBR(ASSETSCPY)` while the
+  copy is there says the same.
+- [ ] **`Compile`.** PASS: `CRTBNDRPG` of `COMPILE42` (QS/400's
+  `tools/conformance/qap/COMPILE42.rpgle`) answers one diagnostic at line
+  42; its ID (`RNF7416`) and text are those of the compile listing
+  (`WRKSPLF`, the `COMPILE42` listing).
+- [ ] **`ListJobs`.** PASS: `*CURRENT` includes the connection's job as
+  `JobInfo` names it; `WRKUSRJOB` in 5250 shows the same `QAPCNN` job.
+- [ ] **`Debug`.** PASS: `Start Own`, `AddProgram` of `QTEMP/DBGASSETS`
+  (the conformance `ASSETS`, `DBGVIEW(*SOURCE)`), a breakpoint on line 11
+  landing on 12, `CALL` through `RunCommand`: `Stopped` at line 12 on the
+  receiver, `Variables` lists `COUNT`, `NAME` and `ASSET`, `Resume Go` and
+  the `CALL`'s reply. `DebugEnded` follows at the sign-off (`TCP1A76`):
+  by the spec neither `Resume` nor `End` sends it.
+- [ ] **Nothing secret logged.** No password and no 64-hexadecimal-character
+  run in the output.
 
 ## Keyboard: Right Ctrl
 
