@@ -346,7 +346,7 @@ pub fn runs_long(op: Op) -> bool {
 
 /// Whether `op` only reads, so that when its connection closed quietly or
 /// dropped before the reply came it may be sent once more, on a new
-/// connection: the lists (the `Sql` catalog's, operations 9 to 11, and
+/// connection: the lists (the `Sql` catalog's, operations 9 to 13, and
 /// `ListMessages` included), `ReadSpooledFile`, `SystemInfo`, `PasswordStatus`,
 /// `DescribeCommand`, `CheckCommand`, `JobInfo`, `Ifs`'s
 /// `ListDirectory`, `GetInfo`, `Stat` and `ReadFile`, `Develop`'s lists,
@@ -371,6 +371,8 @@ pub fn retryable(op: Op) -> bool {
             | Op::ListSchemas
             | Op::ListTables
             | Op::ListColumns
+            | Op::ListRoutines
+            | Op::ListIndexes
             | Op::ReadSpooledFile
             | Op::SystemInfo
             | Op::PasswordStatus

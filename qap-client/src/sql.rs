@@ -11,7 +11,8 @@
 //!   its job. Operations 1 to 8 go on it, one after another in the server's
 //!   lane for the job.
 //! - The catalog ([`Client::list_schemas`], [`Client::list_tables`],
-//!   [`Client::list_columns`], and the `all_` helpers that page through
+//!   [`Client::list_columns`], version 8's [`Client::list_routines`] and
+//!   [`Client::list_indexes`], and the `all_` helpers that page through
 //!   everything) keeps no state and goes on the session's shared
 //!   connection.
 //! - Rows stream: [`SqlConnection::fetch_into`] fetches [`FETCH_BLOCK`] rows
@@ -44,9 +45,10 @@ use std::time::Duration;
 
 use ipc::Wire;
 use qap_proto::ops::sql::{
-    Column, Columns, CommitLevel, CursorRef, Execute, Executed, Fetch, Fetched, ListColumns,
-    ListSchemas, ListTables, Prepare, Prepared, Schema, Schemas, SetOptions, SqlFailure, SqlValue,
-    StatementRef, Table, TableKind, Tables,
+    Column, Columns, CommitLevel, CursorRef, Execute, Executed, Fetch, Fetched, Index, Indexes,
+    ListColumns, ListIndexes, ListRoutines, ListSchemas, ListTables, Prepare, Prepared, Routine,
+    RoutineKind, Routines, Schema, Schemas, SetOptions, SqlFailure, SqlValue, StatementRef, Table,
+    TableKind, Tables,
 };
 use qap_proto::{Op, ServerMessage, Status};
 
@@ -633,6 +635,54 @@ impl Client {
             }
             req.start = u32::try_from(out.len()).unwrap_or(u32::MAX);
         }
+    }
+
+    /// `ListRoutines` (version 8): one page of the procedures and functions
+    /// in `schema` matching `pattern` (SQL `LIKE`), `kinds` empty for both,
+    /// by name and then specific name.
+    pub fn list_routines(&mut self, req: &ListRoutines) -> Result<Routines, Error> {
+        self.call(Op::ListRoutines, req)
+    }
+
+    /// Every routine of `kinds` (empty: both) in `schema` matching
+    /// `pattern`.
+    pub fn all_routines(
+        &mut self,
+        schema: &str,
+        pattern: &str,
+        kinds: &[RoutineKind],
+    ) -> Result<Vec<Routine>, Error> {
+        let mut req = ListRoutines {
+            schema: schema.to_owned(),
+            pattern: pattern.to_owned(),
+            kinds: kinds.to_vec(),
+            start: 0,
+            max: ALL_PAGE,
+        };
+        let mut out = Vec::new();
+        loop {
+            let page = self.list_routines(&req)?;
+            let n = page.routines.len();
+            out.extend(page.routines);
+            if n == 0 || out.len() >= page.total as usize {
+                return Ok(out);
+            }
+            req.start = u32::try_from(out.len()).unwrap_or(u32::MAX);
+        }
+    }
+
+    /// `ListIndexes` (version 8): a table's indexes, by name, each with its
+    /// key columns in key order. `NotAuthorized` (`SQL0551`) for a table
+    /// the profile may not read, as `ListColumns`.
+    pub fn list_indexes(&mut self, schema: &str, table: &str) -> Result<Vec<Index>, Error> {
+        let i: Indexes = self.call(
+            Op::ListIndexes,
+            &ListIndexes {
+                schema: schema.to_owned(),
+                table: table.to_owned(),
+            },
+        )?;
+        Ok(i.indexes)
     }
 
     /// A connection of its own for SQL (version 4), attached to this
