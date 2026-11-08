@@ -6,7 +6,7 @@
 //! objects and source members, on a [`crate::Client`]'s shared connection
 //! or a [`crate::Attached`] one, through the [`Develop`] trait.
 //!
-//! - Lanes: `GetLibraryList` and `SetLibraryList` run in the connection
+//! - Lanes: `GetLibraryList`, `SetLibraryList` and `Compile` run in the connection
 //!   job's lane with `Command` and `Sql` 1 to 8, since they use the job's
 //!   library list; they are sent as `RunCommand` is
 //!   ([`Requests::request_op`]) and never sent again after a drop: a new
@@ -25,6 +25,11 @@
 //!   none of it: the server writes the member when the last arrives, and
 //!   a write that stops before it changes nothing.
 //!
+//! - [`Develop::compile`] runs a command as `RunCommand` does, with no
+//!   reply timeout ([`crate::runs_long`]); [`CompileOutcome`] carries its
+//!   status, messages and the compiler's diagnostics, `Error` (the compile
+//!   failed) with the body still filled.
+//!
 //! Every refusal is an [`Error::Status`] with the server's message as it
 //! sent it: `NotFound` (`CPF9812` a file, `CPF9815` a member, `CPF9801`
 //! an object, `CPF2110` a library), `NotAuthorized` (`CPF2182`), `InUse`
@@ -33,16 +38,17 @@
 //! record longer than the file's data length; sequence numbers out of
 //! order).
 
+use qap_proto::ops::command::CommandText;
 use qap_proto::ops::develop::{
-    Attribute, ChangeMember, CopyMember, CreateMember, DescribeObject, Libraries, LibraryList,
-    ListLibraries, ListMembers, ListObjects, MemberData, MemberRef, Members, ObjectDescription,
-    Objects, RenameMember, SetLibraryList, WriteMember, Written,
+    Attribute, ChangeMember, CompileReply, CopyMember, CreateMember, DescribeObject, Libraries,
+    LibraryList, ListLibraries, ListMembers, ListObjects, MemberData, MemberRef, Members,
+    ObjectDescription, Objects, RenameMember, SetLibraryList, WriteMember, Written,
 };
-use qap_proto::types::{MemberName, ObjectName, SourceRecord};
-use qap_proto::{Envelope, MAX_FRAME, Op};
+use qap_proto::types::{Diagnostic, JobId, MemberName, ObjectName, SourceRecord};
+use qap_proto::{Envelope, MAX_FRAME, Op, ServerMessage, Status};
 
-use crate::Error;
 pub use crate::conn::Requests;
+use crate::{Error, Pending, Reply};
 
 /// What a [`Develop::write_member`] changes beside the records.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -55,6 +61,63 @@ pub struct WriteOptions {
     pub srctype: Option<String>,
     /// The new text; `None` leaves it.
     pub text: Option<String>,
+}
+
+/// How a `Compile` ended: `RunCommand`'s outcome and the compiler's
+/// diagnostics.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CompileOutcome {
+    /// `Ok`, `Error` (the compile failed; the escape message, and the body
+    /// still filled), `NotFound`, `NotAuthorized` or `Cancelled`.
+    pub status: Status,
+    /// The escape message that ended it, when one did.
+    pub escape: Option<ServerMessage>,
+    /// The job it ran in; `None` when the reply had no body (cancelled
+    /// while it waited in the lane).
+    pub job: Option<JobId>,
+    /// Every message the command sent its caller, oldest first.
+    pub messages: Vec<ServerMessage>,
+    /// What the compiler reported, as its listing shows it; none for a
+    /// command that is not a compile.
+    pub diagnostics: Vec<Diagnostic>,
+}
+
+impl CompileOutcome {
+    /// A `Compile` reply as its outcome. Any status a command's outcome
+    /// is not carried with is an [`Error::Status`].
+    pub fn from_reply(mut reply: Reply) -> Result<CompileOutcome, Error> {
+        if !matches!(
+            reply.status,
+            Status::Ok
+                | Status::Error
+                | Status::NotFound
+                | Status::NotAuthorized
+                | Status::Cancelled
+        ) {
+            reply.body.fill(0);
+            return Err(Error::Status {
+                status: reply.status,
+                message: reply.message.take(),
+            });
+        }
+        let body: Option<CompileReply> = reply.body_as()?;
+        let (job, messages, diagnostics) = match body {
+            Some(b) => (Some(b.job), b.messages, b.diagnostics),
+            None => (None, Vec::new(), Vec::new()),
+        };
+        Ok(CompileOutcome {
+            status: reply.status,
+            escape: reply.message.take(),
+            job,
+            messages,
+            diagnostics,
+        })
+    }
+
+    /// Whether the compile succeeded.
+    pub fn ok(&self) -> bool {
+        self.status == Status::Ok
+    }
 }
 
 /// The request ID a piece is measured with: the widest there is.
@@ -285,6 +348,20 @@ pub trait Develop: Requests {
                 member: member.clone(),
                 srctype: srctype.map(str::to_owned),
                 text: text.map(str::to_owned),
+            },
+        )
+    }
+
+    /// Starts `Compile`, in the lane: `command` run as `RunCommand` runs
+    /// it, with no reply timeout, answered with the diagnostics the
+    /// compiler left on the job. Wait on the [`Pending`] (or cancel it)
+    /// and read it with [`CompileOutcome::from_reply`]; never sent again
+    /// after a drop.
+    fn compile(&mut self, command: &str) -> Result<Pending, Error> {
+        self.request_op(
+            Op::Compile,
+            &CommandText {
+                command: command.to_owned(),
             },
         )
     }

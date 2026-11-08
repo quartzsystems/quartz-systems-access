@@ -81,6 +81,7 @@ use std::time::Duration;
 pub use attach::{Attached, Ended};
 pub use command::{CheckOutcome, CommandOutcome};
 pub use conn::{Closed, Connection, Event, Pending, Reply, Requests, retryable, runs_long};
+pub use develop::{CompileOutcome, Develop};
 pub use error::Error;
 pub use ifs::Files;
 pub use ipc::Wire;
