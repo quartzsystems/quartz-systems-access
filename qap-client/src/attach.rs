@@ -332,3 +332,21 @@ fn ended_error(e: &Ended) -> Error {
         },
     }
 }
+
+impl crate::conn::Requests for Attached {
+    fn call_op<B: Wire, R: Wire>(&mut self, op: Op, body: &B) -> Result<R, Error> {
+        self.call(op, body)
+    }
+
+    fn request_op<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error> {
+        self.request(op, body)
+    }
+
+    fn request_here_op<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error> {
+        self.request_here(op, body)
+    }
+
+    fn reply_timeout(&self) -> std::time::Duration {
+        self.target.options.reply_timeout
+    }
+}

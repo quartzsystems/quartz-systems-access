@@ -42,6 +42,10 @@
 //! - [`messages`]: version 6's `Messages` service: message queues listed a
 //!   page at a time, replies, removes and sends, with every status they
 //!   answer, and a reply matched to its inquiry by `answers` alone.
+//! - [`develop`]: version 8's `Develop` service (draft): the library list,
+//!   libraries, objects and source members, a member read whole and
+//!   written in pieces under one frame each, on the shared connection or a
+//!   window's own ([`Requests`]).
 //! - [`watch`]: version 6's watches of message queues and spool targets,
 //!   owned by the [`Client`] on its shared connection: watched again after
 //!   every resume and sign-on, each queue caught up, every message reported
@@ -60,6 +64,7 @@
 pub mod attach;
 pub mod command;
 pub mod conn;
+pub mod develop;
 pub mod ifs;
 pub mod messages;
 pub mod session;
@@ -75,7 +80,7 @@ use std::time::Duration;
 
 pub use attach::{Attached, Ended};
 pub use command::{CheckOutcome, CommandOutcome};
-pub use conn::{Closed, Connection, Event, Pending, Reply, retryable, runs_long};
+pub use conn::{Closed, Connection, Event, Pending, Reply, Requests, retryable, runs_long};
 pub use error::Error;
 pub use ifs::Files;
 pub use ipc::Wire;

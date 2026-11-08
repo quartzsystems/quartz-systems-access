@@ -315,6 +315,22 @@ impl Client {
         r
     }
 
+    /// Sends any request on the connection open now, never a new one: for
+    /// what belongs to that connection. [`Error::Closed`] when it has
+    /// closed or there is none.
+    pub fn request_here<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error> {
+        self.absorb_events();
+        let r = match &self.conn {
+            Some(c) => match c.closed() {
+                None => c.request(op, body),
+                Some(why) => Err(Error::Closed(why)),
+            },
+            None => Err(Error::Closed(Closed::Quietly)),
+        };
+        self.absorb_events();
+        r
+    }
+
     /// `PasswordStatus` (version 2): when the signed-on profile's password
     /// expires, and the system's warning period.
     pub fn password_status(&mut self) -> Result<PasswordStatus, Error> {
@@ -604,5 +620,23 @@ impl Client {
         if session_ended {
             self.conn = None;
         }
+    }
+}
+
+impl crate::conn::Requests for Client {
+    fn call_op<B: Wire, R: Wire>(&mut self, op: Op, body: &B) -> Result<R, Error> {
+        self.call(op, body)
+    }
+
+    fn request_op<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error> {
+        self.request(op, body)
+    }
+
+    fn request_here_op<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error> {
+        self.request_here(op, body)
+    }
+
+    fn reply_timeout(&self) -> std::time::Duration {
+        self.target.options.reply_timeout
     }
 }

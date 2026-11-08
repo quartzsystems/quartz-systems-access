@@ -342,8 +342,10 @@ pub fn runs_long(op: Op) -> bool {
 /// dropped before the reply came it may be sent once more, on a new
 /// connection: the lists (the `Sql` catalog's, operations 9 to 11, and
 /// `ListMessages` included), `ReadSpooledFile`, `SystemInfo`, `PasswordStatus`,
-/// `DescribeCommand`, `CheckCommand`, `JobInfo`, and `Ifs`'s
-/// `ListDirectory`, `GetInfo`, `Stat` and `ReadFile`. Nothing that changes state is
+/// `DescribeCommand`, `CheckCommand`, `JobInfo`, `Ifs`'s
+/// `ListDirectory`, `GetInfo`, `Stat` and `ReadFile`, and `Develop`'s lists,
+/// `DescribeObject` and `ReadMember` (a lock it took ended with the
+/// connection's job, so a new one takes it again). Nothing that changes state is
 /// ever sent again (`WriteFile` included), nor `Execute` or `Fetch`: their
 /// callers report the lost connection.
 pub fn retryable(op: Op) -> bool {
@@ -351,6 +353,11 @@ pub fn retryable(op: Op) -> bool {
         op,
         Op::ListSpooledFiles
             | Op::ListOutputQueues
+            | Op::ListLibraries
+            | Op::ListObjects
+            | Op::DescribeObject
+            | Op::ListMembers
+            | Op::ReadMember
             | Op::ListMessages
             | Op::ListSchemas
             | Op::ListTables
@@ -366,6 +373,30 @@ pub fn retryable(op: Op) -> bool {
             | Op::Stat
             | Op::ReadFile
     )
+}
+
+/// The ways a [`crate::Client`] or a [`crate::Attached`] sends requests, for
+/// the services that run on either ([`crate::develop`], [`crate::jobs`],
+/// [`crate::debug`]). Each refuses an operation the connection's version
+/// does not define before anything is sent ([`Error::Unsupported`]).
+pub trait Requests {
+    /// Sends `op` on a live connection and waits for its reply, decoded;
+    /// a [`retryable`] operation the connection's close cut off is sent
+    /// once more on a new one.
+    fn call_op<B: Wire, R: Wire>(&mut self, op: Op, body: &B) -> Result<R, Error>;
+
+    /// Sends `op` on a live connection and returns at once; never sent
+    /// again. `RunCommand`'s path: what goes in the connection job's lane
+    /// is sent this way.
+    fn request_op<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error>;
+
+    /// Sends `op` on the connection open now, never a new one: for what
+    /// belongs to that connection (a `WriteMember` after its first piece,
+    /// a debug session). [`Error::Closed`] when it has closed.
+    fn request_here_op<B: Wire>(&mut self, op: Op, body: &B) -> Result<Pending, Error>;
+
+    /// How long a short request waits for its reply.
+    fn reply_timeout(&self) -> Duration;
 }
 
 /// Whether a request that failed with `e` may be sent once more on a new
