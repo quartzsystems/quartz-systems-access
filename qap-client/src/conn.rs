@@ -39,14 +39,20 @@ use std::time::{Duration, Instant};
 
 use ipc::Wire;
 use qap_proto::ops::connection::{Hello, HelloReply};
+use qap_proto::ops::debug::{DebugEnded, Stopped};
 use qap_proto::ops::event;
 use qap_proto::ops::messages::MessageArrived;
 use qap_proto::ops::spool::SpooledFileChanged;
 use qap_proto::{Envelope, Kind, Op, ProtoError, Reassembly, ServerMessage, Service, Status};
 use qsa_net::{Security, Transport, is_timeout};
 
+use crate::debug::DebugEvent;
 use crate::frames::{FrameReader, frame};
 use crate::{CLIENT_NAME, Error, Options, Target, Wake};
+
+/// The most `Debug` events kept for a session whose receiver is not yet
+/// handed out.
+const DEBUG_BACKLOG: usize = 1024;
 
 /// How long one read waits, so the thread also writes and pings.
 const POLL: Duration = Duration::from_millis(10);
@@ -178,6 +184,12 @@ struct Shared {
     /// `Attach` has sent it: `Attach` must be the first request after
     /// `Hello`.
     pings_held: bool,
+    /// Where `Debug` events go: the receiver of the session started last
+    /// on this connection (version 9).
+    debug: Option<Sender<DebugEvent>>,
+    /// `Debug` events that came before a session's receiver was handed
+    /// out (between `Start`'s reply and its taking).
+    debug_backlog: VecDeque<DebugEvent>,
 }
 
 impl Shared {
@@ -317,6 +329,21 @@ impl Pending {
             message: env.message,
             body: env.body,
         }
+    }
+
+    /// A new receiver for this connection's `Debug` events, taking those
+    /// that came since the last one was handed out; the one before it
+    /// disconnects. For `Start`'s reply, on the connection it came on.
+    pub(crate) fn debug_events(&self) -> Receiver<DebugEvent> {
+        let (tx, rx) = mpsc::channel();
+        let mut s = lock(&self.shared);
+        for ev in s.debug_backlog.drain(..) {
+            let _ = tx.send(ev);
+        }
+        if s.closed.is_none() {
+            s.debug = Some(tx);
+        }
+        rx
     }
 
     fn gone(&self) -> Error {
@@ -513,6 +540,8 @@ impl Connection {
             frames_in: 0,
             pings: 0,
             pings_held: hold_pings,
+            debug: None,
+            debug_backlog: VecDeque::new(),
         }));
         let (out, rx) = mpsc::channel();
         let pump = Pump {
@@ -739,8 +768,10 @@ impl Pump {
         {
             let mut s = lock(&self.shared);
             s.closed.get_or_insert(why);
-            // Dropping the senders ends every wait with `Closed`.
+            // Dropping the senders ends every wait with `Closed`, and a
+            // debug session's receiver: the close ended the session.
             s.waiters.clear();
+            s.debug = None;
         }
         self.wake();
     }
@@ -809,6 +840,24 @@ impl Pump {
         None
     }
 
+    /// A `Debug` event to its session's receiver, or kept until one is
+    /// handed out; a receiver dropped means nobody listens.
+    fn debug_event(&self, ev: DebugEvent) {
+        {
+            let mut s = lock(&self.shared);
+            match &s.debug {
+                Some(tx) => {
+                    if tx.send(ev).is_err() {
+                        s.debug = None;
+                    }
+                }
+                None if s.debug_backlog.len() < DEBUG_BACKLOG => s.debug_backlog.push_back(ev),
+                None => qsa_net::debug!("qap: Debug event with no session listening; dropped"),
+            }
+        }
+        self.wake();
+    }
+
     /// Takes one frame in; `Some` when the connection is to end.
     fn take(&mut self, mut env: Envelope) -> Option<Closed> {
         lock(&self.shared).frames_in += 1;
@@ -864,6 +913,26 @@ impl Pump {
                             Err(e) => {
                                 return self.unreadable_event("SpooledFileChanged", &e, env);
                             }
+                        }
+                    }
+                    // A debug session's events go straight to its receiver,
+                    // whatever the caller waits on meanwhile.
+                    (Service::Debug, event::STOPPED) => match ipc::decode::<Stopped>(&env.body) {
+                        Ok(st) => {
+                            qsa_net::debug!("qap: event Stopped");
+                            self.debug_event(DebugEvent::Stopped(st));
+                            return None;
+                        }
+                        Err(e) => return self.unreadable_event("Stopped", &e, env),
+                    },
+                    (Service::Debug, event::DEBUG_ENDED) => {
+                        match ipc::decode::<DebugEnded>(&env.body) {
+                            Ok(d) => {
+                                qsa_net::debug!("qap: event DebugEnded");
+                                self.debug_event(DebugEvent::DebugEnded(d));
+                                return None;
+                            }
+                            Err(e) => return self.unreadable_event("DebugEnded", &e, env),
                         }
                     }
                     (service, op) => {

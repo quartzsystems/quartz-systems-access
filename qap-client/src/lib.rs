@@ -42,6 +42,9 @@
 //! - [`messages`]: version 6's `Messages` service: message queues listed a
 //!   page at a time, replies, removes and sends, with every status they
 //!   answer, and a reply matched to its inquiry by `answers` alone.
+//! - [`debug`]: version 9's `Debug` service (draft): one debug session per
+//!   connection, its `Stopped` and `DebugEnded` events on a receiver the
+//!   caller drains ([`DebugEvent`]), fed from the connection's thread.
 //! - [`develop`]: version 8's `Develop` service (draft): the library list,
 //!   libraries, objects and source members, a member read whole and
 //!   written in pieces under one frame each, on the shared connection or a
@@ -66,6 +69,7 @@
 pub mod attach;
 pub mod command;
 pub mod conn;
+pub mod debug;
 pub mod develop;
 pub mod ifs;
 pub mod jobs;
@@ -84,6 +88,7 @@ use std::time::Duration;
 pub use attach::{Attached, Ended};
 pub use command::{CheckOutcome, CommandOutcome};
 pub use conn::{Closed, Connection, Event, Pending, Reply, Requests, retryable, runs_long};
+pub use debug::{DebugEvent, DebugSession, Debugger};
 pub use develop::{CompileOutcome, Develop};
 pub use error::Error;
 pub use ifs::Files;
