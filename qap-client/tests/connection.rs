@@ -32,7 +32,7 @@ fn hello_over_tls13() {
     assert_eq!(h.version, 6);
     assert_eq!(h.system_name, "QSHQ400");
     assert_eq!(h.release, "V1R0M0");
-    assert_eq!(h.services, Service::ALL.to_vec());
+    assert_eq!(h.services, Service::of_version(6));
     assert!(
         matches!(c.security(), qsa_net::Security::Tls { protocol, .. } if protocol == "TLSv1_3")
     );
