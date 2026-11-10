@@ -235,7 +235,11 @@ impl ListTable {
         let m = model.clone();
         table.handle(move |t, ev| match ev {
             Event::Push => {
-                if let Some((TableContext::ColHeader, _, col, resize)) = t.cursor2rowcol() {
+                // Where the pointer is, asked of the table now: its
+                // callback_row and callback_context are only set by its own
+                // handler, which runs after this one if at all.
+                let hit = t.cursor2rowcol();
+                if let Some((TableContext::ColHeader, _, col, resize)) = hit {
                     // Near a column edge the table resizes the column.
                     if resize != fltk::table::TableResizeFlag::None {
                         return false;
@@ -243,11 +247,13 @@ impl ListTable {
                     fire_header(&m, col as usize);
                     return true;
                 }
-                let row = t.callback_row();
-                let in_rows = t.callback_context() == TableContext::Cell;
-                if in_rows {
-                    m.borrow_mut().clicked_col = usize::try_from(t.callback_col()).ok();
-                }
+                let (row, in_rows) = match hit {
+                    Some((TableContext::Cell, row, col, _)) if row >= 0 => {
+                        m.borrow_mut().clicked_col = usize::try_from(col).ok();
+                        (row, true)
+                    }
+                    _ => (0, false),
+                };
                 let double = app::event_clicks();
                 let _ = t.take_focus();
                 if in_rows {
