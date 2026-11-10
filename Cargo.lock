@@ -1270,7 +1270,7 @@ dependencies = [
 
 [[package]]
 name = "qap-client"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "ipc 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=58a7e6d3a95a498d50ce3ff40e4969f2351fc813)",
@@ -1357,7 +1357,7 @@ dependencies = [
 
 [[package]]
 name = "qsa-config"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "directories",
  "qsa-msg",
@@ -1369,11 +1369,11 @@ dependencies = [
 
 [[package]]
 name = "qsa-glyph"
-version = "1.1.0"
+version = "1.1.1"
 
 [[package]]
 name = "qsa-icons"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "ico",
  "png",
@@ -1382,7 +1382,7 @@ dependencies = [
 
 [[package]]
 name = "qsa-install"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "directories",
  "fltk",
@@ -1404,7 +1404,7 @@ dependencies = [
 
 [[package]]
 name = "qsa-msg"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "serde",
  "thiserror",
@@ -1413,7 +1413,7 @@ dependencies = [
 
 [[package]]
 name = "qsa-net"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "rustls",
  "rustls-native-certs",
@@ -1424,7 +1424,7 @@ dependencies = [
 
 [[package]]
 name = "qsa-print"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "png",
  "printpdf",
@@ -1436,7 +1436,7 @@ dependencies = [
 
 [[package]]
 name = "qsa-sql"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "qap-proto 0.1.0 (git+https://github.com/quartzsystems/quartz-systems-400?rev=7f82a43fc5edfb8bfd7a84753d6e77e23704fffb)",
  "tn5250",
@@ -1444,7 +1444,7 @@ dependencies = [
 
 [[package]]
 name = "qsa-transfer"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "calamine",
  "qap-client",
@@ -1465,7 +1465,7 @@ dependencies = [
 
 [[package]]
 name = "qsa-ui"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "fltk",
  "qsa-glyph",
@@ -1476,7 +1476,7 @@ dependencies = [
 
 [[package]]
 name = "qsaccess"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "directories",
  "fltk",
@@ -1720,7 +1720,7 @@ checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
 name = "scs"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "tn5250",
 ]
@@ -2070,7 +2070,7 @@ checksum = "fd3ca314f692efd6c868f8408f53fe444634a845f96c028b97d35f6a1f79f0ee"
 
 [[package]]
 name = "tn5250"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "qsa-net",
  "thiserror",
@@ -2603,7 +2603,7 @@ checksum = "66fee0b777b0f5ac1c69bb06d361268faafa61cd4682ae064a171c16c433e9e4"
 
 [[package]]
 name = "xtask"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "qsa-glyph",
  "qsa-icons",

@@ -12,6 +12,18 @@ each crate's name. Breaking changes are marked **Breaking**.
 
 ## Unreleased
 
+## 1.1.1 (2026-11-10)
+
+### QS/400 Access for Desktop
+
+- A click on a row of any list selects it: Session Manager, Printer Output,
+  Messages, the Integrated File System, Run SQL's results and the rest.
+  Double-clicks and the rows' context menus work with it.
+- The main window's File menu has Recent Sessions once, as a submenu, with
+  Exit last.
+- Open menus and drop-down lists have more room between their outline and
+  their items.
+
 ### qap-client
 
 QAP versions 8 and 9 (drafts), for Code for QS/400; QS/400 pinned at
