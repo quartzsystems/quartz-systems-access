@@ -540,7 +540,9 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
         Action::Recent(0),
     );
     if let Some(mut item) = menu.find_item(RECENT_MENU) {
-        item.set_flag(MenuFlag::MenuDivider);
+        // set_flag replaces every flag, so the submenu's own is given again:
+        // without it this is a plain item and its entries fall into File.
+        item.set_flag(MenuFlag::Submenu | MenuFlag::MenuDivider);
     }
     add(
         &mut menu,
