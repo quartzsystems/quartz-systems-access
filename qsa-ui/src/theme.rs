@@ -287,7 +287,9 @@ fn set_box_types() {
     app::set_frame_type_cb(PRESSED_BUTTON_BOX, pressed_button_box, 2, 2, 4, 4);
     app::set_frame_type_cb(CHECK_BOX, check_box, 1, 1, 2, 2);
     app::set_frame_type_cb(RoundDownBox, radio_box, 1, 1, 2, 2);
-    app::set_frame_type_cb(MENU_BOX, menu_box, 3, 3, 6, 6);
+    // The insets are the padding between an open menu's outline and its
+    // items: FLTK lays a menu out from its box's.
+    app::set_frame_type_cb(MENU_BOX, menu_box, 6, 6, 12, 12);
     app::set_frame_type_cb(MENU_HOT_BOX, menu_hot_box, 1, 1, 2, 2);
 }
 
