@@ -334,30 +334,9 @@ UTC, so a machine elsewhere shows those times differently.
 Views whose goldens are stale or missing until CI's bless run writes new ones,
 on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 
-In `qsaccess/tests/goldens/`:
-
-- Changed: `main` and `main-messages-waiting` (the task pane's last entry
-  is now Certificate Management); `properties-security` (certificates by
-  subject and Valid to, View...); `prompt-help` (Help on Prompting);
-  `printer-settings` (the PDF folder's new place in Documents).
-- New: `macro-unsaved` (what the Macro editor's Close asks).
-- New, Certificate Management: `certificate-management` (the list, with one
-  certificate expired and one with 21 days left),
-  `certificate-management-this-computer`, `certificate-view`,
-  `certificate-view-expired`, `certificate-import-systems` (Import's choice
-  of systems) and `certificate-remove` (the confirmation).
-- New, Help: `help-contents`, `help-search` (Search with what it found) and
-  `help-topic-table` (the keyboard reference).
-
-In `qsa-install/tests/goldens/`: `uninstall` (the Sessions folder's new
-place in Documents). In `qsa-print/tests/goldens/` (in the
-`goldens-linux` artifact): `listing-132-1`, `-2` and `-3` (the fixture's
-page heading).
-
-Nothing else should change in that bless run: any other changed PNG is a
-regression to fix. The main window and the installer's pages show the
-release, so they wait for a bless again after each `ci/version.sh prepare`
-(docs/releasing.md).
+None: every view is blessed on CI's runners. The main window and the
+installer's pages show the release, so they wait for a bless again after
+each `ci/version.sh prepare` (docs/releasing.md).
 
 ## PDF goldens
 
