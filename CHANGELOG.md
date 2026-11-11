@@ -31,6 +31,35 @@ each crate's name. Breaking changes are marked **Breaking**.
   `QAD0044`.
 - A system's CA list may reference a DER certificate file as well as a PEM
   one.
+- Help. **Help > Help Topics** (F1) opens a Help window in place of
+  `QAD0001`: Contents (the topics as a tree) and Search (plain substring
+  over titles and text) on the left, the topic on the right, and Back,
+  Forward, Home and Print (the topic as a PDF file). There is a topic for
+  each window and task, a keyboard reference with the default map, and a
+  Messages reference with the cause and recovery of every `QAD` message,
+  made from the catalogue. Help is part of the program: no files on disk,
+  no browser, no network.
+- F1 in any window or dialog opens that window's topic, and so does the Help
+  button of the System Properties, Session Properties and file Properties
+  dialogs and of Certificate Management. The windows with a Help menu
+  (5250 printer session, Printer Output, Messages) have **Help Topics** on
+  it. Two windows keep F1 for the system: a 5250 display session, where F1
+  is the system's key and Help is **Help > Help Topics**, and the Prompt
+  dialog, where F1 and Help show the system's help for the command.
+- The message ID in a message's Details opens the message in the Messages
+  reference.
+- The main window's **Edit > Cut**, **Copy** and **Paste** are dimmed
+  instead of reporting `QAD0001`: only 5250 Console and Control Panel still
+  do.
+- `QAD0050` (a help topic was not found; the build checks every link and
+  every topic a window opens, so it should never be seen).
+- `QAD1002` and `QAD1010` name the right tab for **Use TLS for all
+  connections** (General, not Security).
+- Releases carry build provenance: the release workflow asks GitHub for an
+  artifact attestation of both installers, which `gh attestation verify`
+  checks. `SHA256SUMS` is published as before, and the installers are still
+  not code-signed. The README and docs/releasing.md say how to check a
+  download both ways.
 
 ### qsa-net
 

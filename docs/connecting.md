@@ -8,21 +8,29 @@ Edit...):
 |---|---|---|
 | Telnet | 23 | 5250 display and printer sessions (TN5250E, RFC 4777) |
 | Telnet (TLS) | 992 | The same, when **Use TLS for all connections** is ticked |
-| QAP | 2320 | Everything else: sign-on, password changes, and the functions to come |
+| QAP | 2320 | Everything else: sign-on, password changes and every function on the system |
 
-## Phases and QAP versions
+The program's own Help has the same ground window by window: **Help > Help
+Topics**, or F1 in any window (see [Help](#help)).
 
-Each desktop phase after the first four needs QS/400 to ship a QAP version
-first, so the phases follow the versions:
+## Functions and QAP versions
 
-| Phase | QAP version | What |
-|---|---|---|
-| 5 | 2 | Run Command (`Command`), the password expiry warning (`PasswordStatus`), 5250 automatic sign-on by ticket (`TelnetTicket`) |
-| 6 | 3 | Printer Output (`Spool`) |
-| 7 | 4 | Run SQL, Schemas and Data Transfer (`Sql`); a connection of its own per window (`Attach`, `JobInfo`) |
-| 8 | 5 | Integrated File System (`Ifs`) |
-| 9 | 6 | Messages (`Messages`) |
-| 10 | none | 5250 Console and Control Panel (the service console, not QAP) |
+Each function works on a system from the QAP version that defines it. The
+task pane dims a function the selected system's version does not have, with
+`QAD5001` as the reason:
+
+| QAP version | What |
+|---|---|
+| 1 | Sign On, Change Password, Sign Off and Verify Connection |
+| 2 | Run Command (`Command`), the password expiry warning (`PasswordStatus`), 5250 automatic sign-on by ticket (`TelnetTicket`) |
+| 3 | Printer Output (`Spool`) |
+| 4 | Run SQL, Schemas and Data Transfer (`Sql`); a connection of its own per window (`Attach`, `JobInfo`) |
+| 5 | Integrated File System (`Ifs`) |
+| 6 | Messages (`Messages`) |
+
+5250 display and printer sessions need no QAP version: they use Telnet. The
+5250 Console and Control Panel entries (the service console, which is not
+QAP) are not available yet and report `QAD0001`.
 
 ## QAP
 
@@ -70,12 +78,56 @@ both).
   certificate manager, and refuses to start until one is assigned. A
   certificate this computer does not trust is shown in **Certificate Not
   Trusted** (`QAD1011`), as for 5250 sessions over TLS; **Trust for this
-  system** adds it to the system's CA list (the **Security** tab).
+  system** adds it to the system's CA list (the **Security** tab, and
+  [Certificate Management](#certificates)).
 - **Starting the server.** On the system, `STRTCPSVR SERVER(*QAP)` starts it
   and `ENDTCPSVR SERVER(*QAP)` ends it. `CHGQAPA` sets whether it starts with
   TCP/IP (`AUTOSTART`), its port (`PORT`, 2320 unless changed) and how long a
   session may wait without a connection (`IDLETIMO`). A server that is not
   started, or not on the port configured here, gives `QAD4053`.
+
+## Certificates
+
+Every TLS connection checks the certificate the system presents: each QAP
+connection, and 5250 sessions when **Use TLS for all connections** is ticked.
+A certificate is trusted when it was issued by a certificate authority in the
+operating system's certificate store or in the system configuration's own CA
+list, or when the certificate itself is in that list (which is how a
+self-signed certificate is trusted, by **Trust for this system**). Each
+system has its own list, and nothing turns the check off.
+
+Only the system proves who it is with a certificate. The user signs on with a
+user ID and password, so no client certificate or private key is used, by QAP
+or by Telnet TLS, and there are none to manage.
+
+**Tools > Certificate Management...** (also in the task pane's Management
+group) lists every certificate in any system's CA list, one row each:
+Subject, Issuer, Valid from, Valid to, SHA-256 fingerprint and **Trusted
+for**, the systems that trust it. Times are UTC. A certificate that has
+expired says **Expired** in red; one with 30 days or fewer left shows the
+date and the days left.
+
+| Action | What it does | Message |
+|---|---|---|
+| **View...** | Every field, the PEM text, and **Copy** for all of it | |
+| **Import...** | Reads a PEM file (one certificate or several) or a DER file, and adds each certificate to the CA lists of the systems you tick | `QAD0040`; `QAD0043` for a file with no certificate; `QAD0044` asks before an expired one |
+| **Export...** | Writes the certificate as a PEM file | `QAD0042` |
+| **Trusted for...** | Ticks and clears the systems that trust it | `QAD0040`, `QAD0041` |
+| **Remove** | Takes it out of every system's list, after naming the systems that will stop trusting it | `QAD0041` |
+
+It edits the same lists as the **Security** tab of each system's properties,
+and each shows what the other changes at once. While System Properties is
+open for a system, changes to that system's list are kept by its **OK** and
+dropped by its **Cancel**, wherever they were made; changes to other systems'
+lists are saved as they are made. A list may also refer to a certificate file
+(PEM or DER) instead of holding the certificate: the file is never changed,
+and removing one of its certificates replaces the reference with the file's
+other certificates, kept in the configuration.
+
+The **This computer** tab says how many certificates the operating system's
+store supplies. They are trusted for every system and are managed by the
+operating system, not here; the program reads the store when it first makes a
+TLS connection.
 
 ## Signing on
 
@@ -517,3 +569,25 @@ if you trust it.
 The test sign-on is a real sign-on. A failed one counts toward the system's
 `QMAXSIGN` limit, which can disable the profile, and is audited like any
 sign-on; the dialog says so beside the fields.
+
+## Help
+
+Help is built into the program: no browser is opened and no network is used.
+**Help > Help Topics** (F1) in the main window opens it; F1 in any other
+window or dialog, and a dialog's **Help** button, open that window's topic.
+Two windows keep F1 for the system: in a 5250 display session it is the
+system's F1 key (use **Help > Help Topics**), and in the Prompt dialog it
+shows the system's help for the field.
+
+The Help window has **Contents** (the topics as a tree) and **Search**
+(topics whose title or text contains what is typed, as a plain substring)
+on the left and the topic on the right, with **Back**, **Forward**, **Home**
+and **Print...** (the topic as a PDF file) above. The Messages reference
+topic lists every `QAD` message with its cause and recovery, made from the
+catalogue when the program is built; the message ID in a message's
+**Details...** opens its entry.
+
+The topics are the Markdown files in `qsaccess/help/`, listed in
+`contents.txt`. The build turns them into HTML and puts them in the binary,
+and fails on a link to a topic or heading that does not exist, so a help
+link cannot lead nowhere (`QAD0050` is what would say so).

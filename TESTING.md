@@ -174,6 +174,32 @@ database (`qapd::testing::sql`):
   (`max_version` 5) `GetInfo`'s change time, after a 20 ms wait.
 - `qsaccess/tests/run_request.rs` also runs a files request delegated to the
   instance: exit 0 with the files written, exit 3 for a folder refused.
+- Certificate Management. `qsa-net`'s `x509` unit tests: the certificates
+  in a PEM file, a DER file, several in one file in order, and files that
+  hold none (a key, text, cut-short DER). `qsaccess`'s `certs` unit tests:
+  what Import takes and refuses, one row per certificate with the systems
+  that trust it, a referenced file read as PEM or DER, adding once and
+  removing while keeping a file's other certificates, the Valid to column
+  (Expired, the days left), the confirmation's wording and View's text.
+  `qsaccess/tests/certs_sync.rs` (a plain program, `harness = false`, since
+  it makes the real windows): the window and the Security tab of an open
+  System Properties show one list, each sees what the other adds and
+  removes at once, OK saves the dialog's list and Cancel drops it, and
+  **Trust for this system** shows in the window.
+- Help. Building `qsaccess` fails on a help link to a topic or heading that
+  does not exist, on a topic file not listed in `help/contents.txt` and on a
+  link out of Help (`qsaccess/build/help.rs`). `qsaccess`'s `help` unit
+  tests: every topic a window or dialog opens exists, every internal link
+  resolves, Search finds a known phrase (plain substring, title matches
+  first), the Messages reference has every catalogue message with its cause
+  and recovery, the keyboard reference has the default map, and a topic
+  prints as pages with its headings in bold and makes a PDF.
+  `qsaccess/tests/help_window.rs` (a plain program too): Home, Back and
+  Forward, every link of every topic followed through FLTK's help view as a
+  click follows it, a link from a showing no longer on screen, Search's
+  list, and `QAD0050` for a topic that does not exist.
+- `ci/version.sh names`, a CI step: no file names a release that is not
+  `VERSION`'s (docs/releasing.md).
 - `qsaccess/tests/fallback.rs` also: the Integrated File System is
   `QAD5001` before version 5, against a version 2 server and in a session
   that agreed version 4.
@@ -261,7 +287,8 @@ Configurations, system and Session Properties, Sign On, Change Password, a
 system's message, Verify Connection, Start, sessions, Keyboard Map
 with the defaults and with `tests/data/operations.qkm` loaded, Load Keyboard
 Map, certificate, Session Manager, Macro editor and step, Run Macro, a long
-message) and `qsa-install/tests/goldens/` (every wizard page, Uninstall,
+message, Certificate Management with its dialogs, Help) and
+`qsa-install/tests/goldens/` (every wizard page, Uninstall,
 Repair). Both use `qsa_ui::goldens`. Locally, the Linux goldens can be made in
 `ci/linux-ci.Dockerfile`, the same image as the CI job.
 
@@ -298,9 +325,22 @@ UTC, so a machine elsewhere shows those times differently.
 Views whose goldens are stale or missing until CI's bless run writes new ones,
 on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 
-None: every view is blessed on CI's runners. The main window and the
-installer's pages show the release, so they wait for a bless again after
-each `ci/version.sh prepare` (docs/releasing.md).
+All in `qsaccess/tests/goldens/`:
+
+- Changed: `main` and `main-messages-waiting` (the task pane's last entry
+  is now Certificate Management).
+- New, Certificate Management: `certificate-management` (the list, with one
+  certificate expired and one with 21 days left),
+  `certificate-management-this-computer`, `certificate-view`,
+  `certificate-view-expired`, `certificate-import-systems` (Import's choice
+  of systems) and `certificate-remove` (the confirmation).
+- New, Help: `help-contents`, `help-search` (Search with what it found) and
+  `help-topic-table` (the keyboard reference).
+
+Nothing else should change in that bless run: any other changed PNG is a
+regression to fix. The main window and the installer's pages show the
+release, so they wait for a bless again after each `ci/version.sh prepare`
+(docs/releasing.md).
 
 ## PDF goldens
 

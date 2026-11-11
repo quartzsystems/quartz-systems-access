@@ -129,6 +129,29 @@ every queue, and older systems, refresh on the Auto-refresh timer as
 before. The editor's check for a file changed on the system uses the
 system's change count on version 6.
 
+**Certificate Management** (Management, and the Tools menu) lists every
+certificate trusted in any system's configuration, one row each, with its
+subject, issuer, validity, SHA-256 fingerprint and the systems that trust
+it; an expired certificate says so in red, and one within 30 days of
+expiring shows the days left. **View...**, **Import...** (PEM or DER, for
+the systems you tick), **Export...** (PEM), **Trusted for...** and
+**Remove**. It edits the same CA lists as the Security tab of each system's
+properties, and the two stay in step while both are open. Client
+certificates are not used: only the system proves who it is with a
+certificate. The certificates of the operating system's store are trusted
+for every system too, and are managed by the operating system.
+`docs/connecting.md` has the details.
+
+**Help > Help Topics** (F1) opens Help, which is part of the program: no
+browser and no network. F1 in any window, and a dialog's **Help** button,
+open that window's topic (in a 5250 display session F1 is the system's own
+key, so Help is on the Help menu there). The Help window has Contents,
+Search, Back, Forward, Home and Print (to a PDF file), and a Messages
+reference with the cause and recovery of every `QAD` message, which the
+message ID in a message's Details opens. The topics are the Markdown files
+in `qsaccess/help/`, made into HTML when the program is built; a link to a
+topic that does not exist fails the build.
+
 ### Transfer requests and `qsaccess run`
 
 A transfer can be saved as a `.qdx` request (**Save Request...** in either
