@@ -55,7 +55,7 @@ The toolbar has the commands used most.
 
 Each job is written to this computer's disk as it arrives, before the system is told it arrived. When the job ends, its output is made:
 
-- **PDF files.** A PDF in the session's PDF folder. Unless you set another, the folder is `Quartz Access/Printer Output/<device>` in your Documents folder, and the file name is `{device}-{date}-{time}-{seq}.pdf`. [QAD3010](messages-reference.md#QAD3010) names the file.
+- **PDF files.** A PDF in the session's PDF folder. Unless you set another, the folder is `QS400 Access for Desktop/Printer Output/<device>` in your Documents folder, and the file name is `{device}-{date}-{time}-{seq}.pdf`. [QAD3010](messages-reference.md#QAD3010) names the file.
 - **System printer.** The job is printed on the printer chosen in the settings, or on this computer's default printer ([QAD3011](messages-reference.md#QAD3011)). When this computer cannot print, a job meant only for the printer is saved as a PDF instead ([QAD3012](messages-reference.md#QAD3012)).
 
 If the connection ends in the middle of a job, what arrived is still made into output and the job is marked incomplete ([QAD3023](messages-reference.md#QAD3023)). A job left unfinished because the program stopped is made into output when the session is next opened.

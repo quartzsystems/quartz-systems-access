@@ -118,20 +118,10 @@ impl ConfigDir {
 }
 
 /// The folder session files are kept in unless the user picks another:
-/// `Quartz Access/Sessions` in the user's Documents folder. It may not
-/// exist yet.
-///
-/// - Windows: the Documents known folder, so it follows Documents wherever
-///   it has been moved, OneDrive included; else
-///   `%USERPROFILE%\Documents`.
-/// - Linux: `$XDG_DOCUMENTS_DIR`, else `~/Documents`.
+/// `QS400 Access for Desktop/Sessions` in the user's Documents folder
+/// ([`crate::documents::folder`]). It may not exist yet.
 pub fn default_sessions_dir() -> Option<PathBuf> {
-    let documents = directories::UserDirs::new().map(|u| {
-        u.document_dir()
-            .map(Path::to_owned)
-            .unwrap_or_else(|| u.home_dir().join("Documents"))
-    });
-    documents.map(|d| d.join("Quartz Access").join("Sessions"))
+    crate::documents::folder().map(|d| d.join("Sessions"))
 }
 
 /// Reads and parses a TOML file. `None` (or the default) for a missing file.
@@ -372,13 +362,13 @@ pub(crate) mod tests {
     fn default_sessions_dir_is_under_documents() {
         if let Some(d) = default_sessions_dir() {
             let p = d.to_string_lossy().replace('\\', "/");
-            assert!(p.ends_with("/Quartz Access/Sessions"), "{p}");
+            assert!(p.ends_with("/QS400 Access for Desktop/Sessions"), "{p}");
             // It is under the Documents folder the platform reports, which
             // on Windows is wherever Documents has been moved to.
             if let Some(docs) =
                 directories::UserDirs::new().and_then(|u| u.document_dir().map(Path::to_owned))
             {
-                assert_eq!(d, docs.join("Quartz Access").join("Sessions"));
+                assert_eq!(d, docs.join("QS400 Access for Desktop").join("Sessions"));
             }
         }
     }

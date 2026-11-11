@@ -142,16 +142,13 @@ pub fn pdf(s: &Screen, look: Look, title: &str) -> Vec<u8> {
     out
 }
 
-/// Where Print Screen writes: the Documents folder (or the home folder),
-/// `QS400 Access/Screens/<system> <date> <time>.pdf`, in UTC.
+/// Where Print Screen writes: `Screens/<system> <date> <time>.pdf`, in UTC,
+/// in the program's folder in Documents
+/// ([`qsa_config::documents::screens_dir`]), beside Sessions and Printer
+/// Output.
 pub fn output_path(system: &str) -> std::path::PathBuf {
-    let base = directories::UserDirs::new()
-        .and_then(|u| {
-            u.document_dir()
-                .map(|d| d.to_owned())
-                .or(Some(u.home_dir().to_owned()))
-        })
-        .unwrap_or_else(std::env::temp_dir);
+    let dir = qsa_config::documents::screens_dir()
+        .unwrap_or_else(|| std::env::temp_dir().join("Screens"));
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
@@ -165,9 +162,7 @@ pub fn output_path(system: &str) -> std::path::PathBuf {
             }
         })
         .collect();
-    base.join("QS400 Access")
-        .join("Screens")
-        .join(format!("{safe} {}.pdf", stamp(secs)))
+    dir.join(format!("{safe} {}.pdf", stamp(secs)))
 }
 
 /// `YYYY-MM-DD HHMMSS` for seconds since 1970, UTC.

@@ -66,7 +66,7 @@ Drag over the display to select a rectangle of cells. **Edit > Copy** copies the
 
 ## Print Screen
 
-**File > Print Screen** writes the screen as a one-page PDF, in the session's colours, to `QS400 Access/Screens` in your Documents folder. The file is named with the system, the date and the time. The status bar names the file ([QAD1040](messages-reference.md#QAD1040)).
+**File > Print Screen** writes the screen as a one-page PDF, in the session's colours, to `QS400 Access for Desktop/Screens` in your Documents folder. The file is named with the system, the date and the time. The status bar names the file ([QAD1040](messages-reference.md#QAD1040)).
 
 ## Hotspots
 

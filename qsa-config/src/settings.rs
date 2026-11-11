@@ -479,6 +479,37 @@ impl Settings {
         true
     }
 
+    /// Gives every path kept here that was in one of `documents`' earlier
+    /// folders ([`crate::documents::EARLIER`]) its place in the one folder,
+    /// when the file or folder is there now: Recent Sessions, Session
+    /// Manager's folders, when each session was last used, and Run SQL's
+    /// recent scripts. True when anything changed.
+    pub fn reroot_documents(&mut self, documents: &Path) -> bool {
+        let moved = |p: &Path| crate::documents::reroot(p, documents).filter(|n| n.exists());
+        let mut changed = false;
+        for p in self
+            .recent_sessions
+            .iter_mut()
+            .chain(self.session_folders.iter_mut())
+            .chain(self.run_sql.recent.iter_mut())
+        {
+            if let Some(new) = moved(p) {
+                *p = new;
+                changed = true;
+            }
+        }
+        let keys: Vec<String> = self.last_used.keys().cloned().collect();
+        for key in keys {
+            if let Some(new) = moved(Path::new(&key))
+                && let Some(when) = self.last_used.remove(&key)
+            {
+                self.last_used.insert(path_key(&new), when);
+                changed = true;
+            }
+        }
+        changed
+    }
+
     /// Puts `path` at the top of the recent sessions, keeping at most
     /// [`RECENT_MAX`].
     pub fn add_recent(&mut self, path: &Path) {

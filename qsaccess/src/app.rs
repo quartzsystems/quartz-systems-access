@@ -33,6 +33,22 @@ pub struct AppState {
     pub trust: Rc<crate::certs::Hub>,
 }
 
+/// Moves what earlier releases kept in other folders of the user's
+/// Documents folder into the one folder everything is saved under now
+/// ([`qsa_config::documents`]), logging each thing moved or left. Called
+/// once at start-up, before the state is loaded;
+/// [`AppState::follow_documents`] then takes what it did.
+pub fn adopt_documents() -> qsa_config::documents::Adopted {
+    let Some(documents) = qsa_config::documents::user_documents() else {
+        return qsa_config::documents::Adopted::default();
+    };
+    let adopted = qsa_config::documents::adopt_earlier(&documents);
+    for line in adopted.log_lines() {
+        crate::log!("Documents: {line}");
+    }
+    adopted
+}
+
 /// Shared, mutable application state.
 pub type Shared = Rc<RefCell<AppState>>;
 
@@ -100,6 +116,31 @@ impl AppState {
             if let Err(e) = self.save_settings() {
                 crate::log!("settings not saved: {e}");
             }
+        }
+    }
+
+    /// Follows files [`adopt_documents`] moved: the paths the settings keep
+    /// (Recent Sessions, Session Manager's folders and the rest) get their
+    /// new places, the settings are saved, and `QAD2012` is queued for the
+    /// status bar.
+    pub fn follow_documents(&mut self, adopted: &qsa_config::documents::Adopted) {
+        let Some(documents) = qsa_config::documents::user_documents() else {
+            return;
+        };
+        if self.settings.reroot_documents(&documents) {
+            self.recent_gen += 1;
+            if let Err(e) = self.save_settings() {
+                crate::log!("settings not saved after moving the Documents folder: {e}");
+            }
+        }
+        if !adopted.moved.is_empty() {
+            let folder = documents.join(qsa_config::documents::FOLDER);
+            let m = qsa_msg::message(
+                qsa_msg::id::DOCUMENTS_MOVED,
+                &[&folder.display().to_string()],
+            );
+            crate::log!("{m}");
+            self.startup_messages.push(m);
         }
     }
 

@@ -121,7 +121,16 @@ fn main() {
         return;
     }
 
-    let state = AppState::load(dir).shared();
+    // Everything saved in Documents is in one folder: what an earlier
+    // release kept in others is moved there before anything reads it.
+    let adopted = if args.snapshot.is_none() {
+        qsaccess::app::adopt_documents()
+    } else {
+        Default::default()
+    };
+    let mut loaded = AppState::load(dir);
+    loaded.follow_documents(&adopted);
+    let state = loaded.shared();
     let (ui, rx) = mainwin::build(state.clone());
     let mut win = ui.window.clone();
     // The main window keeps the size it last had, and always opens in the

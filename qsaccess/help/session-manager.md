@@ -19,7 +19,7 @@ Passwords are never in a session file, and neither is certificate trust, which i
 
 ## The Sessions folder
 
-Session files are kept in `Quartz Access/Sessions` in your Documents folder unless you choose another place when saving. The program creates the folder when it is first needed. File choosers for session files, keyboard maps and macros open there.
+Session files are kept in `QS400 Access for Desktop/Sessions` in your Documents folder unless you choose another place when saving. The program creates the folder when it is first needed. File choosers for session files, keyboard maps and macros open there.
 
 ## The Session Manager window
 

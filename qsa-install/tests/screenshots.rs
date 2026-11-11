@@ -50,9 +50,9 @@ fn main() -> ExitCode {
         g.check(&format!("wizard-{i}-{name}"), page(i));
     }
     let sessions = if cfg!(windows) {
-        r"C:\Users\user\Documents\Quartz Access\Sessions"
+        r"C:\Users\user\Documents\QS400 Access for Desktop\Sessions"
     } else {
-        "/home/user/Documents/Quartz Access/Sessions"
+        "/home/user/Documents/QS400 Access for Desktop/Sessions"
     };
     g.check(
         "uninstall",

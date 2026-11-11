@@ -17,10 +17,13 @@
 //!   keyboard map and macro files.
 //! - [`migrate`]: moving the earlier per-system keyboard maps into session
 //!   files.
+//! - [`documents`]: the one folder in Documents everything saved there goes
+//!   under, and moving what earlier releases kept in other folders into it.
 //! - [`legacy`]: removing the passwords earlier releases saved. Passwords
 //!   are never saved.
 
 pub mod doc;
+pub mod documents;
 pub mod keymap;
 pub mod legacy;
 pub mod migrate;

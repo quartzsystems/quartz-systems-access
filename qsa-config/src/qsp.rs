@@ -25,7 +25,7 @@
 //!
 //! [output]
 //! target = "pdf"               # "pdf", "printer" or "both"
-//! pdf_folder = ""              # empty: Documents/Quartz Access/Printer Output/<device>
+//! pdf_folder = ""              # empty: Documents/QS400 Access for Desktop/Printer Output/<device>
 //! file_name = "{device}-{date}-{time}-{seq}.pdf"
 //! open_pdf_when_done = false
 //! also_save_text = false
@@ -226,18 +226,10 @@ pub struct PrinterFile {
 }
 
 /// The output folder for `device` when none is set:
-/// `Quartz Access/Printer Output/<device>` in the user's Documents folder.
+/// `QS400 Access for Desktop/Printer Output/<device>` in the user's
+/// Documents folder ([`crate::documents::folder`]).
 pub fn default_pdf_folder(device: &str) -> Option<PathBuf> {
-    let documents = directories::UserDirs::new().map(|u| {
-        u.document_dir()
-            .map(Path::to_owned)
-            .unwrap_or_else(|| u.home_dir().join("Documents"))
-    });
-    documents.map(|d| {
-        d.join("Quartz Access")
-            .join("Printer Output")
-            .join(safe_name(device))
-    })
+    crate::documents::folder().map(|d| d.join("Printer Output").join(safe_name(device)))
 }
 
 /// `s` with every character a file name cannot hold replaced by `_`.
@@ -336,7 +328,9 @@ impl PrinterFile {
         if f.is_empty() {
             default_pdf_folder(&self.printer.device_name)
         } else {
-            Some(PathBuf::from(f))
+            // A folder set by an earlier release, in the Documents folder
+            // it used, is where that folder has been moved to.
+            Some(crate::documents::current(Path::new(f)))
         }
     }
 
@@ -511,7 +505,7 @@ mod tests {
         assert_eq!(file_name("{device}/{job}", "P", "d", "t", 12), "P_12.pdf");
         assert_eq!(file_name("out.txt", "P", "d", "t", 1), "out.txt");
         let dir = default_pdf_folder("PRT01").unwrap();
-        assert!(dir.ends_with(Path::new("Quartz Access/Printer Output/PRT01")));
+        assert!(dir.ends_with(Path::new("QS400 Access for Desktop/Printer Output/PRT01")));
     }
 
     #[test]

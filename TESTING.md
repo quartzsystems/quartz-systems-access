@@ -676,7 +676,7 @@ Then, with `QSACCESS_LOG=trace`:
   download: the program cancels it at its next progress line.
 - [ ] **`qsaccess run` without one.** Close the program, run it again: the
   Sign On dialog, then the transfer; exit code 0. Cancel the Sign On: exit
-  code 2. A request naming a missing table: `QAD7031`, exit code 3.
+  code 2. A request from a missing table: `QAD7036`, exit code 3.
 - [ ] **A sign-off under a window.** With a Run SQL window open, Actions >
   Sign Off in the main window: the window shows the system's `TCP1A58` and
   offers Sign On...; its results stay.
@@ -975,7 +975,7 @@ else; Finish with **Start QS/400 Access for Desktop** ticked must open the main
 window in the middle of the main monitor; Settings > Apps must list the
 program with Uninstall and Modify (repair); uninstalling from there with
 **Also remove my settings** ticked must remove `%APPDATA%\Quartz Systems\Access`
-and leave `Documents\Quartz Access\Sessions` alone.
+and leave `Documents\QS400 Access for Desktop\Sessions` alone.
 
 ## Installer: Linux
 
