@@ -27,7 +27,7 @@ With no running program, the command shows the Sign On dialog itself, runs the t
 
 Progress goes to the standard error stream and the summary to the standard output stream, so a script can keep them apart.
 
-- A table request reports the rows moved and the time taken as it goes. Its summary is [QAD7030](messages-reference.md#QAD7030), [QAD7031](messages-reference.md#QAD7031) or [QAD7032](messages-reference.md#QAD7032). When an upload stopped with rows kept, [QAD7033](messages-reference.md#QAD7033) follows with the row to resume from.
+- A table request reports the rows moved and the time taken as it goes. Its summary is [QAD7030](messages-reference.md#QAD7030) when it is done, [QAD7032](messages-reference.md#QAD7032) when cancelled, and when it failed [QAD7036](messages-reference.md#QAD7036) for a transfer from the system or [QAD7031](messages-reference.md#QAD7031) for one to the system. When an upload stopped with rows kept, [QAD7033](messages-reference.md#QAD7033) follows with the row to resume from.
 - A files request names each file as it starts. Its summary is [QAD8020](messages-reference.md#QAD8020) with the number of files and their size, or one [QAD8021](messages-reference.md#QAD8021) for each file that failed, or [QAD8022](messages-reference.md#QAD8022) when cancelled.
 
 ## Existing files

@@ -320,7 +320,9 @@ system's tables and files on this computer. It needs QAP version 4 (the
 `Sql` service); for an older system the link is dimmed (`QAD5001`). Every run
 has a connection of its own, attached to the session, closed when the run
 ends; it runs with a progress dialog (rows and time) and **Cancel**, and ends
-with a summary: `QAD7030` complete, `QAD7031` failed, `QAD7032` cancelled.
+with a summary: `QAD7030` complete, `QAD7032` cancelled, and failed as
+`QAD7036` from the system (with the reason; the output file is as it was) or
+`QAD7031` to the system (with the row and its line in the file).
 
 ### From the system
 

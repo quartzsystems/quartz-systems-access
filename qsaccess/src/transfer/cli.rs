@@ -367,12 +367,20 @@ fn go(
             Exit::Cancelled
         }
         Err((false, at, why)) => {
-            let (row, line) = at.map_or((0, 0), |(r, l, _, _)| {
-                (r.unwrap_or(0), l.map_or(0, |l| l as u64))
-            });
-            out.say(
-                &super::failed(name, row, line, &r.file().display().to_string(), &why).to_string(),
-            );
+            let file = r.file().display().to_string();
+            let m = match at {
+                // An upload stops at a row of its file.
+                Some((row, line, _, _)) => super::failed(
+                    name,
+                    row.unwrap_or(0),
+                    line.map_or(0, |l| l as u64),
+                    &file,
+                    &why,
+                ),
+                // A download has no row to name.
+                None => super::download_failed(name, &file, &why),
+            };
+            out.say(&m.to_string());
             if let Some((_, _, kept, Some(x))) = at {
                 out.say(&resumable(name, kept, x));
             }

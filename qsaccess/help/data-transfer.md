@@ -75,7 +75,8 @@ The run ends with a summary in a dialog and on the status line:
 | Message | Meaning |
 | --- | --- |
 | [QAD7030](messages-reference.md#QAD7030) | The transfer is complete. |
-| [QAD7031](messages-reference.md#QAD7031) | The transfer failed. For an upload it names the row, its line in the file and the system's message. |
+| [QAD7031](messages-reference.md#QAD7031) | A transfer to the system failed. It names the row, its line in the file and the system's message. |
+| [QAD7036](messages-reference.md#QAD7036) | A transfer from the system failed. It gives the reason. The output file is as it was before the transfer. |
 | [QAD7032](messages-reference.md#QAD7032) | The transfer was cancelled and nothing was kept. |
 
 A download is written to a temporary file beside the output and renamed at the end, so a cancelled or failed download leaves no partial file.

@@ -77,6 +77,16 @@ pub fn failed(name: &str, row: u64, line: u64, file: &str, why: &str) -> Message
     )
 }
 
+/// `QAD7036`: transfer `name` from the system failed, leaving `file` as it
+/// was. A download has no row to name: the statement or a fetch is refused,
+/// or the file cannot be written.
+pub fn download_failed(name: &str, file: &str, why: &str) -> Message {
+    qsa_msg::message(
+        id::DOWNLOAD_FAILED,
+        &[name, why.trim_end_matches('.'), file],
+    )
+}
+
 /// The session on `system` for a transfer, signing on first if there is
 /// none; `None` (shown) when the user cancels or the system's QAP version
 /// has no `Sql` service (`QAD5001`).
@@ -438,6 +448,10 @@ mod tests {
         assert_eq!(
             complete("assets.csv", 12, Duration::from_millis(400)).text,
             "Transfer assets.csv complete: 12 rows in 0.4 s."
+        );
+        assert_eq!(
+            download_failed("assets.csv", "out.csv", "SQL0204: NOSUCH not found.").text,
+            "Transfer assets.csv failed: SQL0204: NOSUCH not found."
         );
         assert_eq!(
             failed("up.csv", 7, 8, "up.csv", "SQL0803: Duplicate key.").text,

@@ -917,7 +917,7 @@ impl DownloadWindow {
                         f => f.to_string(),
                     },
                 };
-                super::failed(name, 1, 1, &file, &why)
+                super::download_failed(name, &file, &why)
             }
         };
         crate::log!("{m}");
