@@ -56,7 +56,7 @@ pub struct VersionInfo {
     /// Major, minor, patch, build.
     pub version: [u16; 4],
     /// The product version as people read it, for example
-    /// `1.0.0 (V1R0M0)`.
+    /// `1.1.1 (V1R1M1)`.
     pub version_text: String,
     pub internal_name: String,
     pub original_filename: String,

@@ -1138,8 +1138,8 @@ mod tests {
             ),
             (
                 id::UPGRADED,
-                &["V1R0M0", "V1R0M1"],
-                "Upgrade from V1R0M0 to V1R0M1 complete.",
+                &["OLD", "NEW"],
+                "Upgrade from OLD to NEW complete.",
             ),
             (
                 id::PAYLOAD_DAMAGED,

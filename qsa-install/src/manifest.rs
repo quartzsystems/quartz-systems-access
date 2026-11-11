@@ -79,9 +79,9 @@ pub enum Item {
 /// The manifest.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Manifest {
-    /// The product version installed, `1.0.0`.
+    /// The product version installed, `1.1.1`.
     pub version: String,
-    /// The release, `V1R0M0`.
+    /// The release, `V1R1M1`.
     pub release: String,
     pub scope: Scope,
     pub dir: PathBuf,

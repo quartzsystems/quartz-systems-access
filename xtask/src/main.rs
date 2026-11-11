@@ -12,7 +12,7 @@
 //!   release `qsaccess` and `qsa-install`, packs `qsaccess`, the icons and
 //!   the licences into a zstd tar, and appends it to the `qsa-install`
 //!   program with a footer (magic, offset, length, SHA-256). Writes
-//!   `target/dist/QS400-Access-V1R0M0-<os>-x86_64[.exe]`. `--skip-build`
+//!   `target/dist/QS400-Access-V1R1M1-<os>-x86_64[.exe]`. `--skip-build`
 //!   uses release binaries already built.
 
 use std::path::{Path, PathBuf};

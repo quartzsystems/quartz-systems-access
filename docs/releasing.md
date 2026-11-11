@@ -18,6 +18,16 @@ Cargo cannot read a version from a file, so `Cargo.toml` keeps its own copy.
 test fail when the two differ. Change them together with `ci/version.sh
 prepare`.
 
+The release name always follows `VERSION`: 1.1.1 is V1R1M1. Where the README,
+these documents, a script's usage line or a doc comment must write a release
+out (an installer's file name, a tag), it is written with the current
+version, and `ci/version.sh prepare` rewrites those lines with the new one.
+`ci/version.sh names`, run in CI, fails on a `VxRyMz` or `x.y.z` release name
+that is not `VERSION`'s, in any file but the few the script lists (a system's
+own release in test data, and QS/400's protocol document) and the past
+sections of `CHANGELOG.md`. So the commands below always show the version in
+`VERSION`; put the version you are releasing in its place.
+
 ## Changelog
 
 `CHANGELOG.md` has one section per release, newest first. Add each change to
@@ -33,12 +43,13 @@ to `git.exe`; plain `bash` in PowerShell is usually WSL's. From a Git Bash
 window, `ci/version.sh` works as it is.
 
 1. Prepare it: writes the version to `VERSION`, `Cargo.toml` and
-   `Cargo.lock`, and turns `## Unreleased` into `## X.Y.Z (date)` with a new
-   empty Unreleased section above it.
+   `Cargo.lock`, turns `## Unreleased` into `## X.Y.Z (date)` with a new
+   empty Unreleased section above it, and rewrites the release names written
+   out in the README, the documents and the scripts.
 
    ```sh
-   ci/version.sh prepare 1.1.0      # Git Bash
-   ci\version.ps1 prepare 1.1.0     # PowerShell
+   ci/version.sh prepare 1.1.1      # Git Bash
+   ci\version.ps1 prepare 1.1.1     # PowerShell
    ```
 
 2. Bless the screenshot goldens again: the main window and the installer's
@@ -50,9 +61,9 @@ window, `ci/version.sh` works as it is.
    tag, one command at a time (Windows PowerShell 5.1 has no `&&`):
 
    ```sh
-   git commit -am "chore: release 1.1.0 (V1R1M0)"
-   git tag v1.1.0
-   git push origin main v1.1.0
+   git commit -am "chore: release 1.1.1 (V1R1M1)"
+   git tag v1.1.1
+   git push origin main v1.1.1
    ```
 
 Pushing the tag runs `.github/workflows/release.yml`:
@@ -69,9 +80,6 @@ A failed run publishes nothing. Fix the problem on main, then move the tag,
 or, if the release was published, prepare the next patch version:
 
 ```sh
-git tag -f v1.1.0
-git push -f origin v1.1.0
+git tag -f v1.1.1
+git push -f origin v1.1.1
 ```
-
-The first release, 1.0.0, is already in `VERSION`: run `ci/version.sh prepare
-1.0.0` only to date its changelog section.

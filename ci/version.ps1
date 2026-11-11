@@ -5,7 +5,7 @@
 # ci/version.sh from PowerShell, run with Git for Windows' bash (found next to
 # git.exe). Plain `bash` on Windows is usually WSL's, which is not wanted.
 #
-#   ci\version.ps1 prepare 1.1.0
+#   ci\version.ps1 prepare 1.1.1
 #   ci\version.ps1 check
 #
 # Takes the same arguments as ci/version.sh.

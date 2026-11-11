@@ -1,6 +1,26 @@
 # QS/400 Access for Desktop
 
-QS/400 Access for Desktop is the native desktop client for QS/400, the operating system from Quartz Systems, on Windows and Linux. It is written in Rust on FLTK, with plain Windows-style controls on every platform (see Look below). It provides 5250 display and printer sessions, session files, System Configurations and QAP sign-on; Run Command, the password expiry warning and 5250 automatic sign-on by ticket (QAP version 2); and Printer Output, spooled files on the system with a viewer (QAP version 3). The phases to come each follow a QAP version that QS/400 ships first: 7 (version 4) Run SQL, Schemas and Data Transfer; 8 (version 5) the Integrated File System; 9 (version 6) Messages; 10 the 5250 Console and Control Panel (the service console, not QAP). `docs/connecting.md` keeps the list. Build with `cargo build --release`; the binary is `qsaccess`, and `qsaccess --ui-sampler` opens a window that shows every widget once.
+QS/400 Access for Desktop is the native desktop client for QS/400, the operating system from Quartz Systems, on Windows and Linux. It is written in Rust on FLTK, with plain Windows-style controls on every platform (see Look below). It provides:
+
+- 5250 display and printer sessions over Telnet or Telnet TLS, kept as
+  session files in Session Manager, with keyboard maps, macros and automatic
+  sign-on;
+- System Configurations, with Verify Connection, and sign-on to each system
+  over QAP, the Quartz Access Protocol;
+- Run Command with prompting, Printer Output with a spooled file viewer, Run
+  SQL, Schemas, Data Transfer, the Integrated File System and Messages, each
+  on the system selected in the main window;
+- Certificate Management, for the certificates each system's configuration
+  trusts;
+- Help, built in: every window and dialog opens its topic.
+
+A system offers each function from the QAP version that defines it (versions
+1 to 6; `docs/connecting.md` has the table), and a function a system's
+version does not have is dimmed, with the reason. The 5250 Console and
+Control Panel entries are not available yet.
+
+Build with `cargo build --release`; the binary is `qsaccess`, and `qsaccess
+--ui-sampler` opens a window that shows every widget once.
 
 ## Look
 
@@ -32,8 +52,8 @@ the keyboard) and has no UI dependency.
 ## Connecting to QS/400
 
 5250 display and printer sessions use the system's Telnet port (23, or 992
-with TLS). Everything else (sign-on, password changes, and the functions to
-come) uses QAP, the Quartz Access Protocol (`docs/qap-protocol-spec.md`), on
+with TLS). Everything else (sign-on, password changes and every function on
+the system) uses QAP, the Quartz Access Protocol (`docs/qap-protocol-spec.md`), on
 one port: **2320** unless changed on the Ports tab. QAP runs over **TLS 1.3
 only**. The system's QAP server presents the certificate assigned to
 application ID **`QS400_ACCESS_SERVER`** in its certificate manager and does
@@ -185,10 +205,10 @@ Verify Connection check with its messages.
 Each platform has one installer file, built with `cargo xtask dist` (Linux:
 `ci/dist-linux.sh`, which builds in a pinned glibc 2.31 image):
 
-- `QS400-Access-V1R0M0-windows-x86_64.exe`
-- `QS400-Access-V1R0M0-linux-x86_64` (make it executable and run it)
+- `QS400-Access-V1R1M1-windows-x86_64.exe`
+- `QS400-Access-V1R1M1-linux-x86_64` (make it executable and run it)
 
-V1R0M0 is the release of the version in `VERSION`. Tagged versions are
+V1R1M1 is the release of the version in `VERSION`. Tagged versions are
 built, tested and published as GitHub releases with their `CHANGELOG.md`
 section: see [docs/releasing.md](docs/releasing.md).
 
@@ -233,14 +253,14 @@ installation has:
 **Windows SmartScreen.** The installer is not code-signed yet, so the first
 time it is run from a download Windows shows *Windows protected your PC*.
 Select **More info**, check that the file name is
-`QS400-Access-V1R0M0-windows-x86_64.exe`, then **Run anyway**. The program
+`QS400-Access-V1R1M1-windows-x86_64.exe`, then **Run anyway**. The program
 installed has the same publisher details in its properties (Quartz Systems,
-1.0.0 (V1R0M0)) but is not signed either.
+1.1.1 (V1R1M1)) but is not signed either.
 
 ### Silent install, uninstall and repair
 
 ```
-QS400-Access-V1R0M0-windows-x86_64.exe --silent --scope=user|machine [--dir=PATH]
+QS400-Access-V1R1M1-windows-x86_64.exe --silent --scope=user|machine [--dir=PATH]
     [--no-desktop-shortcut] [--no-associations] [--no-start-menu]
     [--close-running] [--log=FILE]
 uninstall.exe --uninstall [--silent] [--remove-settings] [--close-running]

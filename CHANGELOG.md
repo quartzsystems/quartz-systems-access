@@ -12,6 +12,13 @@ each crate's name. Breaking changes are marked **Breaking**.
 
 ## Unreleased
 
+### QS/400 Access for Desktop
+
+- The release name always follows the version: the README, the documents and
+  the scripts no longer name the first release where they mean this one.
+  `ci/version.sh names`, run in CI, fails on a release name that is not
+  `VERSION`'s, and `ci/version.sh prepare` rewrites the names written out.
+
 ## 1.1.1 (2026-11-10)
 
 ### QS/400 Access for Desktop
@@ -57,7 +64,7 @@ versions 1 to 6.
 
 ### QS/400 Access for Desktop
 
-First release, V1R0M0, for QS/400 over QAP versions 1 to 6.
+First release, V1R1M0, for QS/400 over QAP versions 1 to 6.
 
 - 5250 display sessions over Telnet or Telnet TLS (TN5250E), with keyboard
   maps, the keypad, copy and paste, Print Screen, clickable function-key

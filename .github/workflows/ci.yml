@@ -53,6 +53,9 @@ jobs:
       - name: Cargo.toml's version is VERSION's
         run: ci/version.sh check
 
+      - name: Release names are VERSION's
+        run: ci/version.sh names
+
       - name: Format
         run: cargo fmt --all --check
 
@@ -145,6 +148,9 @@ jobs:
 
       - name: Cargo.toml's version is VERSION's
         run: ci/version.sh check
+
+      - name: Release names are VERSION's
+        run: ci/version.sh names
 
       - name: Format
         run: cargo fmt --all --check

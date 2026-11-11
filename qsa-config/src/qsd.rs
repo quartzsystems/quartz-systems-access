@@ -530,7 +530,7 @@ future_top = "kept"
 [qsaccess]
 kind = "display"
 version = 1
-build = "V1R1M0"
+build = "nightly"
 
 [system]
 name = "sys1"
@@ -569,7 +569,7 @@ name = "LPT1"
         let f = SessionFile::parse(text, base).unwrap();
         assert_eq!(f.extra["future_top"].as_str(), Some("kept"));
         assert_eq!(f.extra["printer"]["name"].as_str(), Some("LPT1"));
-        assert_eq!(f.header.extra["build"].as_str(), Some("V1R1M0"));
+        assert_eq!(f.header.extra["build"].as_str(), Some("nightly"));
         assert_eq!(f.system.extra["site"].as_str(), Some("Leeds"));
         assert_eq!(f.session.extra["zoom"].as_integer(), Some(2));
         assert!(f.hotspots.kinds.contains(&"urls".to_owned()));
@@ -578,7 +578,7 @@ name = "LPT1"
         assert_eq!(again, f, "{out}");
         for want in [
             "future_top = \"kept\"",
-            "build = \"V1R1M0\"",
+            "build = \"nightly\"",
             "site = \"Leeds\"",
             "zoom = 2",
             "deep = [",
