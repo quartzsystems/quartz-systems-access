@@ -21,6 +21,8 @@ Passwords are never in a session file, and neither is certificate trust, which i
 
 Session files are kept in `QS400 Access for Desktop/Sessions` in your Documents folder unless you choose another place when saving. The program creates the folder when it is first needed. File choosers for session files, keyboard maps and macros open there.
 
+Everything the program saves in Documents is under `QS400 Access for Desktop`: `Sessions`, `Printer Output` for 5250 printer sessions and `Screens` for Print Screen. Earlier releases used the folders `Quartz Access` and `QS400 Access`. The first time this release starts it moves what they hold into the one folder and reports [QAD2012](messages-reference.md#QAD2012); Recent Sessions and the folders added to Session Manager follow. A file whose name is already taken in the new folder is left where it was, unchanged.
+
 ## The Session Manager window
 
 Select **Session Manager** in the main window's task pane, or **Tools > Session Manager...**. The window lists the session files in the Sessions folder and in any folders you add. Files in folders below those are not listed.

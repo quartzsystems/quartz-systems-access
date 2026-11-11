@@ -115,8 +115,14 @@ date and the days left.
 | **Trusted for...** | Ticks and clears the systems that trust it | `QAD0040`, `QAD0041` |
 | **Remove** | Takes it out of every system's list, after naming the systems that will stop trusting it | `QAD0041` |
 
+**View...** also shows the alternative names (the host names and addresses
+the certificate is good for), the public key, the signature algorithm and
+whether the certificate is a certificate authority's.
+
 It edits the same lists as the **Security** tab of each system's properties,
-and each shows what the other changes at once. While System Properties is
+which lists that one system's certificates by subject and Valid to date, with
+**Add...** (a PEM or DER file, kept as a reference or embedded), **Remove**
+and **View...**. Each shows what the other changes at once. While System Properties is
 open for a system, changes to that system's list are kept by its **OK** and
 dropped by its **Cancel**, wherever they were made; changes to other systems'
 lists are saved as they are made. A list may also refer to a certificate file

@@ -198,6 +198,15 @@ database (`qapd::testing::sql`):
   Forward, every link of every topic followed through FLTK's help view as a
   click follows it, a link from a showing no longer on screen, Search's
   list, and `QAD0050` for a topic that does not exist.
+- `qsa-config`'s `documents` unit tests: the earlier Documents folders
+  moved whole into the one folder, a file whose name is taken left where it
+  was with nothing overwritten, and paths re-rooted.
+- `qsaccess/tests/macro_editor.rs` (a plain program): the Macro editor has
+  unsaved changes after an edit and none once it is undone, always for a
+  recorded macro with no file, never for an untouched one.
+- `qsa-net`'s `x509` unit tests also cover `details`: the key (EC curves,
+  RSA size, Ed25519), the signature algorithm, alternative names of each
+  kind and the basic constraints.
 - `ci/version.sh names`, a CI step: no file names a release that is not
   `VERSION`'s (docs/releasing.md).
 - `qsaccess/tests/fallback.rs` also: the Integrated File System is
@@ -325,10 +334,13 @@ UTC, so a machine elsewhere shows those times differently.
 Views whose goldens are stale or missing until CI's bless run writes new ones,
 on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 
-All in `qsaccess/tests/goldens/`:
+In `qsaccess/tests/goldens/`:
 
 - Changed: `main` and `main-messages-waiting` (the task pane's last entry
-  is now Certificate Management).
+  is now Certificate Management); `properties-security` (certificates by
+  subject and Valid to, View...); `prompt-help` (Help on Prompting);
+  `printer-settings` (the PDF folder's new place in Documents).
+- New: `macro-unsaved` (what the Macro editor's Close asks).
 - New, Certificate Management: `certificate-management` (the list, with one
   certificate expired and one with 21 days left),
   `certificate-management-this-computer`, `certificate-view`,
@@ -336,6 +348,11 @@ All in `qsaccess/tests/goldens/`:
   of systems) and `certificate-remove` (the confirmation).
 - New, Help: `help-contents`, `help-search` (Search with what it found) and
   `help-topic-table` (the keyboard reference).
+
+In `qsa-install/tests/goldens/`: `uninstall` (the Sessions folder's new
+place in Documents). In `qsa-print/tests/goldens/` (in the
+`goldens-linux` artifact): `listing-132-1`, `-2` and `-3` (the fixture's
+page heading).
 
 Nothing else should change in that bless run: any other changed PNG is a
 regression to fix. The main window and the installer's pages show the

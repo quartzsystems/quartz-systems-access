@@ -85,7 +85,7 @@ A macro is a list of steps kept in a `.qsm` file.
 
 **Running.** Choose the macro from **Macro > Run**, or **Macro > Play...** for a file. **Macro > Stop** stops it. A macro stops by itself when a wait times out, the session is not connected, or the screen size is not the macro's; [QAD2020](messages-reference.md#QAD2020) names the step and the reason.
 
-**Editing.** **Macro > Edit...** opens a file in the **Macro Editor**: the macro's **Name**, **Description** and **Screen size**, and its steps, with **Add...**, **Edit...**, **Remove**, **Move Up** and **Move Down**. Choose **Save** or **Save As...** before **Close**.
+**Editing.** **Macro > Edit...** opens a file in the **Macro Editor**: the macro's **Name**, **Description** and **Screen size**, and its steps, with **Add...**, **Edit...**, **Remove**, **Move Up** and **Move Down**. **Save** writes the macro to its file, and **Save As...** to another. **Close** asks first when there are changes not saved: **Save**, **Don't Save** or **Cancel**.
 
 | Step | Does |
 |---|---|

@@ -98,11 +98,13 @@ Telnet carries 5250 display and printer sessions; they use the TLS port when **U
 
 ### Security
 
-**Trusted CA certificates** lists the certificates this system's connections trust, in addition to those the computer trusts.
+**Trusted CA certificates** lists the certificates this system's connections trust, in addition to those the computer trusts: each certificate's subject and its **Valid to** date, which says **Expired** in red once it has passed.
 
-- **Add...** takes a certificate file (`.pem`, `.crt` or `.cer`). Choose **Reference** to keep the path of the file, or **Embed** to copy the certificate into the system configuration. An embedded certificate travels with exported configurations.
+- **Add...** takes a certificate file, PEM or DER. Choose **Reference** to keep the path of the file, or **Embed** to copy its certificates into the system configuration. An embedded certificate travels with exported configurations. A file with no certificate in it is refused with [QAD0043](messages-reference.md#QAD0043).
 - **Remove** takes the selected certificate out of the list.
-- **View** shows the selected certificate's text.
+- **View...** shows every field of the selected certificate and its PEM text, as Certificate Management does.
+
+A file that is referenced and cannot be read, or holds no certificate, is listed by its path with the reason in red, so that the reference can be removed.
 
 When a system presents a certificate that is not trusted, **Trust for this system** in the **Certificate Not Trusted** dialog adds it to this list. [Certificate Management](certificate-management.md) shows the same lists for every system.
 

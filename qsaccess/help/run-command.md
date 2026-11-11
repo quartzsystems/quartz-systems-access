@@ -74,6 +74,7 @@ The Prompt dialog's title is the command's description and name. It shows one ro
 
 - Press `F1` in a field, or select the **?** button at the end of its row, for help on that value.
 - **Help** shows help for the whole command. `F1` does the same when the cursor is not in a field.
+- **Help on Prompting**, in the help that opens, opens this topic.
 
 The help is the system's own text for the command or the value, followed by what the value may be: its kind and length, whether it is required, its default, its special values, the values allowed, its range and how many values it takes. When the system has no help text for it, the help says so and still shows what the value may be.
 

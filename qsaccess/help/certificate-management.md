@@ -33,7 +33,21 @@ A system configuration can also refer to a certificate file instead of holding t
 
 ## View
 
-Select a certificate and select **View...**, or double-click it. The dialog shows every field: the subject, the issuer, the serial number, the times it is valid from and to, the fingerprint and the systems it is trusted for, and below them the certificate as PEM text. **Copy** puts all of it on the clipboard as text.
+Select a certificate and select **View...**, or double-click it. The dialog shows every field, and below them the certificate as PEM text. **Copy** puts all of it on the clipboard as text.
+
+| Field | What it shows |
+|---|---|
+| **Subject** and **Issuer** | Who the certificate was issued to, and by whom. |
+| **Alternative names** | The host names and addresses the certificate is good for, for example `DNS:sys1.example.net`. A connection checks the system's name against these. |
+| **Serial number** | The number the issuer gave it. |
+| **Valid from** and **Valid to** | The times it is valid between, in UTC. |
+| **Public key** | The kind and size of its key, for example `EC P-256` or `RSA 2048 bits`. |
+| **Signature** | How the issuer signed it. |
+| **Certificate authority** | **Yes** when the certificate may issue others, **No** when it says it may not, **Not stated** when it does not say. |
+| **SHA-256 fingerprint** | The fingerprint that identifies this exact certificate. |
+| **Trusted for** | The systems whose configurations trust it. |
+
+Rest the pointer on a value that is too long for its line to see all of it.
 
 ## Import
 
@@ -67,7 +81,7 @@ Select a row and select **Remove**. The confirmation names the systems that will
 
 ## The Security tab of a system's properties
 
-The **Security** tab of System Properties shows the same list for one system: the certificates and certificate files that system's configuration trusts. Certificate Management and the Security tab edit the same lists, and each shows a change made in the other at once.
+The **Security** tab of System Properties shows the same list for one system: each certificate that system's configuration trusts, by its subject and Valid to date, with **Add...**, **Remove** and **View...**. Certificate Management and the Security tab edit the same lists, and each shows a change made in the other at once.
 
 While System Properties is open for a system, the changes made to that system's list, on the Security tab or here, are kept or dropped with the dialog: **OK** saves them and **Cancel** drops them. Changes to the lists of other systems are saved as they are made. See [System Configurations](getting-started.md#system-configurations).
 

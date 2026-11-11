@@ -55,6 +55,33 @@ each crate's name. Breaking changes are marked **Breaking**.
   every topic a window opens, so it should never be seen).
 - `QAD1002` and `QAD1010` name the right tab for **Use TLS for all
   connections** (General, not Security).
+- Everything saved in Documents is in one folder, **QS400 Access for
+  Desktop**: session files in `Sessions`, printer output in `Printer Output`
+  and Print Screen's PDFs in `Screens`. Earlier releases used `Quartz
+  Access` for the first two and `QS400 Access` for screens. The first start
+  moves what those folders hold into the one folder (a rename; a file whose
+  name is taken there is left where it was, and nothing is overwritten),
+  Recent Sessions and Session Manager's folders follow, and `QAD2012` says
+  so.
+- Certificate Management's View also shows a certificate's alternative
+  names, its public key, how it was signed and whether it is a certificate
+  authority's.
+- The Security tab of a system's properties lists each certificate by its
+  subject, with its Valid to date, instead of a file's path or "Embedded
+  PEM". **Add...** takes a DER file as well as a PEM one and refuses a file
+  with no certificate (`QAD0043`), **Remove** takes out one certificate, and
+  **View...** shows what Certificate Management's View shows.
+- The Macro editor's **Close** asks before unsaved changes are lost: Save,
+  Don't Save or Cancel.
+- A transfer from the system that fails reports its reason as `QAD7036`,
+  and says the output file is as it was. It used to report `QAD7031` with
+  "row 1 (line 1 of file)", whatever had gone wrong; `QAD7031` is now for
+  transfers to the system only, where a row is refused.
+- The Prompt dialog's help has **Help on Prompting**, which opens Help's
+  topic on prompting; F1 and Help there still show the system's help.
+- The XLSX format is listed as "XLSX workbook" in Data Transfer and in Run
+  SQL's Export, without another vendor's product name; the clean-room check
+  now refuses that name and product IDs of the other vendor's form.
 - Releases carry build provenance: the release workflow asks GitHub for an
   artifact attestation of both installers, which `gh attestation verify`
   checks. `SHA256SUMS` is published as before, and the installers are still
@@ -68,6 +95,9 @@ each crate's name. Breaking changes are marked **Breaking**.
   it, in seconds since 1970).
 - `Trust::from_der`, and `tls::system_certificate_count` (how many
   certificates the operating system's store supplies).
+- `x509::details` and `CertDetails`: a certificate's signature algorithm,
+  public key, subject alternative names and whether it is a certificate
+  authority's.
 
 ## 1.1.1 (2026-11-10)
 
