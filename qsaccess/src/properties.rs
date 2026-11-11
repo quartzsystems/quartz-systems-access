@@ -12,17 +12,16 @@ use fltk::enums::{Align, FrameType};
 use fltk::input::{Input, IntInput};
 use fltk::menu::Choice;
 use fltk::prelude::*;
-use fltk::text::{TextBuffer, TextDisplay};
-use fltk::window::Window;
 use qsa_config::system::{PORT_FIELDS, Ports};
 use qsa_config::{AddressLookup, CaCertificate, Invalid, System, Systems};
 use qsa_ui::controls::{self, Switch};
 use qsa_ui::groupbox::{self, CONTENT_SIDE, CONTENT_TOP};
 use qsa_ui::listtable::{Cell, ListTable};
-use qsa_ui::propdialog::center_on;
+use qsa_ui::statusbar::Status;
 use qsa_ui::theme::{self, colors};
 use qsa_ui::{MessageBox, PropertyDialog};
 
+use crate::certs::model::{self, Entry, What};
 use crate::files;
 
 /// Dialog width.
@@ -46,6 +45,8 @@ pub struct SystemForm {
     fixed_ip: Input,
     ports: Vec<(usize, IntInput)>,
     cas: Rc<RefCell<Vec<CaCertificate>>>,
+    /// The certificates in it, row for row as the Security tab lists them.
+    ca_entries: Rc<RefCell<Vec<Entry>>>,
     /// The Security tab's list of them.
     ca_table: ListTable,
     /// Redraws the list from `cas`.
@@ -53,6 +54,9 @@ pub struct SystemForm {
     /// Called after the tab's Add or Remove changed `cas`.
     ca_changed: Changed,
 }
+
+/// Shows the certificate of a row of the Security tab over a window.
+type ShowRow = dyn Fn(Option<usize>, Option<&dyn WindowExt>);
 
 /// What to call after the Security tab changed its CA list, once set.
 type Changed = Rc<RefCell<Option<Rc<dyn Fn()>>>>;
@@ -225,36 +229,79 @@ when Use TLS for all connections is selected.",
     let cas = Rc::new(RefCell::new(system.ca_certificates.clone()));
     let ca_changed: Changed = Rc::default();
     let mut security = None;
+    let ca_entries: Rc<RefCell<Vec<Entry>>> = Rc::default();
+    let trusted_for: Vec<String> = Some(system.name.trim().to_owned())
+        .filter(|n| !n.is_empty())
+        .into_iter()
+        .collect();
     d.tabs().add_page("Security", |r| {
         let mut l = controls::label(r.x, r.y, r.w, 18, "Trusted CA certificates:");
         l.set_align(Align::Left | Align::Inside);
         let bw = theme::BUTTON_W;
         let lw = r.w - bw - 8;
-        let mut list = ListTable::new(r.x, r.y + 22, lw, r.h - 22, &[("Certificate", lw - 4)]);
+        let date_w = 150;
+        let mut list = ListTable::new(
+            r.x,
+            r.y + 22,
+            lw,
+            r.h - 22,
+            &[("Certificate", lw - 4 - date_w), ("Valid to", date_w)],
+        );
         let bx = r.x + lw + 8;
         let mut add = controls::button(bx, r.y + 22, bw, theme::BUTTON_H, "Add...");
         let mut remove = controls::button(bx, r.y + 22 + 29, bw, theme::BUTTON_H, "Remove");
-        let mut view = controls::button(bx, r.y + 22 + 58, bw, theme::BUTTON_H, "View");
+        let mut view = controls::button(bx, r.y + 22 + 58, bw, theme::BUTTON_H, "View...");
         let remove_switch = Switch::for_button(&mut remove);
         let view_switch = Switch::for_button(&mut view);
 
+        // One row for each certificate the list holds, as Certificate
+        // Management shows them, and one for a file that gives none.
         let fill: Rc<dyn Fn()> = Rc::new({
             let cas = cas.clone();
+            let entries = ca_entries.clone();
             let list = list.clone();
             move || {
-                let rows = cas
-                    .borrow()
+                let now = crate::certs::clock();
+                let found =
+                    model::entries(&[(String::new(), cas.borrow().clone())], &model::read_file);
+                let rows = found
                     .iter()
-                    .map(|c| vec![Cell::from(c.summary())])
+                    .map(|e| match &e.what {
+                        What::Certificate(c) => vec![
+                            Cell::from(c.info.subject.as_str()),
+                            Cell {
+                                text: c.valid_to(now),
+                                status: if c.validity(now) == model::Validity::Expired {
+                                    Status::Error
+                                } else {
+                                    Status::Neutral
+                                },
+                            },
+                        ],
+                        // The reason is in Certificate Management, which has
+                        // the room for it.
+                        What::Unreadable { path, .. } => vec![
+                            Cell::from(path.display().to_string()),
+                            Cell {
+                                text: "File not readable".to_owned(),
+                                status: Status::Error,
+                            },
+                        ],
+                    })
                     .collect();
+                *entries.borrow_mut() = found;
                 list.clone().set_rows(rows);
             }
         });
-        let (rs, vs) = (remove_switch.clone(), view_switch.clone());
-        list.on_select(move |sel| {
-            rs.set_enabled(sel.is_some());
-            vs.set_enabled(sel.is_some());
-        });
+        {
+            let entries = ca_entries.clone();
+            let (rs, vs) = (remove_switch.clone(), view_switch.clone());
+            list.on_select(move |sel| {
+                let entry = sel.and_then(|i| entries.borrow().get(i).cloned());
+                rs.set_enabled(entry.is_some());
+                vs.set_enabled(entry.is_some_and(|e| e.certificate().is_some()));
+            });
+        }
         fill();
         remove_switch.set_enabled(false);
         view_switch.set_enabled(false);
@@ -265,8 +312,8 @@ when Use TLS for all connections is selected.",
             let changed = ca_changed.clone();
             add.set_callback(move |b| {
                 let parent = b.window();
-                if let Some(ca) = add_certificate(parent.as_deref()) {
-                    cas.borrow_mut().push(ca);
+                let added = add_certificate(parent.as_deref(), &mut cas.borrow_mut());
+                if added {
                     fill();
                     tell(&changed);
                 }
@@ -274,32 +321,40 @@ when Use TLS for all connections is selected.",
         }
         {
             let cas = cas.clone();
+            let entries = ca_entries.clone();
             let list2 = list.clone();
             let fill = fill.clone();
             let changed = ca_changed.clone();
             remove.set_callback(move |_| {
-                if let Some(i) = list2.selected() {
-                    cas.borrow_mut().remove(i);
+                let entry = list2
+                    .selected()
+                    .and_then(|i| entries.borrow().get(i).cloned());
+                if let Some(e) = entry {
+                    model::remove_entry(&mut cas.borrow_mut(), &e, &model::read_file);
                     fill();
                     tell(&changed);
                 }
             });
         }
-        {
-            let cas = cas.clone();
-            let list2 = list.clone();
-            view.set_callback(move |b| {
-                if let Some(ca) = list2.selected().and_then(|i| cas.borrow().get(i).cloned()) {
-                    view_certificate(b.window().as_deref(), &ca);
+        let show: Rc<ShowRow> = Rc::new({
+            let entries = ca_entries.clone();
+            let trusted_for = trusted_for.clone();
+            move |row, parent| {
+                let entry = row.and_then(|i| entries.borrow().get(i).cloned());
+                if let Some(c) = entry.as_ref().and_then(Entry::certificate) {
+                    crate::certs::show_view(parent, c, &trusted_for);
                 }
-            });
-        }
-        let cas2 = cas.clone();
-        list.on_activate(move |sel| {
-            if let Some(ca) = sel.and_then(|i| cas2.borrow().get(i).cloned()) {
-                view_certificate(None, &ca);
             }
         });
+        {
+            let list2 = list.clone();
+            let show = show.clone();
+            view.set_callback(move |b| {
+                let parent = b.window();
+                show(list2.selected(), parent.as_deref());
+            });
+        }
+        list.on_activate(move |sel| show(sel, None));
         security = Some((list, fill));
     });
     let (ca_table, refill) = security.expect("security page built");
@@ -313,6 +368,7 @@ when Use TLS for all connections is selected.",
         fixed_ip,
         ports,
         cas,
+        ca_entries,
         ca_table,
         refill,
         ca_changed,
@@ -345,17 +401,19 @@ impl SystemForm {
         tell(&self.ca_changed);
     }
 
-    /// Takes entry `index` out of the CA list, as Remove does for the
-    /// selected row.
-    pub fn remove_ca(&self, index: usize) {
-        if index < self.cas.borrow().len() {
-            self.cas.borrow_mut().remove(index);
+    /// Takes the certificate of row `row` out of the CA list, as Remove
+    /// does for the selected row.
+    pub fn remove_ca(&self, row: usize) {
+        let entry = self.ca_entries.borrow().get(row).cloned();
+        if let Some(e) = entry {
+            model::remove_entry(&mut self.cas.borrow_mut(), &e, &model::read_file);
             (self.refill)();
             tell(&self.ca_changed);
         }
     }
 
-    /// What the Security tab's list shows, row by row.
+    /// What the Security tab's list shows, row by row: each certificate's
+    /// subject, or the path of a file that gives none.
     pub fn ca_rows(&self) -> Vec<String> {
         (0..self.ca_table.len())
             .filter_map(|i| self.ca_table.row(i))
@@ -518,12 +576,38 @@ fn run_built(
     if ok { result } else { None }
 }
 
-/// Asks for a PEM file, then whether to reference or embed it.
-fn add_certificate(parent: Option<&dyn WindowExt>) -> Option<CaCertificate> {
-    let path = files::choose_open(
+/// Add: asks for a certificate file (PEM or DER), then whether to keep a
+/// reference to it or its certificates themselves, and adds that to
+/// `list`. True when the list changed. A file with no certificate in it is
+/// refused with `QAD0043`.
+fn add_certificate(parent: Option<&dyn WindowExt>, list: &mut Vec<CaCertificate>) -> bool {
+    let Some(path) = files::choose_open(
         "Add CA Certificate",
-        "Certificates (*.{pem,crt,cer})\tAll Files (*)",
-    )?;
+        "Certificates (*.{pem,crt,cer,der})\tAll Files (*)",
+    ) else {
+        return false;
+    };
+    let certs = match std::fs::read(&path) {
+        Ok(bytes) => model::importable(&bytes),
+        Err(e) => {
+            MessageBox::new(
+                "Add CA Certificate",
+                &format!("{} could not be read: {e}", path.display()),
+            )
+            .glyph(qsa_ui::Glyph::Cross)
+            .run(parent);
+            return false;
+        }
+    };
+    if certs.is_empty() {
+        let m = qsa_msg::message(
+            qsa_msg::id::NOT_A_CERTIFICATE,
+            &[&path.display().to_string()],
+        );
+        crate::log!("{m}");
+        qsa_ui::msgdetails::show_message(parent, &m);
+        return false;
+    }
     let answer = MessageBox::new(
         "Add CA Certificate",
         &format!(
@@ -535,64 +619,19 @@ fn add_certificate(parent: Option<&dyn WindowExt>) -> Option<CaCertificate> {
     .buttons(&["Reference", "Embed", "Cancel"], 0, 2)
     .run(parent);
     match answer {
-        0 => Some(CaCertificate::Path(path)),
-        1 => match std::fs::read_to_string(&path) {
-            Ok(pem) if pem.contains("-----BEGIN CERTIFICATE-----") => Some(CaCertificate::Pem(pem)),
-            Ok(_) => {
-                MessageBox::new(
-                    "Add CA Certificate",
-                    &format!("{} does not hold a PEM certificate.", path.display()),
-                )
-                .run(parent);
-                None
+        0 => {
+            list.push(CaCertificate::Path(path));
+            true
+        }
+        1 => {
+            // Each certificate once: one the list has already is left.
+            let mut added = false;
+            for c in &certs {
+                added |= model::add(list, c, &model::read_file);
             }
-            Err(e) => {
-                MessageBox::new("Add CA Certificate", &format!("{}: {e}", path.display()))
-                    .run(parent);
-                None
-            }
-        },
-        _ => None,
-    }
-}
-
-/// Shows a certificate's PEM text.
-fn view_certificate(parent: Option<&dyn WindowExt>, ca: &CaCertificate) {
-    let (title, text) = match ca {
-        CaCertificate::Path(p) => (
-            p.display().to_string(),
-            std::fs::read_to_string(p)
-                .unwrap_or_else(|e| format!("The file could not be read: {e}")),
-        ),
-        CaCertificate::Pem(pem) => ("Embedded certificate".to_owned(), pem.clone()),
-    };
-    let (w, h) = (520, 360);
-    let mut win = Window::new(0, 0, w, h, None);
-    crate::help::attach(&mut win, crate::help::topic::CERTIFICATE_MANAGEMENT);
-    win.set_label(&format!("View Certificate - {title}"));
-    win.set_color(colors::FACE);
-    win.make_modal(true);
-    let mut buf = TextBuffer::default();
-    buf.set_text(&text);
-    let mut td = TextDisplay::new(10, 10, w - 20, h - 20 - theme::BUTTON_H - 8, None);
-    td.set_buffer(buf);
-    td.set_frame(FrameType::DownBox);
-    td.set_text_font(theme::MONO_FONT);
-    td.set_text_size(theme::MONO_SIZE);
-    let mut close = controls::default_button(
-        w - 10 - theme::BUTTON_W,
-        h - 10 - theme::BUTTON_H,
-        theme::BUTTON_W,
-        theme::BUTTON_H,
-        "Close",
-    );
-    win.end();
-    let mut wc = win.clone();
-    close.set_callback(move |_| wc.hide());
-    center_on(&mut win, parent);
-    win.show();
-    while win.shown() {
-        fltk::app::wait();
+            added
+        }
+        _ => false,
     }
 }
 

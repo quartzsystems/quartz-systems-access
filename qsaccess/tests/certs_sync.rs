@@ -87,7 +87,8 @@ fn run() {
     let a = state.borrow().systems.get(A).cloned().unwrap();
     let (_dialog, form) = properties::build("System Properties - a.example.net", &a);
     let editing = properties::share(&state, A, &form);
-    assert_eq!(form.ca_rows(), ["Embedded PEM (1 certificate)"]);
+    // The tab lists the certificate itself, by its subject.
+    assert_eq!(form.ca_rows(), ["CN=x, O=Example Corp"]);
     assert_eq!(listed(&window), want(&[("x", &[A])]));
 
     // Add on the tab: the window lists it at once. Nothing is saved yet.
@@ -151,7 +152,12 @@ fn run() {
     let (_dialog, form) = properties::build("System Properties - a.example.net", &a);
     let editing = properties::share(&state, A, &form);
     form.add_ca(CaCertificate::Pem(x.pem()));
-    form.remove_ca(0);
+    // The tab's rows are in subject order: x, then y.
+    assert_eq!(
+        form.ca_rows(),
+        ["CN=x, O=Example Corp", "CN=y, O=Example Corp"]
+    );
+    form.remove_ca(1);
     assert_eq!(listed(&window), want(&[("x", &[A]), ("z", &[B])]));
     drop(editing);
     assert_eq!(listed(&window), want(&[("y", &[A]), ("z", &[B])]));
