@@ -1826,7 +1826,7 @@ impl RunSql {
         } else {
             format!("result-{}.csv", i + 1)
         };
-        let pattern = "CSV (*.csv)\tTSV (*.tsv)\tExcel workbook (*.xlsx)\tOpenDocument spreadsheet (*.ods)\tFixed width (*.txt)";
+        let pattern = "CSV (*.csv)\tTSV (*.tsv)\tXLSX workbook (*.xlsx)\tOpenDocument spreadsheet (*.ods)\tFixed width (*.txt)";
         let Some(path) = crate::files::choose_save("Export Result", pattern, &name) else {
             return;
         };
