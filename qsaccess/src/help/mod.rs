@@ -708,6 +708,10 @@ pub fn for_dialog(
     attach_at(&mut d.window().clone(), topic, anchor);
 }
 
+/// The heading of Run Command and prompting that the Prompt dialog's help
+/// opens at.
+pub const PROMPTING: &str = "prompting-a-command";
+
 /// The heading of Getting started that System Configurations and System
 /// Properties open at.
 pub const SYSTEM_CONFIGURATIONS: &str = "system-configurations";
@@ -827,6 +831,8 @@ mod tests {
         // And the heading System Configurations opens at.
         let start = find(topic::GETTING_STARTED).unwrap();
         assert!(start.anchors.contains(&SYSTEM_CONFIGURATIONS));
+        let run = find(topic::RUN_COMMAND).unwrap();
+        assert!(run.anchors.contains(&PROMPTING));
         assert!(find("no-such-topic").is_none());
     }
 

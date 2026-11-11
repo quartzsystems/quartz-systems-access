@@ -233,9 +233,23 @@ pub fn command_help(def: &CommandDefinition) -> String {
     out
 }
 
-/// The help popup for `text`.
+/// The second button of [`help_box`].
+pub const HELP_ON_PROMPTING: &str = "Help on Prompting";
+
+/// The help popup for `text`, the system's help for a command or a value:
+/// Close, and a button that opens Help's own topic on prompting.
 pub fn help_box(title: &str, text: &str) -> MessageBox {
-    MessageBox::new(title, text).buttons(&["Close"], 0, 0)
+    MessageBox::new(title, text).buttons(&["Close", HELP_ON_PROMPTING], 0, 0)
+}
+
+/// Shows [`help_box`], and Help at Prompting a command when asked for.
+fn show_help(parent: &dyn WindowExt, title: &str, text: &str) {
+    if help_box(title, text).run(Some(parent)) == 1 {
+        crate::help::show_at(
+            crate::help::topic::RUN_COMMAND,
+            Some(crate::help::PROMPTING),
+        );
+    }
 }
 
 /// The rows the parameters take.
@@ -602,15 +616,18 @@ pub fn run(
                 d.string.set_value(&form.command_string());
             }
             Request::Help => {
-                help_box(&format!("Help - {}", form.name()), &command_help(&form.def))
-                    .run(Some(&d.window));
+                show_help(
+                    &d.window,
+                    &format!("Help - {}", form.name()),
+                    &command_help(&form.def),
+                );
             }
             Request::NodeHelp(i) => {
                 let kwd = form
                     .node(form.top(i))
                     .map(|p| p.keyword.clone())
                     .unwrap_or_default();
-                help_box(&format!("Help - {kwd}"), &node_help(&form, i)).run(Some(&d.window));
+                show_help(&d.window, &format!("Help - {kwd}"), &node_help(&form, i));
             }
             Request::Details => {
                 if let Some(m) = d.messages.selected().and_then(|i| checked.get(i)) {
