@@ -250,6 +250,28 @@ installation has:
 | `libfontconfig.so.1`, `libpango-1.0.so.0`, `libpangocairo-1.0.so.0`, `libcairo.so.2`, `libgobject-2.0.so.0` | Text and drawing |
 | `libgcc_s.so.1`, `libc.so.6`, `libm.so.6`, `libdl.so.2`, `libpthread.so.0` | The C runtime |
 
+**Checking a download.** Each release has a `SHA256SUMS` file beside the
+installers, and both installers carry a GitHub artifact attestation: a signed
+statement that the release workflow of this repository built that exact file
+from the tagged commit.
+
+```
+sha256sum --check --ignore-missing SHA256SUMS
+gh attestation verify QS400-Access-V1R1M1-windows-x86_64.exe --repo quartzsystems/quartz-systems-access
+gh attestation verify QS400-Access-V1R1M1-linux-x86_64 --repo quartzsystems/quartz-systems-access
+```
+
+The first line (Linux or Git Bash) prints `OK` for each installer in the
+folder; in PowerShell, compare
+`(Get-FileHash QS400-Access-V1R1M1-windows-x86_64.exe -Algorithm SHA256).Hash`
+with the file's line in `SHA256SUMS`. The checksum shows that the download is
+whole and is the file the release published. The attestation, checked with
+the GitHub CLI (`gh`, signed in to any account), shows where it was built:
+it prints `Verification succeeded!` with the workflow and commit, and fails
+for a file changed afterwards or built anywhere else.
+[docs/releasing.md](docs/releasing.md#checking-a-release) has more. Neither
+is a code signature:
+
 **Windows SmartScreen.** The installer is not code-signed yet, so the first
 time it is run from a download Windows shows *Windows protected your PC*.
 Select **More info**, check that the file name is

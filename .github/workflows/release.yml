@@ -4,7 +4,10 @@ name: release
 # VERSION and CHANGELOG.md, every check in ci.yml runs (the installers built
 # and tested on both platforms among them), and the two installers, their
 # SHA-256 sums and CHANGELOG.md's section for the version are published.
-# See docs/releasing.md.
+# Both installers get a GitHub artifact attestation (build provenance): a
+# signed statement that this workflow built them from the tagged commit,
+# which anyone can check with `gh attestation verify`. The installers
+# themselves are not code-signed. See docs/releasing.md.
 
 on:
   push:
@@ -42,6 +45,11 @@ jobs:
     runs-on: ubuntu-24.04
     permissions:
       contents: write
+      # For the attestations: a token to ask Sigstore for a signing
+      # certificate with, and leave to store what is signed.
+      id-token: write
+      attestations: write
+      artifact-metadata: write
     steps:
       - uses: actions/checkout@v4
 
@@ -62,12 +70,21 @@ jobs:
           sha256sum QS400-Access-* > SHA256SUMS
           cat SHA256SUMS
 
+      # Build provenance for both installers, before anything is published:
+      # if they cannot be attested, there is no release.
+      - name: Attest the installers
+        uses: actions/attest@v4
+        with:
+          subject-path: |
+            dist/QS400-Access-${{ needs.version.outputs.release }}-windows-x86_64.exe
+            dist/QS400-Access-${{ needs.version.outputs.release }}-linux-x86_64
+
       - name: Release notes from CHANGELOG.md
         run: |
           {
             ci/version.sh notes
             echo
-            echo "The installers are not signed: see the README's Installing section. Check a download against SHA256SUMS."
+            echo "The installers are not code-signed: see the README's Installing section. Check a download against SHA256SUMS, and its build provenance with \`gh attestation verify <file> --repo $GITHUB_REPOSITORY\`."
           } > notes.md
           cat notes.md
 

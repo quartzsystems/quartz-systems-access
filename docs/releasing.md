@@ -72,9 +72,11 @@ Pushing the tag runs `.github/workflows/release.yml`:
    must have a non-empty section for it.
 2. **ci**: every job in `ci.yml` (checks, tests and screenshots on Windows and
    Linux, and the installers built and tested end to end).
-3. **publish**: a GitHub release named `QS/400 Access for Desktop VxRyMz
-   (x.y.z)`, with the two installers, `SHA256SUMS` and the changelog section
-   as its notes.
+3. **publish**: the two installers get a GitHub artifact attestation (build
+   provenance), then a GitHub release named `QS/400 Access for Desktop
+   VxRyMz (x.y.z)` is made with the installers, `SHA256SUMS` and the
+   changelog section as its notes. If the attestation fails, nothing is
+   published.
 
 A failed run publishes nothing. Fix the problem on main, then move the tag,
 or, if the release was published, prepare the next patch version:
@@ -83,3 +85,48 @@ or, if the release was published, prepare the next patch version:
 git tag -f v1.1.1
 git push -f origin v1.1.1
 ```
+
+## Checking a release
+
+The installers are not code-signed, and nothing here changes that: Windows
+still shows its SmartScreen warning for a downloaded installer (the README's
+Installing section). What a release does carry is two ways to check a
+download.
+
+**The checksum** says the file is the one the release published, whole and
+unchanged. `SHA256SUMS` is a release asset beside the installers:
+
+```sh
+sha256sum --check --ignore-missing SHA256SUMS      # Linux, Git Bash
+```
+
+```powershell
+(Get-FileHash QS400-Access-V1R1M1-windows-x86_64.exe -Algorithm SHA256).Hash   # PowerShell
+Get-Content SHA256SUMS
+```
+
+On Linux the command prints `OK` for each installer it finds. In PowerShell,
+compare the hash printed with the installer's line in `SHA256SUMS`; capitals
+and small letters do not matter. A checksum comes from the same place as the
+file, so it shows damage or a swapped file on a mirror, not who built it.
+
+**The attestation** says who built the file. The release workflow asks
+GitHub to attest both installers: a statement, signed through Sigstore with a
+certificate issued to that workflow run, that the file with this SHA-256 was
+built by `.github/workflows/release.yml` of this repository from the tagged
+commit. With the GitHub CLI:
+
+```sh
+gh attestation verify QS400-Access-V1R1M1-windows-x86_64.exe --repo quartzsystems/quartz-systems-access
+gh attestation verify QS400-Access-V1R1M1-linux-x86_64 --repo quartzsystems/quartz-systems-access
+```
+
+It prints `Verification succeeded!` and the workflow and commit the file was
+built from, and fails for a file that was changed after the build or built
+anywhere else. It needs a network connection and `gh` 2.49 or later, signed
+in to any GitHub account. The attestations are also listed on the
+repository's **Attestations** page, under **Actions**.
+
+Attestations are free for public repositories. They are made only by the
+release workflow: an installer built by hand with `cargo xtask dist`, or by a
+branch's CI run, has none.
