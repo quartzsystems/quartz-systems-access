@@ -193,7 +193,7 @@ fn fixtures() -> Vec<Fixture> {
     b.scd(15).svf(66, 1, 66).shf(132, 1, 132, &[]);
     for page in 1..=3 {
         b.avpp(2)
-            .text("5770SS1 V7R5M0  240000                    Sample listing")
+            .text("QS00SS1 V1R0M0  261102                    Sample listing")
             .ahpp(120)
             .text(&format!("Page {page:>4}"))
             .nl()

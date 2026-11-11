@@ -1,5 +1,5 @@
 page 1 12240x15840 Portrait margins 0 0 0 0
-  0,240 h240 p150 f11 L2 C1 |5770SS1 V7R5M0  240000                    Sample listing                                                               Page    1|
+  0,240 h240 p150 f11 L2 C1 |QS00SS1 V1R0M0  261102                    Sample listing                                                               Page    1|
   480,720 h240 p150 f11 L4 C6 |1  QSYSPRT   LISTING  Detail line 1 of page 1                         1234|
   480,960 h240 p150 f11 L5 C6 |2  QSYSPRT   LISTING  Detail line 2 of page 1                         2468|
   480,1200 h240 p150 f11 L6 C6 |3  QSYSPRT   LISTING  Detail line 3 of page 1                         3702|
@@ -51,7 +51,7 @@ page 1 12240x15840 Portrait margins 0 0 0 0
   384,12240 h240 p150 f11 L52 C5 |49  QSYSPRT   LISTING  Detail line 49 of page 1                       60466|
   384,12480 h240 p150 f11 L53 C5 |50  QSYSPRT   LISTING  Detail line 50 of page 1                       61700|
 page 2 12240x15840 Portrait margins 0 0 0 0
-  0,240 h240 p150 f11 L2 C1 |5770SS1 V7R5M0  240000                    Sample listing                                                               Page    2|
+  0,240 h240 p150 f11 L2 C1 |QS00SS1 V1R0M0  261102                    Sample listing                                                               Page    2|
   384,720 h240 p150 f11 L4 C5 |51  QSYSPRT   LISTING  Detail line 1 of page 2                         1234|
   384,960 h240 p150 f11 L5 C5 |52  QSYSPRT   LISTING  Detail line 2 of page 2                         2468|
   384,1200 h240 p150 f11 L6 C5 |53  QSYSPRT   LISTING  Detail line 3 of page 2                         3702|
@@ -103,7 +103,7 @@ page 2 12240x15840 Portrait margins 0 0 0 0
   384,12240 h240 p150 f11 L52 C5 |99  QSYSPRT   LISTING  Detail line 49 of page 2                       60466|
   288,12480 h240 p150 f11 L53 C4 |100  QSYSPRT   LISTING  Detail line 50 of page 2                       61700|
 page 3 12240x15840 Portrait margins 0 0 0 0
-  0,240 h240 p150 f11 L2 C1 |5770SS1 V7R5M0  240000                    Sample listing                                                               Page    3|
+  0,240 h240 p150 f11 L2 C1 |QS00SS1 V1R0M0  261102                    Sample listing                                                               Page    3|
   288,720 h240 p150 f11 L4 C4 |101  QSYSPRT   LISTING  Detail line 1 of page 3                         1234|
   288,960 h240 p150 f11 L5 C4 |102  QSYSPRT   LISTING  Detail line 2 of page 3                         2468|
   288,1200 h240 p150 f11 L6 C4 |103  QSYSPRT   LISTING  Detail line 3 of page 3                         3702|

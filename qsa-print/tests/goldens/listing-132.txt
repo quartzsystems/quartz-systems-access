@@ -1,5 +1,5 @@
 
-5770SS1 V7R5M0  240000                    Sample listing                                                               Page    1
+QS00SS1 V1R0M0  261102                    Sample listing                                                               Page    1
 
      1  QSYSPRT   LISTING  Detail line 1 of page 1                         1234
      2  QSYSPRT   LISTING  Detail line 2 of page 1                         2468
@@ -52,7 +52,7 @@
     49  QSYSPRT   LISTING  Detail line 49 of page 1                       60466
     50  QSYSPRT   LISTING  Detail line 50 of page 1                       61700
 
-5770SS1 V7R5M0  240000                    Sample listing                                                               Page    2
+QS00SS1 V1R0M0  261102                    Sample listing                                                               Page    2
 
     51  QSYSPRT   LISTING  Detail line 1 of page 2                         1234
     52  QSYSPRT   LISTING  Detail line 2 of page 2                         2468
@@ -105,7 +105,7 @@
     99  QSYSPRT   LISTING  Detail line 49 of page 2                       60466
    100  QSYSPRT   LISTING  Detail line 50 of page 2                       61700
 
-5770SS1 V7R5M0  240000                    Sample listing                                                               Page    3
+QS00SS1 V1R0M0  261102                    Sample listing                                                               Page    3
 
    101  QSYSPRT   LISTING  Detail line 1 of page 3                         1234
    102  QSYSPRT   LISTING  Detail line 2 of page 3                         2468

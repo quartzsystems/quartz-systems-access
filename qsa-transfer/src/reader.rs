@@ -85,10 +85,10 @@ pub fn sheets(path: &Path) -> Result<Vec<String>, ReadError> {
     Ok(book.sheet_names())
 }
 
-/// An Excel serial date and time as ISO 8601: the date alone when it has
+/// A spreadsheet serial date and time as ISO 8601: the date alone when it has
 /// no time.
 fn serial_to_iso(serial: f64) -> String {
-    // Day 0 is 1899-12-30, as both Excel and LibreOffice count.
+    // Day 0 is 1899-12-30, as spreadsheet programs count.
     let days = serial.floor();
     #[allow(clippy::cast_possible_truncation)]
     let day = days as i64 + qsa_sql::datetime::day_number(1899, 12, 30);

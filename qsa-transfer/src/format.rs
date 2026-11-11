@@ -39,7 +39,7 @@ impl Format {
         match self {
             Format::Csv => "CSV",
             Format::Tsv => "TSV",
-            Format::Xlsx => "Excel workbook (XLSX)",
+            Format::Xlsx => "XLSX workbook",
             Format::Ods => "OpenDocument spreadsheet (ODS)",
             Format::Fixed => "Fixed width",
         }
