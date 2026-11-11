@@ -72,6 +72,8 @@ pub struct Editor {
     rx: chan::Receiver<Req>,
     file: RefCell<Option<PathBuf>>,
     doc: RefCell<MacroFile>,
+    /// The macro as it was opened or last saved: what Close compares with.
+    saved: RefCell<MacroFile>,
     one: Vec<Switch>,
 }
 
@@ -168,7 +170,7 @@ pub fn build(m: MacroFile, file: Option<PathBuf>) -> Rc<Editor> {
     for s in &one {
         s.set_enabled(!m.steps.is_empty());
     }
-    Rc::new(Editor {
+    let editor = Rc::new(Editor {
         window,
         list,
         name,
@@ -177,9 +179,14 @@ pub fn build(m: MacroFile, file: Option<PathBuf>) -> Rc<Editor> {
         status,
         rx,
         file: RefCell::new(file),
+        saved: RefCell::new(m.clone()),
         doc: RefCell::new(m),
         one,
-    })
+    });
+    // As the fields give it back, so that an untouched macro compares equal.
+    let shown = editor.current();
+    *editor.saved.borrow_mut() = shown;
+    editor
 }
 
 /// Opens a macro file in a new editor window.
@@ -215,7 +222,8 @@ pub fn pump() {
     EDITORS.with(|v| v.borrow_mut().retain(|e| e.window.shown()));
 }
 
-/// Closes every editor. Unsaved changes are lost.
+/// Closes every editor without asking: the program was told to quit.
+/// Unsaved changes are lost.
 pub fn close_all() {
     for e in EDITORS.with(|v| v.borrow_mut().drain(..).collect::<Vec<_>>()) {
         e.window.clone().hide();
@@ -294,18 +302,58 @@ impl Editor {
                 }
             }
             Req::Save => {
-                let file = self.file.borrow().clone();
-                match file {
-                    Some(p) => self.save_to(&p),
-                    None => self.save_as(),
-                }
+                self.save();
             }
-            Req::SaveAs => self.save_as(),
-            Req::Close => self.window.clone().hide(),
+            Req::SaveAs => {
+                self.save_as();
+            }
+            Req::Close => self.close(),
         }
     }
 
-    fn save_as(&self) {
+    /// Types `name` into the Name field.
+    pub fn set_name(&self, name: &str) {
+        self.name.clone().set_value(name);
+    }
+
+    /// Whether the macro differs from what was opened or last saved. A
+    /// macro that has no file yet (one just recorded, or new) is unsaved as
+    /// soon as it has a step.
+    pub fn changed(&self) -> bool {
+        let now = self.current();
+        let never_saved = self.file.borrow().is_none() && !now.steps.is_empty();
+        never_saved || now != *self.saved.borrow()
+    }
+
+    /// Close: asks first when there are unsaved changes. Save that fails
+    /// or is cancelled leaves the editor open.
+    fn close(&self) {
+        if self.changed() {
+            let name = self.current().display_name(self.file.borrow().as_deref());
+            match unsaved_box(&name).run(Some(&self.window)) {
+                0 => {
+                    if !self.save() {
+                        return;
+                    }
+                }
+                1 => {}
+                _ => return,
+            }
+        }
+        self.window.clone().hide();
+    }
+
+    /// Save: to the macro's file, or Save As for one that has none. True
+    /// when it was saved.
+    fn save(&self) -> bool {
+        let file = self.file.borrow().clone();
+        match file {
+            Some(p) => self.save_to(&p),
+            None => self.save_as(),
+        }
+    }
+
+    fn save_as(&self) -> bool {
         let m = self.current();
         let name = files::file_name_for(&m.display_name(None), qsa_config::qsm::EXTENSION);
         let dir = self
@@ -317,12 +365,12 @@ impl Editor {
             .unwrap_or_else(files::sessions_dir);
         let Some(p) = files::choose_save_in(&dir, "Save Macro As", files::MACRO_PATTERN, &name)
         else {
-            return;
+            return false;
         };
-        self.save_to(&files::with_extension(p, qsa_config::qsm::EXTENSION));
+        self.save_to(&files::with_extension(p, qsa_config::qsm::EXTENSION))
     }
 
-    fn save_to(&self, path: &Path) {
+    fn save_to(&self, path: &Path) -> bool {
         let m = self.current();
         for (i, s) in m.steps.iter().enumerate() {
             if let Err(e) = MacroFile::check_step(s, m.info.screen_size) {
@@ -330,18 +378,20 @@ impl Editor {
                     .clone()
                     .set(&format!("Step {}: {e}.", i + 1), Status::Error);
                 self.list.clone().select(Some(i));
-                return;
+                return false;
             }
         }
         match m.save(path) {
             Ok(()) => {
                 *self.doc.borrow_mut() = m.clone();
+                *self.saved.borrow_mut() = m.clone();
                 *self.file.borrow_mut() = Some(path.to_owned());
                 self.window.clone().set_label(&title_for(&m, Some(path)));
                 self.status
                     .clone()
                     .set(&format!("Saved to {}.", path.display()), Status::Neutral);
                 crate::log!("macro saved to {}", path.display());
+                true
             }
             Err(e) => {
                 MessageBox::new(
@@ -350,9 +400,20 @@ impl Editor {
                 )
                 .glyph(Glyph::Cross)
                 .run(Some(&self.window));
+                false
             }
         }
     }
+}
+
+/// What Close asks when the macro has unsaved changes: Save, Don't Save or
+/// Cancel (which is also Escape).
+pub fn unsaved_box(name: &str) -> MessageBox {
+    MessageBox::new(
+        "Macro Editor",
+        &format!("Save the changes to {name}?\n\nIf you do not save them, they are lost."),
+    )
+    .buttons(&["Save", "Don't Save", "Cancel"], 0, 2)
 }
 
 /// The kinds of step, in the order the Step dialog lists them.

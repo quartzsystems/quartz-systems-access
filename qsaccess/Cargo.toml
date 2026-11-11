@@ -67,3 +67,7 @@ harness = false
 [[test]]
 name = "help_window"
 harness = false
+
+[[test]]
+name = "macro_editor"
+harness = false

@@ -120,7 +120,7 @@ fn certificate() -> Window {
 fn session_manager(state: &Shared) -> Window {
     use qsa_config::qsd::SessionFile;
     use qsaccess::manager::{self, Doc, Entry};
-    let dir = std::path::PathBuf::from("/home/user/Documents/Quartz Access/Sessions");
+    let dir = std::path::PathBuf::from("/home/user/Documents/QS400 Access for Desktop/Sessions");
     let mut entries = Vec::new();
     for (title, sys, wide, dev) in [
         ("Payroll", "sys1.example.net", false, ""),
@@ -286,7 +286,8 @@ fn printer_file(state: &Shared) -> qsa_config::qsp::PrinterFile {
     let sys = st.systems.get("sys1.example.net").expect("fixture system");
     let mut f = qsa_config::qsp::PrinterFile::new(sys, "QSAPRT01");
     f.printer.title = "Office output".into();
-    f.output.pdf_folder = "/home/user/Documents/Quartz Access/Printer Output/QSAPRT01".into();
+    f.output.pdf_folder =
+        "/home/user/Documents/QS400 Access for Desktop/Printer Output/QSAPRT01".into();
     f.output.also_save_text = true;
     f
 }
@@ -296,8 +297,9 @@ fn printer_session(state: &Shared) -> Window {
     use qsaccess::printer::spool::{JobRecord, JobStatus, Problem};
     use qsaccess::printer::window::{PrinterWindow, State};
     let p = PrinterWindow::build(state, printer_file(state), None);
-    let dir =
-        std::path::PathBuf::from("/home/user/Documents/Quartz Access/Printer Output/QSAPRT01");
+    let dir = std::path::PathBuf::from(
+        "/home/user/Documents/QS400 Access for Desktop/Printer Output/QSAPRT01",
+    );
     let job = |time: i64, pages: usize, bytes: u64, name: &str, status: JobStatus| JobRecord {
         time,
         title: "QSAPRT01".into(),
@@ -1775,6 +1777,12 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     ));
     out.push(("macro-editor".to_owned(), macro_editor()));
     out.push(("macro-step".to_owned(), macro_step()));
+    out.push((
+        "macro-unsaved".to_owned(),
+        qsaccess::macros::editor::unsaved_box("Sign on and WRKACTJOB")
+            .build()
+            .0,
+    ));
     out.push((
         "sign-on".to_owned(),
         qsaccess::signon::build("sys1.example.net", "QSECOFR")
