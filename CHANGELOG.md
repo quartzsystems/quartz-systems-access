@@ -12,6 +12,8 @@ each crate's name. Breaking changes are marked **Breaking**.
 
 ## Unreleased
 
+## 1.2.0 (2026-11-11)
+
 ### QS/400 Access for Desktop
 
 - The release name always follows the version: the README, the documents and

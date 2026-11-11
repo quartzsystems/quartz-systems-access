@@ -6,7 +6,7 @@
 # repair and uninstall, silently, then check that nothing is left that was
 # not there before (apart from user data). See TESTING.md.
 #
-#   ci\installer-test-windows.ps1 -Installer target\dist\QS400-Access-V1R1M1-windows-x86_64.exe [-Scope user|machine]
+#   ci\installer-test-windows.ps1 -Installer target\dist\QS400-Access-V1R2M0-windows-x86_64.exe [-Scope user|machine]
 #
 # -Scope machine must run as administrator. Exits 0 when every check passes.
 

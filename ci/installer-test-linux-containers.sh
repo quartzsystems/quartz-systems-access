@@ -8,7 +8,7 @@
 # the libraries the program loads and the desktop tools the installer runs
 # are added to each image. See TESTING.md.
 #
-#   ci/installer-test-linux-containers.sh target/dist/QS400-Access-V1R1M1-linux-x86_64
+#   ci/installer-test-linux-containers.sh target/dist/QS400-Access-V1R2M0-linux-x86_64
 set -euo pipefail
 cd "$(dirname "$0")/.."
 installer="$1"

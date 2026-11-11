@@ -228,10 +228,10 @@ Verify Connection check with its messages.
 Each platform has one installer file, built with `cargo xtask dist` (Linux:
 `ci/dist-linux.sh`, which builds in a pinned glibc 2.31 image):
 
-- `QS400-Access-V1R1M1-windows-x86_64.exe`
-- `QS400-Access-V1R1M1-linux-x86_64` (make it executable and run it)
+- `QS400-Access-V1R2M0-windows-x86_64.exe`
+- `QS400-Access-V1R2M0-linux-x86_64` (make it executable and run it)
 
-V1R1M1 is the release of the version in `VERSION`. Tagged versions are
+V1R2M0 is the release of the version in `VERSION`. Tagged versions are
 built, tested and published as GitHub releases with their `CHANGELOG.md`
 section: see [docs/releasing.md](docs/releasing.md).
 
@@ -280,13 +280,13 @@ from the tagged commit.
 
 ```
 sha256sum --check --ignore-missing SHA256SUMS
-gh attestation verify QS400-Access-V1R1M1-windows-x86_64.exe --repo quartzsystems/quartz-systems-access
-gh attestation verify QS400-Access-V1R1M1-linux-x86_64 --repo quartzsystems/quartz-systems-access
+gh attestation verify QS400-Access-V1R2M0-windows-x86_64.exe --repo quartzsystems/quartz-systems-access
+gh attestation verify QS400-Access-V1R2M0-linux-x86_64 --repo quartzsystems/quartz-systems-access
 ```
 
 The first line (Linux or Git Bash) prints `OK` for each installer in the
 folder; in PowerShell, compare
-`(Get-FileHash QS400-Access-V1R1M1-windows-x86_64.exe -Algorithm SHA256).Hash`
+`(Get-FileHash QS400-Access-V1R2M0-windows-x86_64.exe -Algorithm SHA256).Hash`
 with the file's line in `SHA256SUMS`. The checksum shows that the download is
 whole and is the file the release published. The attestation, checked with
 the GitHub CLI (`gh`, signed in to any account), shows where it was built:
@@ -298,14 +298,14 @@ is a code signature:
 **Windows SmartScreen.** The installer is not code-signed yet, so the first
 time it is run from a download Windows shows *Windows protected your PC*.
 Select **More info**, check that the file name is
-`QS400-Access-V1R1M1-windows-x86_64.exe`, then **Run anyway**. The program
+`QS400-Access-V1R2M0-windows-x86_64.exe`, then **Run anyway**. The program
 installed has the same publisher details in its properties (Quartz Systems,
-1.1.1 (V1R1M1)) but is not signed either.
+1.2.0 (V1R2M0)) but is not signed either.
 
 ### Silent install, uninstall and repair
 
 ```
-QS400-Access-V1R1M1-windows-x86_64.exe --silent --scope=user|machine [--dir=PATH]
+QS400-Access-V1R2M0-windows-x86_64.exe --silent --scope=user|machine [--dir=PATH]
     [--no-desktop-shortcut] [--no-associations] [--no-start-menu]
     [--close-running] [--log=FILE]
 uninstall.exe --uninstall [--silent] [--remove-settings] [--close-running]

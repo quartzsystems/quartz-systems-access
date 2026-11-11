@@ -4,7 +4,7 @@ members = ["qsaccess", "qsa-ui", "qsa-config", "qsa-msg", "qsa-glyph", "qsa-icon
 
 [workspace.package]
 # Always VERSION's: change both with ci/version.sh prepare, which CI checks.
-version = "1.1.1"
+version = "1.2.0"
 edition = "2024"
 rust-version = "1.98"
 license = "MIT"

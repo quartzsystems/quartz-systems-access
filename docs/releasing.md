@@ -18,7 +18,7 @@ Cargo cannot read a version from a file, so `Cargo.toml` keeps its own copy.
 test fail when the two differ. Change them together with `ci/version.sh
 prepare`.
 
-The release name always follows `VERSION`: 1.1.1 is V1R1M1. Where the README,
+The release name always follows `VERSION`: 1.2.0 is V1R2M0. Where the README,
 these documents, a script's usage line or a doc comment must write a release
 out (an installer's file name, a tag), it is written with the current
 version, and `ci/version.sh prepare` rewrites those lines with the new one.
@@ -48,8 +48,8 @@ window, `ci/version.sh` works as it is.
    out in the README, the documents and the scripts.
 
    ```sh
-   ci/version.sh prepare 1.1.1      # Git Bash
-   ci\version.ps1 prepare 1.1.1     # PowerShell
+   ci/version.sh prepare 1.2.0      # Git Bash
+   ci\version.ps1 prepare 1.2.0     # PowerShell
    ```
 
 2. Bless the screenshot goldens again: the main window and the installer's
@@ -61,9 +61,9 @@ window, `ci/version.sh` works as it is.
    tag, one command at a time (Windows PowerShell 5.1 has no `&&`):
 
    ```sh
-   git commit -am "chore: release 1.1.1 (V1R1M1)"
-   git tag v1.1.1
-   git push origin main v1.1.1
+   git commit -am "chore: release 1.2.0 (V1R2M0)"
+   git tag v1.2.0
+   git push origin main v1.2.0
    ```
 
 Pushing the tag runs `.github/workflows/release.yml`:
@@ -82,8 +82,8 @@ A failed run publishes nothing. Fix the problem on main, then move the tag,
 or, if the release was published, prepare the next patch version:
 
 ```sh
-git tag -f v1.1.1
-git push -f origin v1.1.1
+git tag -f v1.2.0
+git push -f origin v1.2.0
 ```
 
 ## Checking a release
@@ -101,7 +101,7 @@ sha256sum --check --ignore-missing SHA256SUMS      # Linux, Git Bash
 ```
 
 ```powershell
-(Get-FileHash QS400-Access-V1R1M1-windows-x86_64.exe -Algorithm SHA256).Hash   # PowerShell
+(Get-FileHash QS400-Access-V1R2M0-windows-x86_64.exe -Algorithm SHA256).Hash   # PowerShell
 Get-Content SHA256SUMS
 ```
 
@@ -117,8 +117,8 @@ built by `.github/workflows/release.yml` of this repository from the tagged
 commit. With the GitHub CLI:
 
 ```sh
-gh attestation verify QS400-Access-V1R1M1-windows-x86_64.exe --repo quartzsystems/quartz-systems-access
-gh attestation verify QS400-Access-V1R1M1-linux-x86_64 --repo quartzsystems/quartz-systems-access
+gh attestation verify QS400-Access-V1R2M0-windows-x86_64.exe --repo quartzsystems/quartz-systems-access
+gh attestation verify QS400-Access-V1R2M0-linux-x86_64 --repo quartzsystems/quartz-systems-access
 ```
 
 It prints `Verification succeeded!` and the workflow and commit the file was

@@ -968,8 +968,8 @@ down while it was held. Check it by hand on each platform (step 4 above).
 step. In a fresh Windows 11 VM, copy the installer and the script in, then:
 
 ```
-powershell -ExecutionPolicy Bypass -File installer-test-windows.ps1 -Installer QS400-Access-V1R1M1-windows-x86_64.exe -Scope user
-powershell -ExecutionPolicy Bypass -File installer-test-windows.ps1 -Installer QS400-Access-V1R1M1-windows-x86_64.exe -Scope machine   # as administrator
+powershell -ExecutionPolicy Bypass -File installer-test-windows.ps1 -Installer QS400-Access-V1R2M0-windows-x86_64.exe -Scope user
+powershell -ExecutionPolicy Bypass -File installer-test-windows.ps1 -Installer QS400-Access-V1R2M0-windows-x86_64.exe -Scope machine   # as administrator
 ```
 
 It snapshots the registry keys and folders an install can touch, then:
@@ -1002,7 +1002,7 @@ digest), as root for All users and as an ordinary user for Just me:
 
 ```
 ci/dist-linux.sh
-ci/installer-test-linux-containers.sh target/dist/QS400-Access-V1R1M1-linux-x86_64
+ci/installer-test-linux-containers.sh target/dist/QS400-Access-V1R2M0-linux-x86_64
 ```
 
 Each container gets only the libraries the program loads (see README.md), the

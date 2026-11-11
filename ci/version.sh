@@ -9,8 +9,8 @@
 # installers' file names, the Windows version resources and the GitHub
 # release.
 #
-#   ci/version.sh               print the version, 1.1.1
-#   ci/version.sh release       print the release, V1R1M1
+#   ci/version.sh               print the version, 1.2.0
+#   ci/version.sh release       print the release, V1R2M0
 #   ci/version.sh check [TAG]   fail unless Cargo.toml's workspace version is
 #                               VERSION; with a tag, also unless the tag is
 #                               v<VERSION> and CHANGELOG.md has its section
