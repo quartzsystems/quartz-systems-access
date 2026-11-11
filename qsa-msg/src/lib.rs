@@ -60,6 +60,7 @@ pub mod id {
     pub const SESSION_SAVED: &str = "QAD2004";
     pub const KEYMAP_LOADED: &str = "QAD2010";
     pub const KEYMAPS_MIGRATED: &str = "QAD2011";
+    pub const DOCUMENTS_MOVED: &str = "QAD2012";
     pub const MACRO_STOPPED: &str = "QAD2020";
     pub const MACRO_RECORDED: &str = "QAD2021";
     pub const FOLDER_ADDED: &str = "QAD2030";
@@ -134,6 +135,7 @@ pub mod id {
     pub const TRANSFER_RESUMABLE: &str = "QAD7033";
     pub const NO_COMMITMENT_CONTROL: &str = "QAD7034";
     pub const VALUE_DOES_NOT_FIT: &str = "QAD7035";
+    pub const DOWNLOAD_FAILED: &str = "QAD7036";
     pub const REQUEST_SAVED: &str = "QAD7040";
     pub const ENTRIES_LISTED: &str = "QAD8001";
     pub const FOLDER_CREATED: &str = "QAD8002";
@@ -331,7 +333,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 135] = [
+    const SEEDS: [&str; 137] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -365,6 +367,7 @@ mod tests {
         id::SESSION_SAVED,
         id::KEYMAP_LOADED,
         id::KEYMAPS_MIGRATED,
+        id::DOCUMENTS_MOVED,
         id::MACRO_STOPPED,
         id::MACRO_RECORDED,
         id::FOLDER_ADDED,
@@ -439,6 +442,7 @@ mod tests {
         id::TRANSFER_RESUMABLE,
         id::NO_COMMITMENT_CONTROL,
         id::VALUE_DOES_NOT_FIT,
+        id::DOWNLOAD_FAILED,
         id::REQUEST_SAVED,
         id::ENTRIES_LISTED,
         id::FOLDER_CREATED,
@@ -1247,6 +1251,27 @@ mod tests {
         assert_eq!(m.kind(), Kind::Warning);
         assert!(m.cause.contains("2025-01-01 00:00:00 UTC"));
         assert_eq!(message(id::NOT_A_CERTIFICATE, &["f"]).kind(), Kind::Error);
+    }
+
+    #[test]
+    fn round_two_texts() {
+        let m = message(
+            id::DOWNLOAD_FAILED,
+            &[
+                "assets.csv",
+                "SQL0204: NOSUCH in HLINV not found",
+                "out.csv",
+            ],
+        );
+        assert_eq!(
+            m.text,
+            "Transfer assets.csv failed: SQL0204: NOSUCH in HLINV not found."
+        );
+        assert!(m.cause.contains("out.csv is as it was"));
+        assert_eq!(m.kind(), Kind::Error);
+        let m = message(id::DOCUMENTS_MOVED, &["D"]);
+        assert_eq!(m.text, "Files moved to D.");
+        assert_eq!(m.kind(), Kind::Information);
     }
 
     #[test]

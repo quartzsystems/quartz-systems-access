@@ -209,6 +209,12 @@ text = "Keyboard maps migrated for &1 systems."
 cause = "Keyboard maps kept per system by an earlier release were moved into session files for &1 systems and removed from settings.toml. The details were written to the log."
 recovery = "None needed. Each session now carries its own keyboard map; use Load keyboard map to copy one between sessions."
 
+[QAD2012]
+severity = 0
+text = "Files moved to &1."
+cause = "Everything QS/400 Access for Desktop saves in your Documents folder is now kept in one folder, &1: session files in Sessions, printer output in Printer Output and printed screens in Screens. Earlier releases used the folders Quartz Access and QS400 Access. What they held was moved to &1, and Recent Sessions and Session Manager's folders follow it."
+recovery = "None needed. A file whose name was already taken in &1 was not moved and not changed: it is still in its earlier folder, and the log names it. Move or rename it yourself if you want it with the rest."
+
 [QAD2020]
 severity = 30
 text = "Macro &1 stopped at step &2: &3."
@@ -657,6 +663,12 @@ severity = 20
 text = "Column &1: value &2 does not fit &3."
 cause = "In the preview, value &2 for column &1 cannot be stored in its type &3: it is too long, has too many digits, or is not of that type. Only the first such value of each column is shown."
 recovery = "Correct the value in the source file, or map the column to another target column, before running the transfer."
+
+[QAD7036]
+severity = 30
+text = "Transfer &1 failed: &2."
+cause = "Transfer &1 from the system did not finish, because: &2. No row is named, because rows read from the system are not refused one by one: the system refused the statement or stopped sending rows, or the file &3 could not be written. The rows already read were set aside, so &3 is as it was before the transfer: not made if it was not there, and not changed if it was."
+recovery = "Correct what the reason names: the table, the columns or the WHERE clause of the transfer, your authority to the table, or the folder and name of &3. Then run the transfer again. It starts from the first row."
 
 [QAD7040]
 severity = 0
