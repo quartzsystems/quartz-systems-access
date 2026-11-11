@@ -298,7 +298,7 @@ UTC, so a machine elsewhere shows those times differently.
 Views whose goldens are stale or missing until CI's bless run writes new ones,
 on Windows, X11 and Wayland alike; take each off this list when it is blessed.
 
-None: every view was blessed on CI's runners at V1R1M0. The main window and
+None: every view was blessed on CI's runners at V1R1M1. The main window and
 the installer's pages show the release, so they wait for a bless again after
 each `ci/version.sh prepare` (docs/releasing.md).
 
