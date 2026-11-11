@@ -104,6 +104,8 @@ pub enum Cmd {
     Options,
     Close,
     About,
+    /// Help > Help Topics.
+    HelpTopics,
 }
 
 /// The window's widgets.
@@ -213,6 +215,12 @@ fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Cmd>) {
         d,
     );
     add("&Messages/&Options...", Shortcut::None, Cmd::Options, n);
+    add(
+        "&Help/&Help Topics",
+        Shortcut::None | KeyCode::F1,
+        Cmd::HelpTopics,
+        n,
+    );
     add("&Help/&About...", Shortcut::None, Cmd::About, n);
 
     let (m, fh) = (8, theme::FIELD_H);
@@ -713,6 +721,7 @@ impl MessagesWindow {
             }
             Cmd::Close => self.w.window.clone().hide(),
             Cmd::About => crate::about::show(self.parent()),
+            Cmd::HelpTopics => crate::help::show(crate::help::topic::MESSAGES),
         }
     }
 

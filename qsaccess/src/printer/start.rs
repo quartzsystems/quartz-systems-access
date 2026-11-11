@@ -85,6 +85,7 @@ fn build_with(state: &Shared, system: Option<&str>) -> (StartDialog, chan::Recei
     let (lw, fh) = (124, theme::FIELD_H);
     let fw = W - 2 * m - lw;
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::PRINTER_5250);
     window.set_label("Start 5250 Printer");
     window.set_color(colors::FACE);
     window.make_modal(true);

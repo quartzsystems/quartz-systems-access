@@ -147,6 +147,7 @@ const CONTEXT: [(&str, Act); 11] = [
 fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
     let (tx, rx) = chan::channel::<Act>();
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::INTEGRATED_FILE_SYSTEM);
     window.set_label(&format!("{FUNCTION} - {system}"));
     window.set_icon(Some(qsa_ui::glyph::app_icon()));
     window.set_color(colors::FACE);

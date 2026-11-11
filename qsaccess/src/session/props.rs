@@ -152,6 +152,7 @@ pub fn build(
     qap_version: Option<u16>,
 ) -> (PropertyDialog, PropsForm) {
     let mut d = PropertyDialog::new(title, W, H);
+    crate::help::for_dialog(&mut d, crate::help::topic::DISPLAY_5250, None);
     let fh = theme::FIELD_H;
     let mut general = None;
     d.tabs().add_page("General", |r| {

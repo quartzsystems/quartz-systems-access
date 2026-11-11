@@ -401,6 +401,10 @@ impl Viewer {
             if ev != Event::KeyDown && ev != Event::Shortcut {
                 return false;
             }
+            if crate::help::is_f1(ev) {
+                crate::help::show(crate::help::topic::PRINTER_OUTPUT);
+                return true;
+            }
             let k = app::event_key();
             let ctrl = app::event_state().contains(Shortcut::Ctrl);
             let c = match k {

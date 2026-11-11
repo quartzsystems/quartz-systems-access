@@ -58,6 +58,7 @@ fn build_with(file: &Path, sessions: &[(String, String)]) -> (LoadMapDialog, cha
     let bh = theme::BUTTON_H;
     let bw = theme::BUTTON_W;
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::DISPLAY_5250);
     window.set_label("Load Keyboard Map");
     window.set_color(colors::FACE);
     window.make_modal(true);

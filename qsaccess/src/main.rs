@@ -101,6 +101,8 @@ fn main() {
     if let Err(e) = qsa_ui::theme::init() {
         qsaccess::log!("fonts not loaded: {e}");
     }
+    // A QAD message's ID in Message Details opens the message in Help.
+    qsa_ui::msgdetails::set_message_help(qsaccess::help::show_message);
 
     if let Some(part) = &args.ui_sampler {
         let m = qsa_msg::message(qsa_msg::id::NOT_AVAILABLE, &[]);
@@ -189,6 +191,7 @@ fn main() {
             && !qsaccess::messages::any_open()
             && !qsaccess::manager::shown()
             && !qsaccess::certs::shown()
+            && !qsaccess::help::shown()
             && !qsaccess::macros::editor::any_open()
             && !qsaccess::runsql::any_open()
             && !qsaccess::schemas::any_open()
@@ -227,6 +230,7 @@ fn serve(ui: &Ui, state: &Shared, r: &Request, link: Option<ipc::Link>, main_sho
         qsaccess::printer::close_all();
         qsaccess::manager::close();
         qsaccess::certs::close();
+        qsaccess::help::close();
         qsaccess::macros::editor::close_all();
         ui.window.clone().hide();
         return;

@@ -84,6 +84,11 @@ fn build_with(state: &Shared) -> (ListDialog, chan::Receiver<Request>) {
     let bw = theme::BUTTON_W;
     let bh = theme::BUTTON_H;
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach_at(
+        &mut window,
+        crate::help::topic::GETTING_STARTED,
+        Some(crate::help::SYSTEM_CONFIGURATIONS),
+    );
     window.set_label("System Configurations");
     window.set_color(colors::FACE);
     window.make_modal(true);

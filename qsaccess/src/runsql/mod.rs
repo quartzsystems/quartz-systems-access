@@ -241,6 +241,7 @@ fn build_widgets(
 ) -> (Widgets, chan::Sender<Act>, chan::Receiver<Act>) {
     let (tx, rx) = chan::channel::<Act>();
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::RUN_SQL);
     window.set_label(&qap::window_title("Run SQL", system, None));
     window.set_icon(Some(qsa_ui::glyph::app_icon()));
     window.set_color(colors::FACE);
@@ -1673,6 +1674,7 @@ fn history_dialog(
 ) -> Option<String> {
     let (w, h) = (640, 400);
     let mut win = Window::new(0, 0, w, h, None);
+    crate::help::attach(&mut win, crate::help::topic::RUN_SQL);
     win.set_label(&format!("History - {system}"));
     win.set_color(colors::FACE);
     win.make_modal(true);

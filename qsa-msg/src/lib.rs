@@ -39,6 +39,7 @@ pub mod id {
     pub const CERT_EXPORTED: &str = "QAD0042";
     pub const NOT_A_CERTIFICATE: &str = "QAD0043";
     pub const CERT_EXPIRED: &str = "QAD0044";
+    pub const HELP_TOPIC_NOT_FOUND: &str = "QAD0050";
     pub const CONNECTING: &str = "QAD1001";
     pub const CONNECTION_REFUSED: &str = "QAD1002";
     pub const HOST_NOT_FOUND: &str = "QAD1003";
@@ -330,7 +331,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 134] = [
+    const SEEDS: [&str; 135] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -343,6 +344,7 @@ mod tests {
         id::CERT_EXPORTED,
         id::NOT_A_CERTIFICATE,
         id::CERT_EXPIRED,
+        id::HELP_TOPIC_NOT_FOUND,
         id::CONNECTING,
         id::CONNECTION_REFUSED,
         id::HOST_NOT_FOUND,
@@ -1245,6 +1247,13 @@ mod tests {
         assert_eq!(m.kind(), Kind::Warning);
         assert!(m.cause.contains("2025-01-01 00:00:00 UTC"));
         assert_eq!(message(id::NOT_A_CERTIFICATE, &["f"]).kind(), Kind::Error);
+    }
+
+    #[test]
+    fn help_texts() {
+        let m = message(id::HELP_TOPIC_NOT_FOUND, &["run-sql"]);
+        assert_eq!(m.text, "Help topic run-sql not found.");
+        assert_eq!(m.kind(), Kind::Error);
     }
 
     #[test]

@@ -81,6 +81,12 @@ text = "Certificate &1 has expired."
 cause = "The Valid to time of certificate &1, &2, has passed. A system that still presents an expired certificate, or one issued by an expired certificate authority, should be given a new one."
 recovery = "Ask the system's administrator for the current certificate and import that instead. Select Import to trust this certificate all the same, or Skip to leave it out."
 
+[QAD0050]
+severity = 30
+text = "Help topic &1 not found."
+cause = "Help was asked for a topic named &1, and Help has no topic of that name. Every topic is part of the program, and each link in Help and each Help button is checked when the program is built, so this means the program was not built from a complete set of topics."
+recovery = "Select Home in the Help window, and find the topic in Contents or with Search. Install QS/400 Access for Desktop again if the message returns, and report it with the topic's name."
+
 [QAD1001]
 severity = 0
 text = "Connecting to &1 port &2."
@@ -91,7 +97,7 @@ recovery = "None needed. If the connection does not complete within 15 seconds i
 severity = 30
 text = "Connection to &1 refused."
 cause = "System &1 answered, but nothing accepted the connection on the port used. The Telnet server may not be started, or the port in the system configuration may be wrong, or TLS may be selected for a system with no TLS listener."
-recovery = "Check that the Telnet server is started on &1, and check the Telnet ports on the Ports tab of the system's properties and the TLS setting on its Security tab. Then select Reconnect."
+recovery = "Check that the Telnet server is started on &1, and check the Telnet ports on the Ports tab of the system's properties and Use TLS for all connections on its General tab. Then select Reconnect."
 
 [QAD1003]
 severity = 30
@@ -121,7 +127,7 @@ recovery = "Select Reconnect to start a new session. The last screen stays visib
 severity = 30
 text = "TLS handshake with &1 failed: &2."
 cause = "A TLS session could not be set up with system &1. The reason given was: &2"
-recovery = "Check that the port on the Ports tab is the system's TLS Telnet port and that the system's TLS configuration is complete. If the system offers no TLS, clear TLS on the Security tab."
+recovery = "Check that the port on the Ports tab is the system's TLS Telnet port and that the system's TLS configuration is complete. If the system offers no TLS, clear Use TLS for all connections on the General tab of the system's properties."
 
 [QAD1011]
 severity = 30

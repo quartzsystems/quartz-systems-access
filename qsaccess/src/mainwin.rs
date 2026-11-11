@@ -436,7 +436,7 @@ pub enum Action {
     Task(Task),
     Open,
     Recent(usize),
-    NotAvailable,
+    Help,
     Refresh,
     About,
     Exit,
@@ -464,7 +464,7 @@ impl Ui {
                     crate::open::open_path(&self.state, &p, self.parent());
                 }
             }
-            Action::NotAvailable => self.not_available(),
+            Action::Help => crate::help::show(crate::help::HOME),
             Action::Refresh => reload(self),
             Action::About => about::show(Some(&self.window)),
             Action::Exit => self.window.clone().hide(),
@@ -552,8 +552,16 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
         Shortcut::Alt | Key::F4,
         Action::Exit,
     );
+    // The main window has nothing to cut, copy or paste: the entries are
+    // there, as in every window's Edit menu, and dimmed.
     for path in ["&Edit/Cu&t", "&Edit/&Copy", "&Edit/&Paste"] {
-        add(&mut menu, path, Shortcut::None, Action::NotAvailable);
+        menu.add_emit_to(
+            path,
+            Shortcut::None,
+            MenuFlag::Inactive,
+            tx,
+            Action::Refresh,
+        );
     }
     add(
         &mut menu,
@@ -607,7 +615,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
         &mut menu,
         "&Help/&Help Topics",
         Shortcut::None | Key::F1,
-        Action::NotAvailable,
+        Action::Help,
     );
     let about = format!("&Help/&About {PRODUCT}...");
     add(&mut menu, &about, Shortcut::None, Action::About);

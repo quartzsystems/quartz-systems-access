@@ -10,6 +10,7 @@ pub mod app;
 pub mod certs;
 pub mod chgpwd;
 pub mod files;
+pub mod help;
 pub mod ifs;
 pub mod ipc;
 pub mod localtime;

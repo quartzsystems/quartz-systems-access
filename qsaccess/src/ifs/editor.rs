@@ -260,6 +260,7 @@ impl Editor {
     ) -> Editor {
         let (tx, rx) = chan::channel::<Act>();
         let mut window = Window::new(0, 0, W, H, None);
+        crate::help::attach(&mut window, crate::help::topic::INTEGRATED_FILE_SYSTEM);
         window.set_color(colors::FACE);
         window.set_icon(Some(qsa_ui::glyph::app_icon()));
         window.size_range(400, 300, 0, 0);
@@ -671,6 +672,7 @@ impl Editor {
         let (what, with, case) = self.find.borrow().clone();
         let (w, h) = (420, if replace { 150 } else { 118 });
         let mut win = Window::new(0, 0, w, h, None);
+        crate::help::attach(&mut win, crate::help::topic::INTEGRATED_FILE_SYSTEM);
         win.set_label(if replace { "Replace" } else { "Find" });
         win.set_color(colors::FACE);
         win.make_modal(true);

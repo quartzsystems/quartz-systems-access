@@ -115,6 +115,7 @@ const EXISTING: [(&str, Existing); 3] = [
 fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
     let (tx, rx) = chan::channel::<Act>();
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::DATA_TRANSFER);
     window.set_label(&qap::window_title(
         "Data Transfer from System",
         system,

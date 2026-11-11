@@ -139,6 +139,8 @@ enum Cmd {
     Look(ColorMap),
     Key(K5250),
     About,
+    /// Help > Help Topics.
+    HelpTopics,
     Close,
 }
 
@@ -390,6 +392,7 @@ impl SessionWindow {
             Cmd::MacroRun(0),
             MenuFlag::Inactive,
         );
+        add("&Help/&Help Topics", Shortcut::None, Cmd::HelpTopics, n);
         add(
             "&Help/&About QS\\/400 Access for Desktop...",
             Shortcut::None,
@@ -1566,6 +1569,7 @@ impl SessionWindow {
                     let _ = self.term.widget().clone().take_focus();
                 }
                 Cmd::About => crate::about::show(Some(&self.window)),
+                Cmd::HelpTopics => crate::help::show(crate::help::topic::DISPLAY_5250),
                 Cmd::Close => {
                     self.st.borrow_mut().player = None;
                     self.disconnect_quietly();

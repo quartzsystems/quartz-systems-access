@@ -91,6 +91,7 @@ impl SendDialog {
         let fh = theme::FIELD_H;
         let (bw, bh) = (theme::BUTTON_W, theme::BUTTON_H);
         let mut window = Window::new(0, 0, W, H, None);
+        crate::help::attach(&mut window, crate::help::topic::MESSAGES);
         window.set_label(&format!("Send Message - {}", system.name));
         window.set_icon(Some(qsa_ui::glyph::app_icon()));
         window.set_color(colors::FACE);

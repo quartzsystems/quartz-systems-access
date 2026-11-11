@@ -98,6 +98,7 @@ fn build_with(system: &System) -> (VerifyDialog, chan::Receiver<Request>) {
     let fh = theme::FIELD_H;
     let (bw, bh) = (theme::BUTTON_W, theme::BUTTON_H);
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::VERIFY_CONNECTION);
     window.set_label(&format!("Verify Connection - {}", system.name));
     window.set_color(colors::FACE);
     window.make_modal(true);

@@ -27,6 +27,7 @@ pub const H: i32 = 200;
 /// Builds the About box. It is not shown.
 pub fn build() -> Window {
     let mut win = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut win, crate::help::topic::GETTING_STARTED);
     win.set_label(&format!("About {PRODUCT}"));
     win.set_color(colors::FACE);
     win.make_modal(true);

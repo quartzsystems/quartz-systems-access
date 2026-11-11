@@ -162,6 +162,42 @@ fn spaced(label: &str) -> String {
     format!(" {label}")
 }
 
+/// A link: its text in the link colour, underlined, on the face colour.
+/// It is a button, so Tab reaches it and Enter or the space bar selects it.
+pub fn link(x: i32, y: i32, w: i32, h: i32, text: &str) -> Button {
+    let mut b = Button::new(x, y, w, h, None);
+    b.set_label(text);
+    b.set_frame(FrameType::FlatBox);
+    b.set_color(colors::FACE);
+    b.draw(|b| {
+        let (x, y, w, h) = (b.x(), b.y(), b.w(), b.h());
+        draw::draw_rect_fill(x, y, w, h, b.color());
+        draw::set_font(theme::UI_FONT_BOLD, theme::UI_SIZE);
+        draw::set_draw_color(colors::LINK);
+        let label = b.label();
+        draw::draw_text2(&label, x, y, w, h, Align::Left);
+        let tw = (draw::width(&label) as i32).min(w);
+        let base = y + (h + draw::height()) / 2 - draw::descent();
+        draw::draw_rect_fill(x, base + 1, tw, 1, colors::LINK);
+        if b.has_focus() {
+            draw::set_draw_color(colors::TEXT);
+            draw::draw_focus_rect(x - 1, y + 1, tw + 3, h - 2);
+        }
+    });
+    b.handle(|b, ev| {
+        let cursor = match ev {
+            Event::Enter => fltk::enums::Cursor::Hand,
+            Event::Leave => fltk::enums::Cursor::Default,
+            _ => return false,
+        };
+        if let Some(mut win) = b.window() {
+            win.set_cursor(cursor);
+        }
+        true
+    });
+    b
+}
+
 /// A check box.
 pub fn check(x: i32, y: i32, w: i32, h: i32, label: &str) -> CheckButton {
     let mut c = CheckButton::new(x, y, w, h, None);

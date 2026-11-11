@@ -66,6 +66,7 @@ pub fn fields(row: &Row) -> Vec<(&'static str, String)> {
 /// The dialog for `row`, not shown, and its Name field.
 pub fn build(row: &Row) -> (PropertyDialog, Input) {
     let mut d = PropertyDialog::new(&format!("Properties - {}", row.entry.name), W, H);
+    crate::help::for_dialog(&mut d, crate::help::topic::INTEGRATED_FILE_SYSTEM, None);
     let mut name = None;
     let rows = fields(row);
     let entry_name = row.entry.name.clone();

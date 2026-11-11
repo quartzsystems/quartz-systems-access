@@ -1681,6 +1681,23 @@ fn certs_views() -> Vec<(String, Window)> {
     ]
 }
 
+/// Help: Contents with the first topic, Search with what it found, and a
+/// topic with a table.
+fn help_views() -> Vec<(String, Window)> {
+    use qsaccess::help::{self, topic};
+    let contents = help::build();
+    let search = help::build();
+    search.tabs.clone().select(help::TAB_SEARCH);
+    search.search_for("fingerprint");
+    let table = help::build();
+    table.go(topic::KEYBOARD_REFERENCE, None);
+    vec![
+        ("help-contents".to_owned(), contents.window.clone()),
+        ("help-search".to_owned(), search.window.clone()),
+        ("help-topic-table".to_owned(), table.window.clone()),
+    ]
+}
+
 fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Window)> {
     let mut out = Vec::new();
     let (ui, _rx) = mainwin::build(state.clone());
@@ -1787,6 +1804,7 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     out.extend(messages_views(state));
     out.extend(prompt_views());
     out.extend(certs_views());
+    out.extend(help_views());
     out.push((
         "password-expiry".to_owned(),
         qsa_ui::msgdetails::ask_message_box(

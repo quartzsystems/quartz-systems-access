@@ -135,6 +135,7 @@ fn kind_name(k: TableKind) -> &'static str {
 fn build_widgets(system: &str) -> (Widgets, chan::Receiver<Act>) {
     let (tx, rx) = chan::channel::<Act>();
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::SCHEMAS);
     window.set_label(&format!("Schemas - {system}"));
     window.set_icon(Some(qsa_ui::glyph::app_icon()));
     window.set_color(colors::FACE);

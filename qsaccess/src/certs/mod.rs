@@ -367,6 +367,7 @@ pub fn build(state: &Shared, now: Option<i64>, store: Option<usize>) -> Rc<Certs
     let bw = theme::BUTTON_W + 20;
     let bh = theme::BUTTON_H;
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::CERTIFICATE_MANAGEMENT);
     window.set_label(FUNCTION);
     window.set_icon(Some(qsa_ui::glyph::app_icon()));
     window.set_color(colors::FACE);
@@ -407,10 +408,13 @@ pub fn build(state: &Shared, now: Option<i64>, store: Option<usize>) -> Rc<Certs
     });
     let mut list = list.expect("the Certificates page is built");
 
-    let close_x = W - m - theme::BUTTON_W;
+    let help_x = W - m - theme::BUTTON_W;
+    let close_x = help_x - 6 - theme::BUTTON_W;
     let status = StatusLine::new(m, H - m - bh, close_x - 2 * m, bh);
     let mut close = controls::default_button(close_x, H - m - bh, theme::BUTTON_W, bh, "Close");
     close.emit_to(tx, Req::Close);
+    let mut help = controls::button(help_x, H - m - bh, theme::BUTTON_W, bh, "Help");
+    help.set_callback(|_| crate::help::show(crate::help::topic::CERTIFICATE_MANAGEMENT));
     window.end();
     window.set_callback(move |_| tx.send(Req::Close));
 
@@ -827,6 +831,7 @@ pub fn view_dialog(c: &Certificate, systems: &[String], now: i64) -> Window {
     let (w, h) = (580, 470);
     let m = 12;
     let mut win = Window::new(0, 0, w, h, None);
+    crate::help::attach(&mut win, crate::help::topic::CERTIFICATE_MANAGEMENT);
     win.set_label(&format!("View Certificate - {}", c.name()));
     win.set_color(colors::FACE);
     win.make_modal(true);
@@ -906,8 +911,10 @@ impl SystemsDialog {
         let intro_h = 34;
         let bh = theme::BUTTON_H;
         let bw = theme::BUTTON_W;
-        let h = m + intro_h + 4 + list_h + 8 + 2 * bh + 2 + m;
+        let status_h = 18;
+        let h = m + intro_h + 4 + list_h + 4 + status_h + 4 + bh + m;
         let mut window = Window::new(0, 0, w, h, None);
+        crate::help::attach(&mut window, crate::help::topic::CERTIFICATE_MANAGEMENT);
         window.set_label(title);
         window.set_color(colors::FACE);
         window.make_modal(true);
@@ -938,12 +945,11 @@ impl SystemsDialog {
         }
         scroll.end();
 
-        let all_y = ly + list_h + 8;
-        let mut all = controls::button(m, all_y, bw, bh, "Select All");
-        let mut none = controls::button(m + bw + 6, all_y, bw, bh, "Clear All");
+        let status = StatusLine::new(m, ly + list_h + 4, w - 2 * m, status_h);
         let by = h - m - bh;
+        let mut all = controls::button(m, by, bw, bh, "Select All");
+        let mut none = controls::button(m + bw + 6, by, bw, bh, "Clear All");
         let ok_x = w - m - 2 * bw - 6;
-        let status = StatusLine::new(m + 2 * bw + 18, all_y, w - 2 * m - 2 * bw - 18, bh);
         let mut ok = controls::default_button(ok_x, by, bw, bh, "OK");
         let mut cancel = controls::button(w - m - bw, by, bw, bh, "Cancel");
         window.end();

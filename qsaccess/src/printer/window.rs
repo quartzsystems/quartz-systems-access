@@ -70,6 +70,8 @@ enum Cmd {
     Connect,
     Disconnect,
     About,
+    /// Help > Help Topics.
+    HelpTopics,
 }
 
 /// The session's state, as the status area shows it.
@@ -268,6 +270,12 @@ impl PrinterWindow {
             "&Communication/&Disconnect",
             Shortcut::None,
             Cmd::Disconnect,
+            n,
+        );
+        add(
+            "&Help/&Help Topics",
+            Shortcut::None | Key::F1,
+            Cmd::HelpTopics,
             n,
         );
         add(
@@ -707,6 +715,7 @@ impl PrinterWindow {
                 self.report(&qsa_msg::message(id::DISCONNECTED, &[&system]), false);
             }
             Cmd::About => crate::about::show(Some(&self.window)),
+            Cmd::HelpTopics => crate::help::show(crate::help::topic::PRINTER_5250),
         }
     }
 

@@ -814,6 +814,7 @@ impl OptionsDialog {
     pub fn build(what: &str, o: Options) -> OptionsDialog {
         let (w, h) = (440, 268);
         let mut window = Window::new(0, 0, w, h, None);
+        crate::help::attach(&mut window, crate::help::topic::INTEGRATED_FILE_SYSTEM);
         window.set_label(&format!("Transfer Options - {what}"));
         window.set_color(theme::colors::FACE);
         window.make_modal(true);

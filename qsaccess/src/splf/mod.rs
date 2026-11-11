@@ -118,6 +118,8 @@ pub enum Cmd {
     CancelRead,
     Close,
     About,
+    /// Help > Help Topics.
+    HelpTopics,
 }
 
 /// The window's widgets.
@@ -265,6 +267,12 @@ fn build_widgets(system: &str, rows: u32, refresh_secs: u32) -> (Widgets, chan::
         "&View/&Output Queues...",
         Shortcut::None,
         Cmd::OutputQueues,
+        n,
+    );
+    add(
+        "&Help/&Help Topics",
+        Shortcut::None | Key::F1,
+        Cmd::HelpTopics,
         n,
     );
     add(
@@ -1115,6 +1123,7 @@ impl PrinterOutput {
                 self.w.window.clone().hide();
             }
             Cmd::About => crate::about::show(self.parent()),
+            Cmd::HelpTopics => crate::help::show(crate::help::topic::PRINTER_OUTPUT),
         }
     }
 

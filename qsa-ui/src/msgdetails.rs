@@ -27,6 +27,23 @@ use crate::theme::{self, colors};
 /// Width of the details dialog.
 pub const DETAILS_W: i32 = 460;
 
+/// What opens the reference entry of one of this program's own messages.
+static MESSAGE_HELP: std::sync::OnceLock<fn(&str)> = std::sync::OnceLock::new();
+
+/// Makes the message ID in the details dialog of this program's own
+/// messages (`QAD` and four digits) a link: selecting it calls `open` with
+/// the ID, for the application to show the message in its Help. Until this
+/// is called, and for a system's messages, the ID is plain text.
+pub fn set_message_help(open: fn(&str)) {
+    let _ = MESSAGE_HELP.set(open);
+}
+
+/// Whether `id` is one of this program's own message IDs.
+fn is_own(id: &str) -> bool {
+    id.strip_prefix("QAD")
+        .is_some_and(|d| d.len() == 4 && d.bytes().all(|b| b.is_ascii_digit()))
+}
+
 /// The glyph shown beside a message of this kind, if any.
 pub fn glyph_for(m: &Message) -> Option<Glyph> {
     match m.kind() {
@@ -96,8 +113,19 @@ fn details(id: &str, severity: u8, sections: &[(&str, &str)]) -> Window {
 
     let mut y = margin;
     controls::label(margin, y, 70, 20, "Message ID:");
-    let mut id = controls::label(margin + 70, y, 90, 20, id);
-    id.set_label_font(theme::UI_FONT_BOLD);
+    match MESSAGE_HELP.get().filter(|_| is_own(id)) {
+        Some(open) => {
+            let open = *open;
+            let mut link = controls::link(margin + 70, y, 90, 20, id);
+            link.set_tooltip("Show this message in Help");
+            let id = id.to_owned();
+            link.set_callback(move |_| open(&id));
+        }
+        None => {
+            let mut id = controls::label(margin + 70, y, 90, 20, id);
+            id.set_label_font(theme::UI_FONT_BOLD);
+        }
+    }
     controls::label(margin + 180, y, 60, 20, "Severity:");
     controls::label(margin + 240, y, 40, 20, &format!("{severity:02}"));
     y += 20 + 6;
@@ -245,4 +273,21 @@ pub fn show_system_message(
     m: &SystemMessage,
 ) {
     ask_system_message(parent, context, m, &["OK"]);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_this_programs_message_ids_link_to_help() {
+        assert!(is_own("QAD0001"));
+        assert!(is_own("QAD9021"));
+        // A system's message, and things that only look like an ID.
+        assert!(!is_own("CPF1107"));
+        assert!(!is_own("QAD001"));
+        assert!(!is_own("QAD00010"));
+        assert!(!is_own("QADX001"));
+        assert!(!is_own(""));
+    }
 }

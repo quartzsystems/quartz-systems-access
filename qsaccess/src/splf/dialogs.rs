@@ -37,6 +37,7 @@ fn what(files: &[SpooledFile]) -> String {
 /// A modal window of `w` by `h` titled `title`.
 fn dialog(title: &str, w: i32, h: i32) -> Window {
     let mut win = Window::new(0, 0, w, h, None);
+    crate::help::attach(&mut win, crate::help::topic::PRINTER_OUTPUT);
     win.set_label(title);
     win.set_color(colors::FACE);
     win.make_modal(true);

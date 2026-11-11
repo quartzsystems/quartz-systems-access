@@ -91,6 +91,7 @@ pub fn build(m: MacroFile, file: Option<PathBuf>) -> Rc<Editor> {
     let bw = theme::BUTTON_W + 10;
     let bh = theme::BUTTON_H;
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::DISPLAY_5250);
     window.set_label(&title_for(&m, file.as_deref()));
     window.set_color(colors::FACE);
     window.size_range(460, 320, 0, 0);
@@ -458,6 +459,7 @@ pub fn build_step(title: &str, step: &Step) -> (Window, StepForm, chan::Receiver
     let lw = 104;
     let fw = w - 2 * m - lw;
     let mut win = Window::new(0, 0, w, h, None);
+    crate::help::attach(&mut win, crate::help::topic::DISPLAY_5250);
     win.set_label(title);
     win.set_color(colors::FACE);
     win.make_modal(true);

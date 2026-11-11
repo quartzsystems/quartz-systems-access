@@ -107,6 +107,11 @@ fn port_rows() -> Vec<(&'static str, Option<usize>, Option<usize>)> {
 /// Builds the dialog for `system`. It is not shown.
 pub fn build(title: &str, system: &System) -> (PropertyDialog, SystemForm) {
     let mut d = PropertyDialog::new(title, W, H);
+    crate::help::for_dialog(
+        &mut d,
+        crate::help::topic::GETTING_STARTED,
+        Some(crate::help::SYSTEM_CONFIGURATIONS),
+    );
     let fh = theme::FIELD_H;
 
     // General.
@@ -563,6 +568,7 @@ fn view_certificate(parent: Option<&dyn WindowExt>, ca: &CaCertificate) {
     };
     let (w, h) = (520, 360);
     let mut win = Window::new(0, 0, w, h, None);
+    crate::help::attach(&mut win, crate::help::topic::CERTIFICATE_MANAGEMENT);
     win.set_label(&format!("View Certificate - {title}"));
     win.set_color(colors::FACE);
     win.make_modal(true);

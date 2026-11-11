@@ -333,6 +333,7 @@ pub fn build(state: &Shared) -> Rc<Manager> {
     let bw = theme::BUTTON_W + 14;
     let bh = theme::BUTTON_H;
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::SESSION_MANAGER);
     window.set_label("Session Manager");
     window.set_color(colors::FACE);
     window.size_range(560, 320, 0, 0);

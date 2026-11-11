@@ -143,6 +143,7 @@ fn build_with(f: &PrinterFile) -> (SettingsDialog, chan::Receiver<Act>) {
     let (lw, fh) = (128, theme::FIELD_H);
     let fw = W - 2 * m - lw;
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::PRINTER_5250);
     window.set_label("Printer Session Settings");
     window.set_color(colors::FACE);
     window.make_modal(true);

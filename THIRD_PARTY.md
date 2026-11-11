@@ -39,6 +39,17 @@ unmodified, and its source is published on crates.io, which MPL-2.0 asks for.
 The rest of `printpdf`'s tree is under MIT, Apache-2.0, BSD-3-Clause, Zlib or
 Unicode-3.0 terms.
 
+## Build-time tools
+
+Used when the program is built; nothing of them is in the program.
+
+| Component | Version | Licence | Use |
+|-----------|---------|---------|-----|
+| `pulldown-cmark` (`html` feature) | 0.13 | MIT | Help: the topics' Markdown (`qsaccess/help/`) made into the HTML the program carries |
+
+It brings in `pulldown-cmark-escape` (MIT), `unicase` and `bitflags` (MIT or
+Apache-2.0) and `memchr` (Unlicense or MIT).
+
 ## Bundled fonts
 
 The UI and monospace faces are open-licence fonts used until Quartz Systems'

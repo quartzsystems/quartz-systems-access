@@ -45,6 +45,7 @@ pub fn build_run(name: &str, sessions: &[(String, String)]) -> (RunDialog, chan:
     let bh = theme::BUTTON_H;
     let bw = theme::BUTTON_W;
     let mut window = Window::new(0, 0, RUN_W, RUN_H, None);
+    crate::help::attach(&mut window, crate::help::topic::DISPLAY_5250);
     window.set_label("Run Macro");
     window.set_color(colors::FACE);
     window.make_modal(true);

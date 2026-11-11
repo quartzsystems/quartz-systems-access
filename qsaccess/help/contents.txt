@@ -1,0 +1,34 @@
+# The topics of Help, in the order Contents lists them. A line starting
+# with = begins a group; the topics after it are listed under it. Each
+# topic is the file of that name with .md, and its title is that file's
+# first line. Every .md file here must be listed, and the first topic is
+# the one Home shows (see build/help.rs).
+
+getting-started
+
+= Connecting
+signing-on
+verify-connection
+certificate-management
+
+= 5250 sessions
+display-5250
+printer-5250
+session-manager
+
+= Working on a system
+run-command
+printer-output
+run-sql
+schemas
+data-transfer
+qsaccess-run
+integrated-file-system
+messages
+
+= Setting up
+installing
+
+= Reference
+keyboard-reference
+messages-reference

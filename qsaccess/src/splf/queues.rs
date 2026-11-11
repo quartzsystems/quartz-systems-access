@@ -114,6 +114,7 @@ impl QueuesWindow {
     pub fn build(system: &System, rows: u32) -> Rc<QueuesWindow> {
         let (tx, rx) = chan::channel::<Cmd>();
         let mut window = Window::new(0, 0, W, H, None);
+        crate::help::attach(&mut window, crate::help::topic::PRINTER_OUTPUT);
         window.set_label(&format!("Output Queues - {}", system.name));
         window.set_icon(Some(qsa_ui::glyph::app_icon()));
         window.set_color(colors::FACE);

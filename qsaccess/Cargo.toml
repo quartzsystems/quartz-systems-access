@@ -32,6 +32,11 @@ rustls.workspace = true
 [build-dependencies]
 qsa-glyph.workspace = true
 qsa-icons.workspace = true
+# Help topics: Markdown to HTML, the messages reference from the catalogue
+# and the keyboard reference from the default map.
+pulldown-cmark.workspace = true
+qsa-msg.workspace = true
+qsa-config.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { workspace = true, features = [
@@ -57,4 +62,8 @@ harness = false
 
 [[test]]
 name = "certs_sync"
+harness = false
+
+[[test]]
+name = "help_window"
 harness = false

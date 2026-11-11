@@ -35,6 +35,9 @@ printpdf = { version = "0.12.8", default-features = false, features = ["text_lay
 rust_xlsxwriter = { version = "0.102", default-features = false, features = ["constant_memory"] }
 calamine = { version = "0.38", default-features = false }
 zip = { version = "9.2", default-features = false, features = ["deflate"] }
+# Help: the topics' Markdown made into HTML when qsaccess is built (a
+# build-dependency only; nothing of it is in the program).
+pulldown-cmark = { version = "0.13", default-features = false, features = ["html"] }
 
 qsa-ui = { path = "qsa-ui" }
 qsa-glyph = { path = "qsa-glyph" }

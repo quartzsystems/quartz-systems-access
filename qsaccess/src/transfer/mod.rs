@@ -140,6 +140,7 @@ pub struct ProgressDialog {
 pub fn progress_dialog(name: &str) -> ProgressDialog {
     let (w, h) = (380, 120);
     let mut window = Window::new(0, 0, w, h, None);
+    crate::help::attach(&mut window, crate::help::topic::DATA_TRANSFER);
     window.set_label(&format!("Transferring {name}"));
     window.set_color(colors::FACE);
     let m = 12;
@@ -258,6 +259,7 @@ pub fn pick_table(
     };
     let (w, hh) = (640, 420);
     let mut win = Window::new(0, 0, w, hh, None);
+    crate::help::attach(&mut win, crate::help::topic::DATA_TRANSFER);
     win.set_label(title);
     win.set_color(colors::FACE);
     win.make_modal(true);

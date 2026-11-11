@@ -101,6 +101,7 @@ fn build_with(title: &str, map: &KeyMap) -> (KeymapDialog, chan::Receiver<Req>) 
     let m = 10;
     let (bw, bh) = (theme::BUTTON_W + 30, theme::BUTTON_H);
     let mut window = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut window, crate::help::topic::KEYBOARD_REFERENCE);
     window.set_label(title);
     window.set_color(colors::FACE);
     window.make_modal(true);

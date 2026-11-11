@@ -27,6 +27,7 @@ pub fn build(system: &str, reason: &str, info: &CertInfo) -> (Window, chan::Rece
     let (tx, rx) = chan::channel::<bool>();
     let m = 12;
     let mut win = Window::new(0, 0, W, H, None);
+    crate::help::attach(&mut win, crate::help::topic::CERTIFICATE_MANAGEMENT);
     win.set_label("Certificate Not Trusted");
     win.set_color(colors::FACE);
     win.make_modal(true);
