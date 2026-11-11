@@ -40,6 +40,175 @@ pub fn describe(der: &[u8]) -> CertInfo {
     info
 }
 
+/// More of a certificate than [`CertInfo`] has, for a viewer: how it was
+/// signed, its key, the names it is good for and whether it is a
+/// certificate authority's. What cannot be read shows as `(unreadable)`.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CertDetails {
+    /// The signature algorithm: `ecdsa-with-SHA256`, `sha256WithRSA` and
+    /// the like, or its dotted OID when it is not one of the common ones.
+    pub signature: String,
+    /// The public key: `EC P-256`, `RSA 2048 bits`, `Ed25519`.
+    pub public_key: String,
+    /// The subject alternative names, as written in the certificate:
+    /// `DNS:sys1.example.net`, `IP:192.0.2.1`, `Email:`, `URI:`. Empty when
+    /// the certificate has none.
+    pub alt_names: Vec<String>,
+    /// Whether the certificate says it is a certificate authority's (its
+    /// basic constraints): `None` when it does not say.
+    pub ca: Option<bool>,
+}
+
+/// Reads [`CertDetails`] from a certificate.
+pub fn details(der: &[u8]) -> CertDetails {
+    let mut d = CertDetails {
+        signature: "(unreadable)".to_owned(),
+        public_key: "(unreadable)".to_owned(),
+        alt_names: Vec::new(),
+        ca: None,
+    };
+    let _ = read_details(der, &mut d);
+    d
+}
+
+const BOOLEAN: u8 = 0x01;
+const BIT_STRING: u8 = 0x03;
+const OCTET_STRING: u8 = 0x04;
+/// `[3] EXPLICIT Extensions` of a TBSCertificate.
+const EXTENSIONS: u8 = 0xA3;
+
+fn read_details(der: &[u8], d: &mut CertDetails) -> Option<()> {
+    let (cert, _) = expect(der, SEQUENCE)?;
+    let (tbs, _) = expect(cert, SEQUENCE)?;
+    let mut rest = tbs;
+    if let Some((VERSION, _, r)) = tlv(rest) {
+        rest = r;
+    }
+    let (_serial, r) = expect(rest, INTEGER)?;
+    let (sig, r) = expect(r, SEQUENCE)?;
+    if let Some((oid, _)) = expect(sig, OID) {
+        d.signature = signature_name(oid);
+    }
+    let (_issuer, r) = expect(r, SEQUENCE)?;
+    let (_validity, r) = expect(r, SEQUENCE)?;
+    let (_subject, r) = expect(r, SEQUENCE)?;
+    let (spki, mut r) = expect(r, SEQUENCE)?;
+    if let Some(key) = public_key(spki) {
+        d.public_key = key;
+    }
+    // The unique IDs ([1], [2]) may come before the extensions ([3]).
+    while let Some((tag, body, next)) = tlv(r) {
+        if tag == EXTENSIONS
+            && let Some((list, _)) = expect(body, SEQUENCE)
+        {
+            extensions(list, d);
+        }
+        r = next;
+    }
+    Some(())
+}
+
+fn signature_name(oid: &[u8]) -> String {
+    const RSA: [u8; 8] = [0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01];
+    const ECDSA: [u8; 7] = [0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x04, 0x03];
+    let name = match oid {
+        [head @ .., 0x05] if head == RSA => "sha1WithRSA",
+        [head @ .., 0x0A] if head == RSA => "RSASSA-PSS",
+        [head @ .., 0x0B] if head == RSA => "sha256WithRSA",
+        [head @ .., 0x0C] if head == RSA => "sha384WithRSA",
+        [head @ .., 0x0D] if head == RSA => "sha512WithRSA",
+        [head @ .., 0x02] if head == ECDSA => "ecdsa-with-SHA256",
+        [head @ .., 0x03] if head == ECDSA => "ecdsa-with-SHA384",
+        [head @ .., 0x04] if head == ECDSA => "ecdsa-with-SHA512",
+        [0x2B, 0x65, 0x70] => "Ed25519",
+        [0x2B, 0x65, 0x71] => "Ed448",
+        _ => return dotted(oid),
+    };
+    name.to_owned()
+}
+
+/// A SubjectPublicKeyInfo's key, by kind and size.
+fn public_key(spki: &[u8]) -> Option<String> {
+    let (algorithm, key) = expect(spki, SEQUENCE)?;
+    let (oid, parameters) = expect(algorithm, OID)?;
+    Some(match oid {
+        // rsaEncryption: the key is a SEQUENCE of modulus and exponent.
+        [0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01] => {
+            let (bits, _) = expect(key, BIT_STRING)?;
+            let (pair, _) = expect(bits.get(1..)?, SEQUENCE)?;
+            let (modulus, _) = expect(pair, INTEGER)?;
+            let bytes = modulus.iter().skip_while(|b| **b == 0).count();
+            format!("RSA {} bits", bytes * 8)
+        }
+        // id-ecPublicKey: its parameter names the curve.
+        [0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01] => match expect(parameters, OID) {
+            Some(([0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x03, 0x01, 0x07], _)) => "EC P-256".to_owned(),
+            Some(([0x2B, 0x81, 0x04, 0x00, 0x22], _)) => "EC P-384".to_owned(),
+            Some(([0x2B, 0x81, 0x04, 0x00, 0x23], _)) => "EC P-521".to_owned(),
+            Some((curve, _)) => format!("EC {}", dotted(curve)),
+            None => "EC".to_owned(),
+        },
+        [0x2B, 0x65, 0x70] => "Ed25519".to_owned(),
+        [0x2B, 0x65, 0x71] => "Ed448".to_owned(),
+        other => dotted(other),
+    })
+}
+
+/// Takes the alternative names and the basic constraints from a list of
+/// extensions.
+fn extensions(mut list: &[u8], d: &mut CertDetails) {
+    while let Some((SEQUENCE, ext, rest)) = tlv(list) {
+        list = rest;
+        let Some((oid, mut r)) = expect(ext, OID) else {
+            continue;
+        };
+        // critical BOOLEAN DEFAULT FALSE.
+        if let Some((BOOLEAN, _, after)) = tlv(r) {
+            r = after;
+        }
+        let Some((value, _)) = expect(r, OCTET_STRING) else {
+            continue;
+        };
+        match oid {
+            // subjectAltName.
+            [0x55, 0x1D, 0x11] => {
+                if let Some((names, _)) = expect(value, SEQUENCE) {
+                    d.alt_names = alt_names(names);
+                }
+            }
+            // basicConstraints: cA BOOLEAN DEFAULT FALSE comes first.
+            [0x55, 0x1D, 0x13] => {
+                let first = expect(value, SEQUENCE).and_then(|(c, _)| tlv(c));
+                d.ca = Some(matches!(first, Some((BOOLEAN, [b], _)) if *b != 0));
+            }
+            _ => {}
+        }
+    }
+}
+
+/// GeneralNames as text: the kinds a server certificate carries.
+fn alt_names(mut names: &[u8]) -> Vec<String> {
+    let mut out = Vec::new();
+    while let Some((tag, body, rest)) = tlv(names) {
+        names = rest;
+        let text = || String::from_utf8_lossy(body).into_owned();
+        match tag {
+            0x81 => out.push(format!("Email:{}", text())),
+            0x82 => out.push(format!("DNS:{}", text())),
+            0x86 => out.push(format!("URI:{}", text())),
+            0x87 => {
+                if let Ok(v4) = <[u8; 4]>::try_from(body) {
+                    out.push(format!("IP:{}", std::net::Ipv4Addr::from(v4)));
+                } else if let Ok(v6) = <[u8; 16]>::try_from(body) {
+                    out.push(format!("IP:{}", std::net::Ipv6Addr::from(v6)));
+                }
+            }
+            _ => {}
+        }
+    }
+    out
+}
+
 /// Whether `der` is one certificate and nothing else: its outer structure
 /// and the fields [`describe`] shows can all be read.
 pub fn is_certificate(der: &[u8]) -> bool {
@@ -402,6 +571,117 @@ mod tests {
         assert!(!is_certificate(&[0, 0, 0]));
         // The hand-built sample is one.
         assert!(is_certificate(&sample()));
+    }
+
+    #[test]
+    fn details_give_the_key_the_names_and_whether_it_is_a_ca() {
+        let server = details(&certificates_in(&data("server.pem"))[0]);
+        assert_eq!(server.signature, "ecdsa-with-SHA256");
+        assert_eq!(server.public_key, "EC P-256");
+        assert_eq!(server.alt_names, ["DNS:localhost", "IP:127.0.0.1"]);
+        assert_eq!(server.ca, Some(false));
+        let ca = details(&certificates_in(&data("test-ca.pem"))[0]);
+        assert_eq!(ca.public_key, "EC P-256");
+        assert!(ca.alt_names.is_empty());
+        assert_eq!(ca.ca, Some(true));
+        let own = details(&certificates_in(&data("selfsigned.pem"))[0]);
+        assert_eq!(own.alt_names, ["DNS:localhost", "IP:127.0.0.1"]);
+        assert_eq!(own.ca, Some(true));
+        // The hand-built sample stops after its subject: its signature
+        // algorithm is read, and the rest says so.
+        let s = details(&sample());
+        assert_eq!(s.signature, "ecdsa-with-SHA256");
+        assert_eq!(s.public_key, "(unreadable)");
+        assert_eq!((s.alt_names.len(), s.ca), (0, None));
+        assert_eq!(details(&[1, 2, 3]).signature, "(unreadable)");
+    }
+
+    #[test]
+    fn keys_and_signatures_are_named() {
+        // An RSA key: SEQUENCE { rsaEncryption, NULL }, BIT STRING holding
+        // SEQUENCE { modulus (256 bytes after its sign byte), exponent }.
+        let mut modulus = vec![0u8];
+        modulus.extend(std::iter::repeat_n(0xC3u8, 256));
+        let pair = der(
+            SEQUENCE,
+            &[der(INTEGER, &modulus), der(INTEGER, &[1, 0, 1])].concat(),
+        );
+        let mut bits = vec![0u8];
+        bits.extend_from_slice(&pair);
+        let rsa = [0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, 0x01];
+        let spki = [
+            der(SEQUENCE, &[der(OID, &rsa), vec![0x05, 0x00]].concat()),
+            der(BIT_STRING, &bits),
+        ]
+        .concat();
+        assert_eq!(public_key(&spki).as_deref(), Some("RSA 2048 bits"));
+        let ec = |curve: &[u8]| {
+            let id = [0x2A, 0x86, 0x48, 0xCE, 0x3D, 0x02, 0x01];
+            let alg = der(SEQUENCE, &[der(OID, &id), der(OID, curve)].concat());
+            public_key(&[alg, der(BIT_STRING, &[0, 4, 1, 2])].concat())
+        };
+        assert_eq!(
+            ec(&[0x2B, 0x81, 0x04, 0x00, 0x22]).as_deref(),
+            Some("EC P-384")
+        );
+        assert_eq!(
+            ec(&[0x2B, 0x81, 0x04, 0x00, 0x0A]).as_deref(),
+            Some("EC 1.3.132.0.10")
+        );
+        let ed = der(SEQUENCE, &der(OID, &[0x2B, 0x65, 0x70]));
+        assert_eq!(public_key(&ed).as_deref(), Some("Ed25519"));
+        let rsa_sig =
+            |last: u8| signature_name(&[0x2A, 0x86, 0x48, 0x86, 0xF7, 0x0D, 0x01, 0x01, last]);
+        assert_eq!(rsa_sig(0x0B), "sha256WithRSA");
+        assert_eq!(rsa_sig(0x0A), "RSASSA-PSS");
+        assert_eq!(rsa_sig(0x63), "1.2.840.113549.1.1.99");
+        assert_eq!(signature_name(&[0x2B, 0x65, 0x70]), "Ed25519");
+    }
+
+    #[test]
+    fn alternative_names_of_each_kind_are_read() {
+        let names = [
+            der(0x82, b"sys1.example.net"),
+            der(0x87, &[192, 0, 2, 7]),
+            der(
+                0x87,
+                &[0x20, 0x01, 0x0D, 0xB8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+            ),
+            der(0x81, b"ops@example.net"),
+            der(0x86, b"urn:example:sys1"),
+            // A directory name, and an address of no known length.
+            der(0xA4, &[0x30, 0x00]),
+            der(0x87, &[1, 2, 3]),
+        ]
+        .concat();
+        assert_eq!(
+            alt_names(&names),
+            [
+                "DNS:sys1.example.net",
+                "IP:192.0.2.7",
+                "IP:2001:db8::1",
+                "Email:ops@example.net",
+                "URI:urn:example:sys1"
+            ]
+        );
+        // Basic constraints: an empty SEQUENCE says not a CA.
+        let ext = |oid: &[u8], value: &[u8]| {
+            der(
+                SEQUENCE,
+                &[
+                    der(OID, oid),
+                    der(BOOLEAN, &[0xFF]),
+                    der(OCTET_STRING, value),
+                ]
+                .concat(),
+            )
+        };
+        let mut d = details(&[]);
+        extensions(&ext(&[0x55, 0x1D, 0x13], &der(SEQUENCE, &[])), &mut d);
+        assert_eq!(d.ca, Some(false));
+        let is_ca = der(SEQUENCE, &der(BOOLEAN, &[0xFF]));
+        extensions(&ext(&[0x55, 0x1D, 0x13], &is_ca), &mut d);
+        assert_eq!(d.ca, Some(true));
     }
 
     #[test]

@@ -291,7 +291,8 @@ pub struct Certs {
     listener: Cell<Option<u64>>,
 }
 
-fn clock() -> i64 {
+/// The time now, as certificates' validity is judged: Unix seconds.
+pub fn clock() -> i64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map_or(0, |d| d.as_secs() as i64)
@@ -565,12 +566,7 @@ impl Certs {
                 if let Some(e) = self.selected()
                     && let Some(c) = e.certificate()
                 {
-                    let mut d = view_dialog(c, &e.systems, self.now());
-                    center_on(&mut d, Some(&self.window));
-                    show_placed(&mut d);
-                    while d.shown() {
-                        app::wait();
-                    }
+                    show_view(Some(&self.window), c, &e.systems);
                 }
             }
             Req::Import => self.import(),
@@ -808,27 +804,61 @@ fn valid_to_line(c: &Certificate, now: i64) -> (String, bool) {
     }
 }
 
+/// The alternative names on one line, or that there are none.
+fn alt_names_line(d: &qsa_net::x509::CertDetails) -> String {
+    if d.alt_names.is_empty() {
+        "(none)".to_owned()
+    } else {
+        d.alt_names.join(", ")
+    }
+}
+
+/// Whether the certificate says it is a certificate authority's.
+fn ca_line(d: &qsa_net::x509::CertDetails) -> &'static str {
+    match d.ca {
+        Some(true) => "Yes",
+        Some(false) => "No",
+        None => "Not stated",
+    }
+}
+
 /// What View shows of a certificate, as the text Copy puts on the
 /// clipboard: every field, then the PEM text.
 pub fn view_text(c: &Certificate, systems: &[String], now: i64) -> String {
+    let d = qsa_net::x509::details(&c.der);
     format!(
-        "Subject: {}\nIssuer: {}\nSerial number: {}\nValid from: {}\nValid to: {}\n\
-         SHA-256 fingerprint: {}\nTrusted for: {}\n\n{}",
+        "Subject: {}\nAlternative names: {}\nIssuer: {}\nSerial number: {}\n\
+         Valid from: {}\nValid to: {}\nPublic key: {}\nSignature: {}\n\
+         Certificate authority: {}\nSHA-256 fingerprint: {}\nTrusted for: {}\n\n{}",
         c.info.subject,
+        alt_names_line(&d),
         c.info.issuer,
         c.info.serial,
         c.info.not_before,
         valid_to_line(c, now).0,
+        d.public_key,
+        d.signature,
+        ca_line(&d),
         c.info.sha256,
         systems.join(", "),
         c.pem()
     )
 }
 
+/// Shows View's dialog for a certificate and waits until it is closed.
+pub fn show_view(parent: Option<&dyn WindowExt>, c: &Certificate, systems: &[String]) {
+    let mut d = view_dialog(c, systems, clock());
+    center_on(&mut d, parent);
+    show_placed(&mut d);
+    while d.shown() {
+        app::wait();
+    }
+}
+
 /// Builds View's dialog for a certificate: every field, the PEM text, Copy
 /// and Close. It is not shown.
 pub fn view_dialog(c: &Certificate, systems: &[String], now: i64) -> Window {
-    let (w, h) = (580, 470);
+    let (w, h) = (580, 566);
     let m = 12;
     let mut win = Window::new(0, 0, w, h, None);
     crate::help::attach(&mut win, crate::help::topic::CERTIFICATE_MANAGEMENT);
@@ -841,13 +871,19 @@ pub fn view_dialog(c: &Certificate, systems: &[String], now: i64) -> Window {
     let (valid_to, expired) = valid_to_line(c, now);
     let fingerprint = two_lines(&c.info.sha256);
     let trusted = systems.join(", ");
+    let details = qsa_net::x509::details(&c.der);
+    let alt_names = alt_names_line(&details);
     let mut y = m;
     for (label, value, lines) in [
         ("Subject:", c.info.subject.as_str(), 1),
+        ("Alternative names:", alt_names.as_str(), 1),
         ("Issuer:", c.info.issuer.as_str(), 1),
         ("Serial number:", c.info.serial.as_str(), 1),
         ("Valid from:", c.info.not_before.as_str(), 1),
         ("Valid to:", valid_to.as_str(), 1),
+        ("Public key:", details.public_key.as_str(), 1),
+        ("Signature:", details.signature.as_str(), 1),
+        ("Certificate authority:", ca_line(&details), 1),
         ("SHA-256 fingerprint:", fingerprint.as_str(), 2),
         ("Trusted for:", trusted.as_str(), 1),
     ] {
@@ -859,6 +895,10 @@ pub fn view_dialog(c: &Certificate, systems: &[String], now: i64) -> Window {
         v.set_label(value);
         v.set_align(Align::Left | Align::Inside | Align::Top | Align::Clip);
         v.set_label_size(theme::UI_SIZE);
+        // The whole of a value too long for its line.
+        if lines == 1 {
+            v.set_tooltip(value);
+        }
         match label {
             "SHA-256 fingerprint:" | "Serial number:" => {
                 v.set_label_font(theme::MONO_FONT);
@@ -1231,8 +1271,14 @@ mod tests {
         let c = cert("old", "ca", "200101000000Z", "250101000000Z");
         let t = view_text(&c, &names(&["a", "b"]), NOW);
         assert!(t.starts_with(
-            "Subject: CN=old, O=Example Corp\nIssuer: CN=ca, O=Example Corp\nSerial number: 01"
+            "Subject: CN=old, O=Example Corp\nAlternative names: (none)\n\
+             Issuer: CN=ca, O=Example Corp\nSerial number: 01"
         ));
+        assert!(t.contains(
+            "\nPublic key: EC P-256\nSignature: ecdsa-with-SHA256\nCertificate authority: No\n"
+        ));
+        let host = cert("sys1.example.net", "ca", "200101000000Z", "250101000000Z");
+        assert!(view_text(&host, &[], NOW).contains("\nAlternative names: DNS:sys1.example.net\n"));
         assert!(t.contains("\nValid to: 2025-01-01 00:00:00 UTC (expired)\n"));
         assert!(t.contains(&format!("\nSHA-256 fingerprint: {}\n", c.info.sha256)));
         assert!(t.contains("\nTrusted for: a, b\n\n-----BEGIN CERTIFICATE-----\n"));
