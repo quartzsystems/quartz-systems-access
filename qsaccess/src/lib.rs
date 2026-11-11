@@ -7,6 +7,7 @@
 
 pub mod about;
 pub mod app;
+pub mod certs;
 pub mod chgpwd;
 pub mod files;
 pub mod ifs;

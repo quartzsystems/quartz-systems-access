@@ -28,6 +28,9 @@ pub struct AppState {
     pub recent_gen: u64,
     /// This process's QAP session per system, shared by every tool.
     pub qap: crate::qap::Registry,
+    /// Keeps Certificate Management and the Security tab of an open System
+    /// Properties dialog in step.
+    pub trust: Rc<crate::certs::Hub>,
 }
 
 /// Shared, mutable application state.
@@ -71,6 +74,7 @@ impl AppState {
             startup_messages: Vec::new(),
             recent_gen: 0,
             qap: crate::qap::Registry::default(),
+            trust: Rc::default(),
         }
     }
 

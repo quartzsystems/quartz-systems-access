@@ -1589,6 +1589,98 @@ fn prompt_views() -> Vec<(String, Window)> {
     out
 }
 
+/// Certificate Management on 2026-11-01: its list (one certificate
+/// expired, one with 21 days left), the This computer tab, View, Import's
+/// choice of systems and the confirmation Remove asks for.
+fn certs_views() -> Vec<(String, Window)> {
+    use qsaccess::certs::model::{Certificate, Entry, What};
+    use qsaccess::certs::{self, SystemsDialog, sample};
+    // 2026-11-01 12:00:00 UTC.
+    let now = 1_793_534_400;
+    let cert = |cn: &str, issuer: &str, from: &str, to: &str| {
+        Certificate::new(sample::der(cn, issuer, from, to))
+    };
+    let root = cert(
+        "Example Root CA",
+        "Example Root CA",
+        "240101000000Z",
+        "340101000000Z",
+    );
+    let dev = cert(
+        "dev.example.net",
+        "dev.example.net",
+        "260101000000Z",
+        "280101000000Z",
+    );
+    let old = cert(
+        "old.example.net",
+        "Example Root CA",
+        "230701000000Z",
+        "250630235959Z",
+    );
+    let soon = cert(
+        "sys1.example.net",
+        "Example Root CA",
+        "251122120000Z",
+        "261122120000Z",
+    );
+    let pem = |certs: &[&Certificate]| -> Vec<CaCertificate> {
+        certs.iter().map(|c| CaCertificate::Pem(c.pem())).collect()
+    };
+    let mut systems = Systems::new();
+    systems.upsert(System {
+        ca_certificates: pem(&[&root, &soon]),
+        ..System::new("sys1.example.net")
+    });
+    systems.upsert(System {
+        ca_certificates: pem(&[&root, &dev]),
+        ..System::new("dev.example.net")
+    });
+    systems.upsert(System {
+        ca_certificates: pem(&[&root, &old]),
+        ..System::new("10.1.1.7")
+    });
+    let state = AppState::new(None, systems, Settings::default()).shared();
+    let list = certs::build(&state, Some(now), Some(142));
+    let computer = certs::build(&state, Some(now), Some(142));
+    computer.tabs.clone().select(certs::TAB_THIS_COMPUTER);
+    let names = |v: &[&str]| -> Vec<String> { v.iter().map(|s| (*s).to_owned()).collect() };
+    let view = certs::view_dialog(&soon, &names(&["sys1.example.net"]), now);
+    let view_expired = certs::view_dialog(&old, &names(&["10.1.1.7"]), now);
+    let import = SystemsDialog::build(
+        "Import Certificate",
+        &certs::import_intro(
+            std::slice::from_ref(&root),
+            Path::new("example-root-ca.pem"),
+        ),
+        &[
+            ("10.1.1.7".to_owned(), false),
+            ("dev.example.net".to_owned(), true),
+            ("sys1.example.net".to_owned(), true),
+        ],
+    );
+    let remove = certs::remove_box(&Entry {
+        what: What::Certificate(root),
+        systems: names(&["10.1.1.7", "dev.example.net", "sys1.example.net"]),
+    })
+    .build()
+    .0;
+    vec![
+        ("certificate-management".to_owned(), list.window.clone()),
+        (
+            "certificate-management-this-computer".to_owned(),
+            computer.window.clone(),
+        ),
+        ("certificate-view".to_owned(), view),
+        ("certificate-view-expired".to_owned(), view_expired),
+        (
+            "certificate-import-systems".to_owned(),
+            import.window.clone(),
+        ),
+        ("certificate-remove".to_owned(), remove),
+    ]
+}
+
 fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Window)> {
     let mut out = Vec::new();
     let (ui, _rx) = mainwin::build(state.clone());
@@ -1694,6 +1786,7 @@ fn views(state: &Shared, keep: &mut Vec<Rc<SessionWindow>>) -> Vec<(String, Wind
     out.extend(printer_output_views(state));
     out.extend(messages_views(state));
     out.extend(prompt_views());
+    out.extend(certs_views());
     out.push((
         "password-expiry".to_owned(),
         qsa_ui::msgdetails::ask_message_box(

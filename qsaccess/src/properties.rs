@@ -46,6 +46,23 @@ pub struct SystemForm {
     fixed_ip: Input,
     ports: Vec<(usize, IntInput)>,
     cas: Rc<RefCell<Vec<CaCertificate>>>,
+    /// The Security tab's list of them.
+    ca_table: ListTable,
+    /// Redraws the list from `cas`.
+    refill: Rc<dyn Fn()>,
+    /// Called after the tab's Add or Remove changed `cas`.
+    ca_changed: Changed,
+}
+
+/// What to call after the Security tab changed its CA list, once set.
+type Changed = Rc<RefCell<Option<Rc<dyn Fn()>>>>;
+
+/// Runs what [`SystemForm::on_ca_change`] set, without holding it borrowed.
+fn tell(changed: &Changed) {
+    let f = changed.borrow().clone();
+    if let Some(f) = f {
+        f();
+    }
 }
 
 /// The Connection tab's note under the default user ID.
@@ -201,6 +218,8 @@ when Use TLS for all connections is selected.",
 
     // Security.
     let cas = Rc::new(RefCell::new(system.ca_certificates.clone()));
+    let ca_changed: Changed = Rc::default();
+    let mut security = None;
     d.tabs().add_page("Security", |r| {
         let mut l = controls::label(r.x, r.y, r.w, 18, "Trusted CA certificates:");
         l.set_align(Align::Left | Align::Inside);
@@ -214,7 +233,7 @@ when Use TLS for all connections is selected.",
         let remove_switch = Switch::for_button(&mut remove);
         let view_switch = Switch::for_button(&mut view);
 
-        let fill = {
+        let fill: Rc<dyn Fn()> = Rc::new({
             let cas = cas.clone();
             let list = list.clone();
             move || {
@@ -225,7 +244,7 @@ when Use TLS for all connections is selected.",
                     .collect();
                 list.clone().set_rows(rows);
             }
-        };
+        });
         let (rs, vs) = (remove_switch.clone(), view_switch.clone());
         list.on_select(move |sel| {
             rs.set_enabled(sel.is_some());
@@ -238,11 +257,13 @@ when Use TLS for all connections is selected.",
         {
             let cas = cas.clone();
             let fill = fill.clone();
+            let changed = ca_changed.clone();
             add.set_callback(move |b| {
                 let parent = b.window();
                 if let Some(ca) = add_certificate(parent.as_deref()) {
                     cas.borrow_mut().push(ca);
                     fill();
+                    tell(&changed);
                 }
             });
         }
@@ -250,10 +271,12 @@ when Use TLS for all connections is selected.",
             let cas = cas.clone();
             let list2 = list.clone();
             let fill = fill.clone();
+            let changed = ca_changed.clone();
             remove.set_callback(move |_| {
                 if let Some(i) = list2.selected() {
                     cas.borrow_mut().remove(i);
                     fill();
+                    tell(&changed);
                 }
             });
         }
@@ -272,7 +295,9 @@ when Use TLS for all connections is selected.",
                 view_certificate(None, &ca);
             }
         });
+        security = Some((list, fill));
     });
+    let (ca_table, refill) = security.expect("security page built");
 
     let form = SystemForm {
         name,
@@ -283,11 +308,56 @@ when Use TLS for all connections is selected.",
         fixed_ip,
         ports,
         cas,
+        ca_table,
+        refill,
+        ca_changed,
     };
     (d, form)
 }
 
 impl SystemForm {
+    /// The CA list the Security tab is editing.
+    pub fn ca_list(&self) -> Rc<RefCell<Vec<CaCertificate>>> {
+        self.cas.clone()
+    }
+
+    /// Redraws the Security tab's list after the CA list was changed from
+    /// outside the dialog.
+    pub fn refill_cas(&self) -> Rc<dyn Fn()> {
+        self.refill.clone()
+    }
+
+    /// Calls `f` after the Security tab's Add or Remove changed the CA
+    /// list.
+    pub fn on_ca_change(&self, f: impl Fn() + 'static) {
+        *self.ca_changed.borrow_mut() = Some(Rc::new(f));
+    }
+
+    /// Adds an entry to the CA list, as Add does once a file is chosen.
+    pub fn add_ca(&self, ca: CaCertificate) {
+        self.cas.borrow_mut().push(ca);
+        (self.refill)();
+        tell(&self.ca_changed);
+    }
+
+    /// Takes entry `index` out of the CA list, as Remove does for the
+    /// selected row.
+    pub fn remove_ca(&self, index: usize) {
+        if index < self.cas.borrow().len() {
+            self.cas.borrow_mut().remove(index);
+            (self.refill)();
+            tell(&self.ca_changed);
+        }
+    }
+
+    /// What the Security tab's list shows, row by row.
+    pub fn ca_rows(&self) -> Vec<String> {
+        (0..self.ca_table.len())
+            .filter_map(|i| self.ca_table.row(i))
+            .map(|cells| cells.first().map(|c| c.text.clone()).unwrap_or_default())
+            .collect()
+    }
+
     /// Reads the fields into a system. On a bad value, gives the tab to show
     /// and the error text.
     pub fn read(&self) -> Result<System, (usize, String)> {
@@ -357,6 +427,57 @@ pub fn create(
     run_form(parent, systems, "New System Configuration", template, None)
 }
 
+/// A Security tab sharing the CA list it is editing with Certificate
+/// Management, until this is dropped.
+pub struct Editing {
+    hub: Rc<crate::certs::Hub>,
+    system: String,
+}
+
+impl Drop for Editing {
+    fn drop(&mut self) {
+        self.hub.close_editor(&self.system);
+        // Certificate Management goes back to the saved list.
+        self.hub.notify();
+    }
+}
+
+/// Shares the CA list `form` is editing for the system saved as `system`
+/// with Certificate Management: while the dialog is open that list is the
+/// one both show and change, and a change in either shows in the other at
+/// once. The dialog's OK saves the list and Cancel drops it, as before.
+pub fn share(state: &crate::app::Shared, system: &str, form: &SystemForm) -> Editing {
+    let hub = state.borrow().trust.clone();
+    hub.open_editor(crate::certs::Editor {
+        system: system.to_owned(),
+        list: form.ca_list(),
+        refill: form.refill_cas(),
+    });
+    let h = hub.clone();
+    form.on_ca_change(move || h.notify());
+    hub.notify();
+    Editing {
+        hub,
+        system: system.to_owned(),
+    }
+}
+
+/// Runs the dialog for `original`, a configured system, with its Security
+/// tab in step with Certificate Management ([`share`]). Returns the system
+/// to save, or `None` if cancelled.
+pub fn edit_shared(
+    parent: Option<&dyn WindowExt>,
+    state: &crate::app::Shared,
+    original: &System,
+) -> Option<System> {
+    // A copy: the state is not held borrowed while the dialog runs.
+    let systems = state.borrow().systems.clone();
+    let title = format!("System Properties - {}", original.name);
+    let (d, form) = build(&title, original);
+    let _editing = share(state, &original.name, &form);
+    run_built(parent, &systems, d, form, Some(&original.name))
+}
+
 fn run_form(
     parent: Option<&dyn WindowExt>,
     systems: &Systems,
@@ -364,7 +485,17 @@ fn run_form(
     initial: &System,
     old_name: Option<&str>,
 ) -> Option<System> {
-    let (mut d, form) = build(title, initial);
+    let (d, form) = build(title, initial);
+    run_built(parent, systems, d, form, old_name)
+}
+
+fn run_built(
+    parent: Option<&dyn WindowExt>,
+    systems: &Systems,
+    mut d: PropertyDialog,
+    form: SystemForm,
+    old_name: Option<&str>,
+) -> Option<System> {
     let mut result = None;
     let mut tabs = d.tabs().clone();
     let ok = d.run(parent, || {

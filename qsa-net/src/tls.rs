@@ -61,6 +61,13 @@ impl Trust {
             certificates: pems.into_iter().flat_map(certs_from_pem).collect(),
         }
     }
+
+    /// From certificates as DER.
+    pub fn from_der(ders: impl IntoIterator<Item = Vec<u8>>) -> Trust {
+        Trust {
+            certificates: ders.into_iter().map(CertificateDer::from).collect(),
+        }
+    }
 }
 
 /// Every certificate in a PEM text.
@@ -118,6 +125,12 @@ fn native_roots() -> &'static [CertificateDer<'static>] {
         crate::debug!("tls: {} certificates from the system store", r.certs.len());
         r.certs
     })
+}
+
+/// How many certificates the operating system's store supplies. They are
+/// trusted for every system, beside each system configuration's own list.
+pub fn system_certificate_count() -> usize {
+    native_roots().len()
 }
 
 #[derive(Debug)]

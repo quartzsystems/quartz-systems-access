@@ -50,7 +50,7 @@ pub enum Task {
     ControlPanel,
     SystemConfigurations,
     SessionManager,
-    KeyManagement,
+    CertificateManagement,
 }
 
 impl Task {
@@ -70,7 +70,7 @@ impl Task {
             Task::ControlPanel => "Control Panel",
             Task::SystemConfigurations => "System Configurations",
             Task::SessionManager => "Session Manager",
-            Task::KeyManagement => "Key and Certificate Management",
+            Task::CertificateManagement => crate::certs::FUNCTION,
         }
     }
 }
@@ -97,7 +97,7 @@ pub const TASK_GROUPS: &[(Option<&str>, &[Task])] = &[
         &[
             Task::SystemConfigurations,
             Task::SessionManager,
-            Task::KeyManagement,
+            Task::CertificateManagement,
         ],
     ),
 ];
@@ -133,6 +133,7 @@ impl Ui {
         match task {
             Task::SystemConfigurations => crate::sysconfig::open(self),
             Task::SessionManager => crate::manager::open(&self.state, self.parent()),
+            Task::CertificateManagement => crate::certs::open(self.parent(), &self.state),
             Task::Display5250 => {
                 if self.state.borrow().systems.is_empty() {
                     crate::sysconfig::open(self);
@@ -234,7 +235,8 @@ impl Ui {
                     self.refresh_systems();
                 }
             }
-            _ => self.not_available(),
+            // Not part of this release.
+            Task::Console5250 | Task::ControlPanel => self.not_available(),
         }
     }
 
@@ -596,7 +598,7 @@ pub fn build(state: Shared) -> (Ui, chan::Receiver<Action>) {
     for task in [
         Task::SystemConfigurations,
         Task::SessionManager,
-        Task::KeyManagement,
+        Task::CertificateManagement,
     ] {
         let path = format!("&Tools/{}...", task.label());
         add(&mut menu, &path, Shortcut::None, Action::Task(task));

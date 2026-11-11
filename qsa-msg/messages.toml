@@ -51,6 +51,36 @@ text = "Settings file &1 could not be read."
 cause = "The file &1 could not be opened, or it holds a value that is not valid. The reason given was: &2"
 recovery = "Correct the file and start QS/400 Access for Desktop again, or carry on with default values. If you carry on, the unreadable file is kept as &1.unreadable the first time the program saves."
 
+[QAD0040]
+severity = 0
+text = "Certificate &1 imported for &2 systems."
+cause = "Certificate &1 was added to the trusted CA certificates of &2 system configurations. Connections to those systems trust it from now on: as a certificate authority for the certificates they present, or as the certificate a system presents itself. Other systems are not affected."
+recovery = "None needed. Certificate Management lists the certificate with the systems that trust it. To withdraw the trust, select the certificate there and select Trusted for... or Remove."
+
+[QAD0041]
+severity = 0
+text = "Certificate &1 removed from &2 systems."
+cause = "Certificate &1 was taken out of the trusted CA certificates of &2 system configurations. A connection to one of those systems that needs the certificate is refused as not trusted from now on. Connections that are open stay open."
+recovery = "None needed. To trust the certificate again, import it in Certificate Management, or select Trust for this system when a connection presents it."
+
+[QAD0042]
+severity = 0
+text = "Certificate &1 exported to &2."
+cause = "Certificate &1 was written to the file &2 as PEM text. The file holds the certificate only; a certificate has no private key in it."
+recovery = "None needed. The file can be imported on another computer in Certificate Management, or added on the Security tab of a system's properties."
+
+[QAD0043]
+severity = 30
+text = "File &1 does not contain a certificate."
+cause = "The file &1 was read, but no X.509 certificate was found in it. Import takes a PEM file with one or more CERTIFICATE blocks, or a DER file holding one certificate. A private key, a certificate request and a key store are not certificates."
+recovery = "Choose the file that holds the certificate of the system or of its certificate authority. The system's administrator can export it from the system's certificate manager. Then select Import... again."
+
+[QAD0044]
+severity = 10
+text = "Certificate &1 has expired."
+cause = "The Valid to time of certificate &1, &2, has passed. A system that still presents an expired certificate, or one issued by an expired certificate authority, should be given a new one."
+recovery = "Ask the system's administrator for the current certificate and import that instead. Select Import to trust this certificate all the same, or Skip to leave it out."
+
 [QAD1001]
 severity = 0
 text = "Connecting to &1 port &2."
@@ -103,7 +133,7 @@ recovery = "Compare the certificate's SHA-256 fingerprint with the one shown on 
 severity = 0
 text = "Certificate for &1 added to trusted list."
 cause = "The certificate presented by system &1 was added to the CA certificates of this system's configuration. Connections to &1 that present it are trusted from now on. Other systems are not affected."
-recovery = "None needed. To withdraw the trust, remove the certificate from the Security tab of the system's properties."
+recovery = "None needed. To withdraw the trust, remove the certificate in Certificate Management, or from the Security tab of the system's properties."
 
 [QAD1020]
 severity = 30

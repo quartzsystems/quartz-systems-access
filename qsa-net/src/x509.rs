@@ -3,8 +3,9 @@
 // root directory of this project.
 
 //! Just enough X.509 (RFC 5280) DER reading to show a certificate to the
-//! user: subject, issuer, validity and fingerprint. Verification is
-//! rustls's job, not this module's.
+//! user: subject, issuer, validity and fingerprint, and to take the
+//! certificates out of a PEM or DER file. Verification is rustls's job, not
+//! this module's.
 
 use sha2::{Digest, Sha256};
 
@@ -37,6 +38,62 @@ pub fn describe(der: &[u8]) -> CertInfo {
     };
     let _ = read_tbs(der, &mut info);
     info
+}
+
+/// Whether `der` is one certificate and nothing else: its outer structure
+/// and the fields [`describe`] shows can all be read.
+pub fn is_certificate(der: &[u8]) -> bool {
+    let whole = matches!(tlv(der), Some((SEQUENCE, _, rest)) if rest.is_empty());
+    whole && read_tbs(der, &mut describe(&[])).is_some()
+}
+
+/// The certificates in a file's bytes, each as DER: every `CERTIFICATE`
+/// block of a PEM file as it stands (blocks of other kinds, such as keys,
+/// are left out), or the one certificate of a DER file. Empty when the
+/// file holds none. This is what a system configuration's CA list trusts
+/// of the file; [`is_certificate`] says whether a block reads as one.
+pub fn certificates_in(file: &[u8]) -> Vec<Vec<u8>> {
+    const BEGIN: &[u8] = b"-----BEGIN ";
+    if file.windows(BEGIN.len()).any(|w| w == BEGIN) {
+        return match std::str::from_utf8(file) {
+            Ok(pem) => crate::tls::certs_from_pem(pem)
+                .into_iter()
+                .map(|c| c.to_vec())
+                .collect(),
+            Err(_) => Vec::new(),
+        };
+    }
+    if is_certificate(file) {
+        vec![file.to_vec()]
+    } else {
+        Vec::new()
+    }
+}
+
+/// A time as [`CertInfo`] shows it (`YYYY-MM-DD HH:MM:SS UTC`) in seconds
+/// since 1970-01-01 00:00:00 UTC. `None` for anything else, `(unreadable)`
+/// among it.
+pub fn unix_time(shown: &str) -> Option<i64> {
+    let s = shown.strip_suffix(" UTC")?;
+    let b = s.as_bytes();
+    if b.len() != 19 || b[4] != b'-' || b[7] != b'-' || b[10] != b' ' || b[13] != b':' {
+        return None;
+    }
+    let n = |r: std::ops::Range<usize>| s.get(r)?.parse::<i64>().ok();
+    let (y, m, d) = (n(0..4)?, n(5..7)?, n(8..10)?);
+    let (hh, mm, ss) = (n(11..13)?, n(14..16)?, n(17..19)?);
+    if !(1..=12).contains(&m) || !(1..=31).contains(&d) || hh > 23 || mm > 59 || ss > 60 {
+        return None;
+    }
+    // Days from 1970-01-01 to y-m-d in the Gregorian calendar, counting
+    // years from 1 March so that the leap day comes last.
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y.rem_euclid(400);
+    let doy = (153 * ((m + 9) % 12) + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    let days = era * 146_097 + doe - 719_468;
+    Some(days * 86_400 + hh * 3600 + mm * 60 + ss)
 }
 
 /// SHA-256 over the DER, `AB:CD:...`.
@@ -277,6 +334,91 @@ mod tests {
         assert_eq!(info.sha256, fingerprint(&[0x30, 0x82, 0xFF]));
         // The SHA-256 of nothing.
         assert!(fingerprint(&[]).starts_with("E3:B0:C4:42"));
+    }
+
+    fn data(name: &str) -> Vec<u8> {
+        std::fs::read(format!("{}/tests/data/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+    }
+
+    #[test]
+    fn a_pem_file_gives_its_certificate() {
+        let certs = certificates_in(&data("test-ca.pem"));
+        assert_eq!(certs.len(), 1);
+        assert!(is_certificate(&certs[0]));
+        let info = describe(&certs[0]);
+        assert_eq!(info.subject, "CN=Quartz Test CA, O=Quartz Systems Test");
+        // CR LF line ends and text around the block change nothing.
+        let text = String::from_utf8(data("test-ca.pem")).unwrap();
+        let dos = format!(
+            "subject=Quartz Test CA\r\n{}",
+            text.replace("\r\n", "\n").replace('\n', "\r\n")
+        );
+        assert_eq!(certificates_in(dos.as_bytes()), certs);
+    }
+
+    #[test]
+    fn a_der_file_gives_its_certificate() {
+        let der = certificates_in(&data("server.pem")).remove(0);
+        assert_eq!(certificates_in(&der), vec![der.clone()]);
+        // Not with anything after it, and not a part of it.
+        let mut longer = der.clone();
+        longer.push(0);
+        assert!(certificates_in(&longer).is_empty());
+        assert!(certificates_in(&der[..der.len() - 1]).is_empty());
+    }
+
+    #[test]
+    fn several_certificates_in_one_file_come_in_order() {
+        let mut all = data("server.pem");
+        all.extend_from_slice(&data("test-ca.pem"));
+        all.extend_from_slice(&data("selfsigned.pem"));
+        let certs = certificates_in(&all);
+        assert_eq!(certs.len(), 3);
+        let own = certificates_in(&data("selfsigned.pem")).remove(0);
+        assert_eq!(
+            describe(&certs[0]).subject,
+            "CN=localhost, O=Quartz Systems Test"
+        );
+        assert_eq!(
+            describe(&certs[1]).subject,
+            "CN=Quartz Test CA, O=Quartz Systems Test"
+        );
+        assert_eq!(certs[2], own);
+    }
+
+    #[test]
+    fn a_file_with_no_certificate_gives_none() {
+        // A private key, text, nothing, DER that is not a certificate and
+        // a part of one.
+        assert!(certificates_in(&data("server.key")).is_empty());
+        assert!(certificates_in(b"not a certificate\n").is_empty());
+        assert!(certificates_in(b"").is_empty());
+        assert!(certificates_in(&[0x30, 0x03, 0x02, 0x01, 0x05]).is_empty());
+        assert!(certificates_in(&sample()[..20]).is_empty());
+        // A CERTIFICATE block that does not hold one is given as it is,
+        // and does not read as a certificate.
+        let fake = "-----BEGIN CERTIFICATE-----\nAAAA\n-----END CERTIFICATE-----\n";
+        assert_eq!(certificates_in(fake.as_bytes()), [vec![0u8, 0, 0]]);
+        assert!(!is_certificate(&[0, 0, 0]));
+        // The hand-built sample is one.
+        assert!(is_certificate(&sample()));
+    }
+
+    #[test]
+    fn shown_times_convert_to_unix_time() {
+        assert_eq!(unix_time("1970-01-01 00:00:00 UTC"), Some(0));
+        assert_eq!(unix_time("2000-03-01 00:00:00 UTC"), Some(951_868_800));
+        assert_eq!(unix_time("2024-02-29 23:59:59 UTC"), Some(1_709_251_199));
+        assert_eq!(unix_time("2026-11-01 12:00:00 UTC"), Some(1_793_534_400));
+        assert_eq!(unix_time("(unreadable)"), None);
+        assert_eq!(unix_time("2026-13-01 00:00:00 UTC"), None);
+        assert_eq!(unix_time("2026-11-01 12:00:00"), None);
+        // The sample is valid for ten years with three leap days.
+        let info = describe(&sample());
+        assert_eq!(
+            unix_time(&info.not_after).unwrap() - unix_time(&info.not_before).unwrap(),
+            3653 * 86_400
+        );
     }
 
     #[test]

@@ -169,6 +169,8 @@ impl ListDialog {
         self.delete.set_enabled(index.is_some());
         self.verify.set_enabled(index.is_some());
         self.export.set_enabled(!state.borrow().systems.is_empty());
+        // The systems, or one's CA list, may have changed.
+        crate::certs::changed(state);
     }
 
     fn selected(&self, state: &Shared) -> Option<System> {
@@ -240,8 +242,9 @@ pub fn open(ui: &Ui) {
 fn new_system(d: &mut ListDialog, ui: &Ui) {
     let state = &ui.state;
     let edited = {
-        let st = state.borrow();
-        properties::edit(Some(&d.window), &st.systems, None)
+        // A copy: the state is not held borrowed while the dialog runs.
+        let systems = state.borrow().systems.clone();
+        properties::edit(Some(&d.window), &systems, None)
     };
     let Some(sys) = edited else { return };
     let name = sys.name.clone();
@@ -261,10 +264,7 @@ fn edit_system(d: &mut ListDialog, ui: &Ui) {
     let Some(original) = d.selected(state) else {
         return;
     };
-    let edited = {
-        let st = state.borrow();
-        properties::edit(Some(&d.window), &st.systems, Some(&original))
-    };
+    let edited = properties::edit_shared(Some(&d.window), state, &original);
     let Some(sys) = edited else { return };
     let name = sys.name.clone();
     if let Err(e) = state.borrow_mut().systems.change(&original.name, sys) {

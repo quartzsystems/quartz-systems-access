@@ -54,3 +54,7 @@ workspace = true
 [[test]]
 name = "screenshots"
 harness = false
+
+[[test]]
+name = "certs_sync"
+harness = false

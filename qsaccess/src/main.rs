@@ -173,6 +173,7 @@ fn main() {
         qsaccess::messages::pump();
         qsaccess::runsql::pump();
         qsaccess::manager::pump();
+        qsaccess::certs::pump();
         qsaccess::macros::editor::pump();
         qsaccess::qap::pump(&ui);
         ui.refresh_recent();
@@ -187,6 +188,7 @@ fn main() {
             && !qsaccess::splf::any_open()
             && !qsaccess::messages::any_open()
             && !qsaccess::manager::shown()
+            && !qsaccess::certs::shown()
             && !qsaccess::macros::editor::any_open()
             && !qsaccess::runsql::any_open()
             && !qsaccess::schemas::any_open()
@@ -224,6 +226,7 @@ fn serve(ui: &Ui, state: &Shared, r: &Request, link: Option<ipc::Link>, main_sho
         qsaccess::session::close_all();
         qsaccess::printer::close_all();
         qsaccess::manager::close();
+        qsaccess::certs::close();
         qsaccess::macros::editor::close_all();
         ui.window.clone().hide();
         return;

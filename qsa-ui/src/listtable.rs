@@ -11,7 +11,9 @@
 //! - A click on a column header calls [`ListTable::on_header_click`]; the
 //!   caller sorts and shows which way with [`ListTable::set_sort`].
 //! - [`ListTable::set_icons`] puts a 16-pixel glyph at the start of each
-//!   row; [`ListTable::set_bold`] draws chosen rows in bold.
+//!   row; [`ListTable::set_bold`] draws chosen rows in bold;
+//!   [`ListTable::set_system_output_columns`] draws chosen columns in the
+//!   system-output font.
 //! - [`ListTable::on_drop`] takes files dropped on the list from the
 //!   desktop's file manager; [`ListTable::near_end`] says when the rows in
 //!   view reach the last ones, for a list that loads more as it scrolls.
@@ -66,6 +68,8 @@ struct Model {
     icons: Vec<Option<crate::glyph::Glyph>>,
     /// Rows drawn in bold.
     bold: Vec<bool>,
+    /// Columns drawn in the system-output font.
+    mono: Vec<usize>,
     /// The row with the focus: the one selected, or the last one clicked.
     selected: Option<usize>,
     /// Multiple selection: allowed, every selected row, and where a Shift
@@ -143,6 +147,7 @@ impl ListTable {
             headers: columns.iter().map(|(t, _)| (*t).to_owned()).collect(),
             icons: Vec::new(),
             bold: Vec::new(),
+            mono: Vec::new(),
             rows: Vec::new(),
             selected: None,
             multi: false,
@@ -207,12 +212,14 @@ impl ListTable {
                     tx += 20;
                 }
                 if let Some(c) = cell {
-                    let font = if m.bold.get(row as usize).copied().unwrap_or(false) {
-                        theme::UI_FONT_BOLD
-                    } else {
-                        theme::UI_FONT
+                    let bold = m.bold.get(row as usize).copied().unwrap_or(false);
+                    let (font, size) = match (m.mono.contains(&(col as usize)), bold) {
+                        (true, true) => (theme::MONO_FONT_BOLD, theme::MONO_SIZE),
+                        (true, false) => (theme::MONO_FONT, theme::MONO_SIZE),
+                        (false, true) => (theme::UI_FONT_BOLD, theme::UI_SIZE),
+                        (false, false) => (theme::UI_FONT, theme::UI_SIZE),
                     };
-                    draw::set_font(font, theme::UI_SIZE);
+                    draw::set_font(font, size);
                     draw::set_draw_color(fg);
                     draw::draw_text2(
                         &c.text,
@@ -473,6 +480,13 @@ impl ListTable {
     /// attention, such as a message waiting for a reply.
     pub fn set_bold(&mut self, bold: Vec<bool>) {
         self.model.borrow_mut().bold = bold;
+        self.table.redraw();
+    }
+
+    /// Sets which columns are drawn in the system-output font: values given
+    /// character for character, such as a certificate's fingerprint.
+    pub fn set_system_output_columns(&mut self, columns: &[usize]) {
+        self.model.borrow_mut().mono = columns.to_vec();
         self.table.redraw();
     }
 

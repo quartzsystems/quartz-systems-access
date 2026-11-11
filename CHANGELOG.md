@@ -18,6 +18,27 @@ each crate's name. Breaking changes are marked **Breaking**.
   the scripts no longer name the first release where they mean this one.
   `ci/version.sh names`, run in CI, fails on a release name that is not
   `VERSION`'s, and `ci/version.sh prepare` rewrites the names written out.
+- Certificate Management (the Management group and the Tools menu; it was
+  listed as Key and Certificate Management and not available): every
+  certificate trusted in any system's configuration, one row each, with its
+  subject, issuer, validity, SHA-256 fingerprint and the systems that trust
+  it. An expired certificate says Expired in red, and one within 30 days of
+  expiring says how many days are left. View, Import (PEM or DER, for the
+  systems you tick), Export (PEM), Trusted for and Remove. It edits the same
+  CA lists as the Security tab of each system's properties, and the two
+  stay in step while both are open. The This computer tab says how many
+  certificates the operating system's store supplies. Messages `QAD0040` to
+  `QAD0044`.
+- A system's CA list may reference a DER certificate file as well as a PEM
+  one.
+
+### qsa-net
+
+- `x509::certificates_in` (the certificates in a PEM or DER file's bytes),
+  `x509::is_certificate` and `x509::unix_time` (a time as `CertInfo` shows
+  it, in seconds since 1970).
+- `Trust::from_der`, and `tls::system_certificate_count` (how many
+  certificates the operating system's store supplies).
 
 ## 1.1.1 (2026-11-10)
 

@@ -34,6 +34,11 @@ pub mod id {
     pub const SYSTEMS_IMPORTED: &str = "QAD0020";
     pub const SYSTEMS_EXPORTED: &str = "QAD0021";
     pub const SETTINGS_UNREADABLE: &str = "QAD0030";
+    pub const CERT_IMPORTED: &str = "QAD0040";
+    pub const CERT_REMOVED: &str = "QAD0041";
+    pub const CERT_EXPORTED: &str = "QAD0042";
+    pub const NOT_A_CERTIFICATE: &str = "QAD0043";
+    pub const CERT_EXPIRED: &str = "QAD0044";
     pub const CONNECTING: &str = "QAD1001";
     pub const CONNECTION_REFUSED: &str = "QAD1002";
     pub const HOST_NOT_FOUND: &str = "QAD1003";
@@ -325,7 +330,7 @@ pub fn message(id: &str, args: &[&str]) -> Message {
 mod tests {
     use super::*;
 
-    const SEEDS: [&str; 129] = [
+    const SEEDS: [&str; 134] = [
         id::NOT_AVAILABLE,
         id::SYSTEM_ADDED,
         id::SYSTEM_CHANGED,
@@ -333,6 +338,11 @@ mod tests {
         id::SYSTEMS_IMPORTED,
         id::SYSTEMS_EXPORTED,
         id::SETTINGS_UNREADABLE,
+        id::CERT_IMPORTED,
+        id::CERT_REMOVED,
+        id::CERT_EXPORTED,
+        id::NOT_A_CERTIFICATE,
+        id::CERT_EXPIRED,
         id::CONNECTING,
         id::CONNECTION_REFUSED,
         id::HOST_NOT_FOUND,
@@ -1194,6 +1204,47 @@ mod tests {
             message(id::SETTINGS_UNREADABLE, &["s.toml", "bad"]).text,
             "Settings file s.toml could not be read."
         );
+    }
+
+    #[test]
+    fn certificate_management_texts() {
+        let t = |id: &str, args: &[&str]| message(id, args).text;
+        for (id, args, want) in [
+            (
+                id::CERT_IMPORTED,
+                &["Example Root", "2"][..],
+                "Certificate Example Root imported for 2 systems.",
+            ),
+            (
+                id::CERT_REMOVED,
+                &["Example Root", "3"],
+                "Certificate Example Root removed from 3 systems.",
+            ),
+            (
+                id::CERT_EXPORTED,
+                &["Example Root", "root.pem"],
+                "Certificate Example Root exported to root.pem.",
+            ),
+            (
+                id::NOT_A_CERTIFICATE,
+                &["notes.txt"],
+                "File notes.txt does not contain a certificate.",
+            ),
+            (
+                id::CERT_EXPIRED,
+                &["Example Root", "2025-01-01 00:00:00 UTC"],
+                "Certificate Example Root has expired.",
+            ),
+        ] {
+            assert_eq!(t(id, args), want);
+        }
+        let m = message(
+            id::CERT_EXPIRED,
+            &["Example Root", "2025-01-01 00:00:00 UTC"],
+        );
+        assert_eq!(m.kind(), Kind::Warning);
+        assert!(m.cause.contains("2025-01-01 00:00:00 UTC"));
+        assert_eq!(message(id::NOT_A_CERTIFICATE, &["f"]).kind(), Kind::Error);
     }
 
     #[test]
