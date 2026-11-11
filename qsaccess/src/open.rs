@@ -9,7 +9,8 @@
 //! - `.qsd`: a session window, connected if the file says so.
 //! - `.qsp`: a printer window, likewise.
 //! - `.qkm`: Load Keyboard Map, into an open session or new sessions.
-//! - `.qsm`: the Macro editor.
+//! - `.qsm`: Run Macro, which runs it in an open session or opens it in the
+//!   Macro editor.
 //! - `.qdx`: a Data Transfer window with the request, ready to run.
 //!
 //! A file with another extension is recognised by its `[qsaccess]` kind.
